@@ -1,6 +1,6 @@
 # ixora
 
-CLI for managing [ixora](https://github.com/ibmi-agi/ixora) AI agent deployments on IBM i.
+CLI for managing ixora AI agent deployments on IBM i.
 
 ## Install
 
