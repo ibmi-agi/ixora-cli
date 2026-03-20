@@ -132,10 +132,10 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3010/healthz').then(function(r){process.exit(r.ok?0:1)}).catch(function(){process.exit(1)})\""]
-      interval: 30s
-      timeout: 10s
+      interval: 5s
+      timeout: 5s
       retries: 5
-      start_period: 20s
+      start_period: 3s
 
   api:
     image: ghcr.io/ibmi-agi/ixora-api:${IXORA_VERSION:-latest}
