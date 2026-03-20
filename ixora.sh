@@ -654,9 +654,10 @@ cmd_restart() {
     [ -f "$COMPOSE_FILE" ] || die "ixora is not installed. Run: ixora install"
 
     if [ -n "$1" ]; then
-        info "Restarting $1..."
-        run_compose up -d --force-recreate --no-deps "$1"
-        success "Restarted $1"
+        _svc=$(_resolve_service "$1")
+        info "Restarting $_svc..."
+        run_compose up -d --force-recreate --no-deps "$_svc"
+        success "Restarted $_svc"
     else
         info "Restarting all services..."
         run_compose up -d --force-recreate
@@ -767,7 +768,8 @@ cmd_logs() {
     [ -f "$COMPOSE_FILE" ] || die "ixora is not installed. Run: ixora install"
 
     if [ -n "$1" ]; then
-        run_compose logs -f "$1"
+        _svc=$(_resolve_service "$1")
+        run_compose logs -f "$_svc"
     else
         run_compose logs -f
     fi
@@ -997,6 +999,19 @@ _update_env_key() {
         printf "%s='%s'\n" "$_k" "$_v" >> "$ENV_FILE"
     fi
     chmod 600 "$ENV_FILE"
+}
+
+# Accept either a service name (api) or container name (ixora-api-1) and
+# return the service name that docker compose expects.
+_resolve_service() {
+    _input="$1"
+    # Strip "ixora-" prefix and trailing "-N" replica suffix if present
+    _stripped=$(printf '%s' "$_input" | sed 's/^ixora-//; s/-[0-9]*$//')
+    if [ "$_stripped" != "$_input" ]; then
+        printf '%s' "$_stripped"
+    else
+        printf '%s' "$_input"
+    fi
 }
 
 _update_profile() {
