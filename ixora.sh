@@ -127,9 +127,6 @@ services:
       MCP_RATE_LIMIT_MAX_REQUESTS: "5000"
       MCP_RATE_LIMIT_WINDOW_MS: "60000"
       MCP_RATE_LIMIT_SKIP_DEV: "true"
-    depends_on:
-      agentos-db:
-        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3010/healthz').then(function(r){process.exit(r.ok?0:1)}).catch(function(){process.exit(1)})\""]
       interval: 5s
