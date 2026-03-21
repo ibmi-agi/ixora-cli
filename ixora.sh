@@ -69,6 +69,19 @@ detect_compose_cmd() {
 }
 
 # ---------------------------------------------------------------------------
+# Detect architecture and set platform-specific defaults
+# ---------------------------------------------------------------------------
+detect_platform() {
+    _arch=$(uname -m)
+    case "$_arch" in
+        ppc64le)
+            # agnohq/pgvector has no ppc64le image — use custom build
+            export IXORA_DB_IMAGE="${IXORA_DB_IMAGE:-ghcr.io/ibmi-agi/ixora-db:${IXORA_VERSION:-latest}}"
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
 # Compose runner — always operates in ~/.ixora with the right files
 # ---------------------------------------------------------------------------
 run_compose() {
@@ -88,7 +101,7 @@ write_compose_file() {
     cat > "$COMPOSE_FILE" <<'COMPOSEYML'
 services:
   agentos-db:
-    image: agnohq/pgvector:18
+    image: ${IXORA_DB_IMAGE:-agnohq/pgvector:18}
     restart: unless-stopped
     ports:
       - "${DB_PORT:-5432}:5432"
@@ -557,6 +570,7 @@ cmd_install() {
     printf '\n'
 
     detect_compose_cmd
+    detect_platform
     info "Using: $COMPOSE_CMD"
     printf '\n'
 
@@ -615,6 +629,7 @@ cmd_install() {
 
 cmd_start() {
     detect_compose_cmd
+    detect_platform
     [ -f "$COMPOSE_FILE" ] || die "ixora is not installed. Run: ixora install"
 
     # If --profile was provided, update it in .env before starting
@@ -638,6 +653,7 @@ cmd_start() {
 
 cmd_stop() {
     detect_compose_cmd
+    detect_platform
     [ -f "$COMPOSE_FILE" ] || die "ixora is not installed. Run: ixora install"
 
     info "Stopping ixora services..."
@@ -648,6 +664,7 @@ cmd_stop() {
 
 cmd_restart() {
     detect_compose_cmd
+    detect_platform
     [ -f "$COMPOSE_FILE" ] || die "ixora is not installed. Run: ixora install"
 
     if [ -n "$1" ]; then
@@ -666,6 +683,7 @@ cmd_restart() {
 
 cmd_status() {
     detect_compose_cmd
+    detect_platform
     [ -f "$COMPOSE_FILE" ] || die "ixora is not installed. Run: ixora install"
 
     _profile=$(env_get IXORA_PROFILE)
@@ -684,6 +702,7 @@ cmd_status() {
 
 cmd_upgrade() {
     detect_compose_cmd
+    detect_platform
     [ -f "$COMPOSE_FILE" ] || die "ixora is not installed. Run: ixora install"
 
     info "Upgrading ixora..."
@@ -717,6 +736,7 @@ cmd_upgrade() {
 
 cmd_uninstall() {
     detect_compose_cmd
+    detect_platform
 
     if [ "$OPT_PURGE" = "yes" ]; then
         printf "${YELLOW}This will remove all containers, images, volumes, and configuration.${RESET}\n"
@@ -762,6 +782,7 @@ cmd_uninstall() {
 
 cmd_logs() {
     detect_compose_cmd
+    detect_platform
     [ -f "$COMPOSE_FILE" ] || die "ixora is not installed. Run: ixora install"
 
     if [ -n "$1" ]; then
