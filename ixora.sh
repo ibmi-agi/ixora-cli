@@ -376,7 +376,7 @@ APISVC
 
         _cur_id="default"
         _cur_name="$_primary_host"
-        _cur_agents="ibmi-security-assistant, ibmi-sql-services, ibmi-knowledge-agent"
+        _cur_agents="ibmi-security-assistant, ibmi-system-health, ibmi-db-explorer, ibmi-db-performance, ibmi-work-management, ibmi-system-config, ibmi-sql-service-guide, ibmi-knowledge-agent"
         _emit_ms_system
     fi
 
@@ -741,11 +741,19 @@ prompt_profile() {
 wait_for_healthy() {
     info "Waiting for services to become healthy (up to ${HEALTH_TIMEOUT}s)"
     _runtime="${COMPOSE_CMD%% *}"
+
+    # Find the primary API container (api-default, api-*, or legacy api)
+    _api_container=$($COMPOSE_CMD -p ixora -f "$COMPOSE_FILE" ps --format '{{.Name}}' 2>/dev/null | grep -m1 'ixora-api-' || echo "")
+    if [ -z "$_api_container" ]; then
+        warn "Could not find API container — skipping health check"
+        return 0
+    fi
+
     _elapsed=0
     while [ "$_elapsed" -lt "$HEALTH_TIMEOUT" ]; do
         # Check API container state directly (works on both docker and podman)
-        _state=$($_runtime inspect --format '{{.State.Status}}' ixora-api-1 2>/dev/null || echo "")
-        _health=$($_runtime inspect --format '{{.State.Health.Status}}' ixora-api-1 2>/dev/null || echo "")
+        _state=$($_runtime inspect --format '{{.State.Status}}' "$_api_container" 2>/dev/null || echo "")
+        _health=$($_runtime inspect --format '{{.State.Health.Status}}' "$_api_container" 2>/dev/null || echo "")
 
         case "$_state" in
             exited|dead)
@@ -1305,23 +1313,27 @@ cmd_system_add() {
 
     printf '\n'
 
+    _ALL_OPS_AGENTS="ibmi-system-health, ibmi-db-explorer, ibmi-db-performance, ibmi-work-management, ibmi-system-config, ibmi-sql-service-guide"
+
     info "Select agents for this system"
     printf '\n'
-    printf "  ${BOLD}1)${RESET} All agents (security, sql-services, knowledge)\n"
-    printf "  ${BOLD}2)${RESET} Security + SQL Services\n"
+    printf "  ${BOLD}1)${RESET} All agents (security, operations, knowledge)\n"
+    printf "  ${BOLD}2)${RESET} Security + Operations\n"
     printf "  ${BOLD}3)${RESET} Security only\n"
-    printf "  ${BOLD}4)${RESET} SQL Services only\n"
+    printf "  ${BOLD}4)${RESET} Operations only (health, database, work mgmt, config)\n"
+    printf "  ${BOLD}5)${RESET} Knowledge only\n"
     printf '\n'
     printf "${CYAN}  Choose${RESET} [1]: "
     read -r _agent_choice
     _agent_choice="${_agent_choice:-1}"
 
     case "$_agent_choice" in
-        1) _agents="ibmi-security-assistant, ibmi-sql-services, ibmi-knowledge-agent" ;;
-        2) _agents="ibmi-security-assistant, ibmi-sql-services" ;;
+        1) _agents="ibmi-security-assistant, ${_ALL_OPS_AGENTS}, ibmi-knowledge-agent" ;;
+        2) _agents="ibmi-security-assistant, ${_ALL_OPS_AGENTS}" ;;
         3) _agents="ibmi-security-assistant" ;;
-        4) _agents="ibmi-sql-services" ;;
-        *) _agents="ibmi-security-assistant, ibmi-sql-services, ibmi-knowledge-agent" ;;
+        4) _agents="${_ALL_OPS_AGENTS}" ;;
+        5) _agents="ibmi-knowledge-agent" ;;
+        *) _agents="ibmi-security-assistant, ${_ALL_OPS_AGENTS}, ibmi-knowledge-agent" ;;
     esac
 
     # Credentials in .env only
@@ -1532,8 +1544,9 @@ ${BOLD}Multi-System:${RESET}
   system remove <id>  Remove a system
   system list         Show all configured systems
 
-  When 2+ systems are configured, ixora deploys per-system MCP and API
-  containers. Port 8000 serves the primary system, 8001+ for additional.
+  When 2+ systems are configured, ixora automatically deploys per-system
+  agents and a fleet gateway with cross-system coordination teams.
+  Port 8000 always serves the API — single or multi-system.
 
 ${BOLD}Options:${RESET}
   --profile <name>   Set agent profile (full|sql-services|security|knowledge)
