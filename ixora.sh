@@ -1532,9 +1532,8 @@ ${BOLD}Multi-System:${RESET}
   system remove <id>  Remove a system
   system list         Show all configured systems
 
-  When 2+ systems are configured, ixora automatically deploys per-system
-  agents and a fleet gateway with cross-system coordination teams.
-  Port 8000 always serves the API — single or multi-system.
+  When 2+ systems are configured, ixora deploys per-system MCP and API
+  containers. Port 8000 serves the primary system, 8001+ for additional.
 
 ${BOLD}Options:${RESET}
   --profile <name>   Set agent profile (full|sql-services|security|knowledge)
