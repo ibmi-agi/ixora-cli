@@ -1,6 +1,6 @@
 #!/bin/sh
 # ixora.sh — Self-contained deployment script for ixora AI agents on IBM i
-# https://github.com/ibmi-agi/ixora
+# https://github.com/ibmi-agi/ixora-cli
 #
 # Usage: ixora.sh [command] [options]
 # Run with --help for full usage information.
@@ -12,8 +12,9 @@ trap 'stty echo 2>/dev/null || true' EXIT
 
 IXORA_DIR="$HOME/.ixora"
 COMPOSE_FILE="$IXORA_DIR/docker-compose.yml"
+SYSTEMS_CONFIG="$IXORA_DIR/ixora-systems.yaml"
 ENV_FILE="$IXORA_DIR/.env"
-SCRIPT_VERSION="0.0.5"
+SCRIPT_VERSION="0.0.7"
 HEALTH_TIMEOUT=30
 
 # ---------------------------------------------------------------------------
@@ -94,10 +95,53 @@ run_compose() {
 }
 
 # ---------------------------------------------------------------------------
-# Write the embedded docker-compose.yml
+# System count — how many IBM i systems are configured
+# ---------------------------------------------------------------------------
+_system_count() {
+    if [ ! -f "$SYSTEMS_CONFIG" ]; then
+        printf '0'
+        return
+    fi
+    grep -c '  - id:' "$SYSTEMS_CONFIG" 2>/dev/null || printf '0'
+}
+
+_system_id_exists() {
+    [ -f "$SYSTEMS_CONFIG" ] && grep -q "  - id: ${1}$" "$SYSTEMS_CONFIG" 2>/dev/null
+}
+
+# ---------------------------------------------------------------------------
+# Total system count: primary (from install) + additional (from system add)
+# ---------------------------------------------------------------------------
+_total_system_count() {
+    _additional=$(_system_count)
+    _primary_host=$(env_get DB2i_HOST)
+    if [ -n "$_primary_host" ]; then
+        printf '%s' "$((_additional + 1))"
+    else
+        printf '%s' "$_additional"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Write docker-compose.yml — adapts based on number of systems
+#   1 system:  standard layout (MCP + API + UI)
+#   2+ systems: per-system MCP + API, fleet gateway on :8000, UI
 # ---------------------------------------------------------------------------
 write_compose_file() {
     mkdir -p "$IXORA_DIR"
+
+    _total=$(_total_system_count)
+
+    if [ "$_total" -gt 1 ]; then
+        _write_multi_system_compose
+    else
+        _write_single_system_compose
+    fi
+
+    success "Wrote $COMPOSE_FILE"
+}
+
+_write_single_system_compose() {
     cat > "$COMPOSE_FILE" <<'COMPOSEYML'
 services:
   agentos-db:
@@ -203,8 +247,173 @@ volumes:
   pgdata:
   agentos-data:
 COMPOSEYML
+}
 
-    success "Wrote $COMPOSE_FILE"
+# ---------------------------------------------------------------------------
+# Multi-system compose: per-system MCP + API, each on its own port
+# Primary system on :8000, additional systems on :8001, :8002, etc.
+# ---------------------------------------------------------------------------
+_write_multi_system_compose() {
+    _version=$(env_get IXORA_VERSION)
+    _version="${_version:-latest}"
+    _db_image="${IXORA_DB_IMAGE:-agnohq/pgvector:18}"
+
+    cat > "$COMPOSE_FILE" <<MSHEAD
+# Auto-generated for multi-system deployment ($(_total_system_count) systems)
+# Regenerated on every start. Edit ixora-systems.yaml instead.
+services:
+  agentos-db:
+    image: ${_db_image}
+    restart: unless-stopped
+    ports:
+      - "\${DB_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: \${DB_USER:-ai}
+      POSTGRES_PASSWORD: \${DB_PASS:-ai}
+      POSTGRES_DB: \${DB_DATABASE:-ai}
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \${DB_USER:-ai}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+MSHEAD
+
+    _api_port=8000
+    _cur_id="" _cur_name="" _cur_agents=""
+    _first_api=""  # track first API service for UI depends_on
+
+    _emit_ms_system() {
+        [ -z "$_cur_id" ] && return
+
+        _id_upper=$(printf '%s' "$_cur_id" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+
+        cat >> "$COMPOSE_FILE" <<MCPSVC
+  mcp-${_cur_id}:
+    image: ghcr.io/ibmi-agi/ixora-mcp-server:\${IXORA_VERSION:-${_version}}
+    restart: unless-stopped
+    environment:
+      DB2i_HOST: \${SYSTEM_${_id_upper}_HOST}
+      DB2i_USER: \${SYSTEM_${_id_upper}_USER}
+      DB2i_PASS: \${SYSTEM_${_id_upper}_PASS}
+      DB2_PORT: \${SYSTEM_${_id_upper}_PORT:-8076}
+      MCP_TRANSPORT_TYPE: http
+      MCP_SESSION_MODE: stateless
+      YAML_AUTO_RELOAD: "true"
+      TOOLS_YAML_PATH: /usr/src/app/tools
+      YAML_ALLOW_DUPLICATE_SOURCES: "true"
+      IBMI_ENABLE_EXECUTE_SQL: "true"
+      IBMI_ENABLE_DEFAULT_TOOLS: "true"
+      MCP_AUTH_MODE: "none"
+      IBMI_HTTP_AUTH_ENABLED: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3010/healthz').then(function(r){process.exit(r.ok?0:1)}).catch(function(){process.exit(1)})\""]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 3s
+
+MCPSVC
+
+        cat >> "$COMPOSE_FILE" <<APISVC
+  api-${_cur_id}:
+    image: ghcr.io/ibmi-agi/ixora-api:\${IXORA_VERSION:-${_version}}
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    restart: unless-stopped
+    ports:
+      - "${_api_port}:8000"
+    environment:
+      ANTHROPIC_API_KEY: \${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: \${OPENAI_API_KEY:-}
+      GOOGLE_API_KEY: \${GOOGLE_API_KEY:-}
+      OLLAMA_HOST: \${OLLAMA_HOST:-http://host.docker.internal:11434}
+      IXORA_AGENT_MODEL: \${IXORA_AGENT_MODEL:-anthropic:claude-sonnet-4-6}
+      IXORA_TEAM_MODEL: \${IXORA_TEAM_MODEL:-anthropic:claude-haiku-4-5}
+      DB_HOST: agentos-db
+      DB_PORT: "5432"
+      DB_USER: \${DB_USER:-ai}
+      DB_PASS: \${DB_PASS:-ai}
+      DB_DATABASE: \${DB_DATABASE:-ai}
+      MCP_URL: http://mcp-${_cur_id}:3010/mcp
+      IXORA_SYSTEM_ID: ${_cur_id}
+      IXORA_SYSTEM_NAME: ${_cur_name:-${_cur_id}}
+      IAASSIST_DEPLOYMENT_CONFIG: app/config/deployments/\${IXORA_PROFILE:-full}.yaml
+      DATA_DIR: /data
+      RUNTIME_ENV: docker
+      WAIT_FOR_DB: "True"
+      CORS_ORIGINS: \${CORS_ORIGINS:-*}
+      AUTH_ENABLED: "false"
+      MCP_AUTH_MODE: "none"
+    volumes:
+      - agentos-data:/data
+    depends_on:
+      agentos-db:
+        condition: service_healthy
+      mcp-${_cur_id}:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).getcode()==200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+APISVC
+
+        [ -z "$_first_api" ] && _first_api="api-${_cur_id}"
+        _api_port=$((_api_port + 1))
+    }
+
+    # Primary system (from ixora install)
+    _primary_host=$(env_get DB2i_HOST)
+    if [ -n "$_primary_host" ]; then
+        _update_env_key "SYSTEM_DEFAULT_HOST" "$_primary_host"
+        _update_env_key "SYSTEM_DEFAULT_PORT" "$(env_get DB2_PORT)"
+        _update_env_key "SYSTEM_DEFAULT_USER" "$(env_get DB2i_USER)"
+        _update_env_key "SYSTEM_DEFAULT_PASS" "$(env_get DB2i_PASS)"
+
+        _cur_id="default"
+        _cur_name="$_primary_host"
+        _cur_agents="ibmi-security-assistant, ibmi-sql-services, ibmi-knowledge-agent"
+        _emit_ms_system
+    fi
+
+    # Additional systems from ixora-systems.yaml
+    if [ -f "$SYSTEMS_CONFIG" ]; then
+        _cur_id="" _cur_name="" _cur_agents=""
+        while IFS= read -r _line; do
+            case "$_line" in
+                "  - id: "*)
+                    _emit_ms_system
+                    _cur_id="${_line#*id: }"
+                    _cur_name="" _cur_agents=""
+                    ;;
+                *"name: "*)   _cur_name=$(printf '%s' "$_line" | sed "s/.*name: *//; s/'//g") ;;
+                *"agents: "*) _cur_agents=$(printf '%s' "$_line" | sed "s/.*agents: *//") ;;
+            esac
+        done < "$SYSTEMS_CONFIG"
+        _emit_ms_system
+    fi
+
+    # UI points to primary system
+    cat >> "$COMPOSE_FILE" <<UISVC
+  ui:
+    image: ghcr.io/ibmi-agi/ixora-ui:\${IXORA_VERSION:-${_version}}
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    depends_on:
+      ${_first_api}:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  agentos-data:
+UISVC
 }
 
 # ---------------------------------------------------------------------------
@@ -241,6 +450,7 @@ write_env_file() {
     mkdir -p "$IXORA_DIR"
 
     # Preserve any extra keys the user may have added manually
+    # Preserve system credentials (SYSTEM_*) and any other user-added keys
     _known_keys="ANTHROPIC_API_KEY|OPENAI_API_KEY|GOOGLE_API_KEY|OLLAMA_HOST|DB2i_HOST|DB2i_USER|DB2i_PASS|IXORA_PROFILE|IXORA_VERSION|IXORA_AGENT_MODEL|IXORA_TEAM_MODEL"
     _extra=""
     if [ -f "$ENV_FILE" ]; then
@@ -630,12 +840,15 @@ cmd_install() {
 cmd_start() {
     detect_compose_cmd
     detect_platform
-    [ -f "$COMPOSE_FILE" ] || die "ixora is not installed. Run: ixora install"
+    [ -f "$ENV_FILE" ] || die "ixora is not installed. Run: ixora install"
 
     # If --profile was provided, update it in .env before starting
     if [ -n "$OPT_PROFILE" ]; then
         _update_profile "$OPT_PROFILE"
     fi
+
+    # Regenerate compose — adapts to current system count
+    write_compose_file
 
     info "Starting ixora services..."
     run_compose up -d
@@ -643,11 +856,28 @@ cmd_start() {
     wait_for_healthy
 
     _profile=$(env_get IXORA_PROFILE)
+    _total=$(_total_system_count)
     printf '\n'
     success "ixora is running!"
     printf "  ${BOLD}UI:${RESET}      http://localhost:3000\n"
     printf "  ${BOLD}API:${RESET}     http://localhost:8000\n"
     printf "  ${BOLD}Profile:${RESET} %s\n" "${_profile:-full}"
+    if [ "$_total" -gt 1 ]; then
+        printf "  ${BOLD}Systems:${RESET} %s\n" "$_total"
+        _port=8000
+        _primary_host=$(env_get DB2i_HOST)
+        [ -n "$_primary_host" ] && { printf "    ${DIM}:${_port} → default (${_primary_host})${RESET}\n"; _port=$((_port + 1)); }
+        if [ -f "$SYSTEMS_CONFIG" ]; then
+            grep '  - id:' "$SYSTEMS_CONFIG" | while IFS= read -r _line; do
+                _sid="${_line#*id: }"
+                _sid_upper=$(printf '%s' "$_sid" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+                _shost=$(env_get "SYSTEM_${_sid_upper}_HOST")
+                printf "    ${DIM}:${_port} → ${_sid} (${_shost})${RESET}\n"
+                _port=$((_port + 1))
+            done
+        fi
+        printf "  ${DIM}Note: UI connects to primary system (:8000) only. Use API ports for other systems.${RESET}\n"
+    fi
     printf '\n'
 }
 
@@ -1042,6 +1272,225 @@ _update_profile() {
     _update_env_key IXORA_PROFILE "$_new_profile"
 }
 
+# ===========================================================================
+# System management — add/remove IBM i systems
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# system add — interactively add an IBM i system
+# ---------------------------------------------------------------------------
+cmd_system_add() {
+    mkdir -p "$IXORA_DIR"
+
+    info "Add an IBM i system"
+    printf '\n'
+
+    _id=$(prompt_value "System ID (short name, e.g., dev, prod)" "" "no")
+    [ -z "$_id" ] && die "System ID is required"
+    _id=$(printf '%s' "$_id" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-')
+    [ -z "$_id" ] && die "System ID must contain alphanumeric characters"
+    [ "$_id" = "default" ] && die "System ID 'default' is reserved for the primary system"
+    _system_id_exists "$_id" && die "System '$_id' already exists"
+
+    _name=$(prompt_value "Display name" "$_id" "no")
+    _host=$(prompt_value "IBM i hostname" "" "no")
+    [ -z "$_host" ] && die "Hostname is required"
+
+    _port=$(prompt_value "IBM i Mapepire port" "8076" "no")
+    _user=$(prompt_value "IBM i username" "" "no")
+    [ -z "$_user" ] && die "Username is required"
+
+    _pass=$(prompt_value "IBM i password" "" "yes")
+    [ -z "$_pass" ] && die "Password is required"
+
+    printf '\n'
+
+    info "Select agents for this system"
+    printf '\n'
+    printf "  ${BOLD}1)${RESET} All agents (security, sql-services, knowledge)\n"
+    printf "  ${BOLD}2)${RESET} Security + SQL Services\n"
+    printf "  ${BOLD}3)${RESET} Security only\n"
+    printf "  ${BOLD}4)${RESET} SQL Services only\n"
+    printf '\n'
+    printf "${CYAN}  Choose${RESET} [1]: "
+    read -r _agent_choice
+    _agent_choice="${_agent_choice:-1}"
+
+    case "$_agent_choice" in
+        1) _agents="ibmi-security-assistant, ibmi-sql-services, ibmi-knowledge-agent" ;;
+        2) _agents="ibmi-security-assistant, ibmi-sql-services" ;;
+        3) _agents="ibmi-security-assistant" ;;
+        4) _agents="ibmi-sql-services" ;;
+        *) _agents="ibmi-security-assistant, ibmi-sql-services, ibmi-knowledge-agent" ;;
+    esac
+
+    # Credentials in .env only
+    _id_upper=$(printf '%s' "$_id" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+    _update_env_key "SYSTEM_${_id_upper}_HOST" "$_host"
+    _update_env_key "SYSTEM_${_id_upper}_PORT" "$_port"
+    _update_env_key "SYSTEM_${_id_upper}_USER" "$_user"
+    _update_env_key "SYSTEM_${_id_upper}_PASS" "$_pass"
+
+    _e_name=$(_sq_escape "$_name")
+
+    if [ "$(_system_count)" = "0" ]; then
+        cat > "$SYSTEMS_CONFIG" <<SYSEOF
+# yaml-language-server: \$schema=
+# Ixora Systems Configuration
+# Manage with: ixora system add|remove|list
+# Credentials stored in .env (SYSTEM_<ID>_USER, SYSTEM_<ID>_PASS)
+systems:
+  - id: ${_id}
+    name: '${_e_name}'
+    agents: [${_agents}]
+SYSEOF
+    else
+        cat >> "$SYSTEMS_CONFIG" <<SYSEOF
+  - id: ${_id}
+    name: '${_e_name}'
+    agents: [${_agents}]
+SYSEOF
+    fi
+
+    chmod 600 "$SYSTEMS_CONFIG"
+    printf '\n'
+    success "Added system '${_id}' (${_host})"
+    printf "  Credentials stored in ${DIM}%s${RESET}\n" "$ENV_FILE"
+    printf "  Systems: $(_system_count)\n"
+    printf "  Restart to apply: ${BOLD}ixora restart${RESET}\n"
+    printf '\n'
+}
+
+# ---------------------------------------------------------------------------
+# system remove — remove a system by ID
+# ---------------------------------------------------------------------------
+cmd_system_remove() {
+    _rm_id="$1"
+    [ -z "$_rm_id" ] && die "Usage: ixora system remove <system-id>"
+    [ -f "$SYSTEMS_CONFIG" ] || die "No systems configured"
+    _system_id_exists "$_rm_id" || die "System '$_rm_id' not found"
+
+    _tmp="$SYSTEMS_CONFIG.tmp.$$"
+    _skip="no"
+    while IFS= read -r _line; do
+        case "$_line" in
+            "  - id: ${_rm_id}")
+                _skip="yes"
+                continue
+                ;;
+            "  - id: "*)
+                _skip="no"
+                ;;
+        esac
+        [ "$_skip" = "yes" ] && continue
+        printf '%s\n' "$_line"
+    done < "$SYSTEMS_CONFIG" > "$_tmp"
+    mv "$_tmp" "$SYSTEMS_CONFIG"
+    chmod 600 "$SYSTEMS_CONFIG"
+
+    # Remove credentials from .env
+    _rm_upper=$(printf '%s' "$_rm_id" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+    if [ -f "$ENV_FILE" ]; then
+        _tmp="$ENV_FILE.tmp.$$"
+        grep -v "^SYSTEM_${_rm_upper}_" "$ENV_FILE" > "$_tmp" || true
+        mv "$_tmp" "$ENV_FILE"
+        chmod 600 "$ENV_FILE"
+    fi
+
+    success "Removed system '${_rm_id}'"
+    printf "  Systems: $(_system_count)\n"
+    printf "  Restart to apply: ${BOLD}ixora restart${RESET}\n"
+}
+
+# ---------------------------------------------------------------------------
+# system list — show configured IBM i systems
+# ---------------------------------------------------------------------------
+cmd_system_list() {
+    # Always show the primary system from install (DB2i_* vars)
+    _primary_host=$(env_get DB2i_HOST)
+
+    printf '\n'
+    printf "  ${BOLD}IBM i Systems${RESET}\n"
+    printf '\n'
+
+    if [ -n "$_primary_host" ]; then
+        _primary_user=$(env_get DB2i_USER)
+        printf "  ${CYAN}*${RESET}  %-12s  %-30s  ${DIM}(primary — from install)${RESET}\n" "default" "$_primary_host"
+    fi
+
+    if [ -f "$SYSTEMS_CONFIG" ] && [ "$(_system_count)" -gt 0 ]; then
+        _idx=0
+        _cur_id="" _cur_agents=""
+
+        while IFS= read -r _line; do
+            case "$_line" in
+                "  - id: "*)
+                    if [ -n "$_cur_id" ]; then
+                        _id_upper=$(printf '%s' "$_cur_id" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+                        _sys_host=$(env_get "SYSTEM_${_id_upper}_HOST")
+                        _sys_host="${_sys_host:-${DIM}(no host)${RESET}}"
+                        printf "  ${CYAN} ${RESET}  %-12s  %-30s  %s\n" "$_cur_id" "$_sys_host" "$_cur_agents"
+                    fi
+                    _cur_id="${_line#*id: }"
+                    _cur_agents=""
+                    ;;
+                *"agents: "*) _cur_agents=$(printf '%s' "$_line" | sed "s/.*agents: *//; s/[][]//g") ;;
+            esac
+        done < "$SYSTEMS_CONFIG"
+        # Print last
+        if [ -n "$_cur_id" ]; then
+            _id_upper=$(printf '%s' "$_cur_id" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+            _sys_host=$(env_get "SYSTEM_${_id_upper}_HOST")
+            _sys_host="${_sys_host:-${DIM}(no host)${RESET}}"
+            printf "  ${CYAN} ${RESET}  %-12s  %-30s  %s\n" "$_cur_id" "$_sys_host" "$_cur_agents"
+        fi
+    fi
+
+    if [ -z "$_primary_host" ] && { [ ! -f "$SYSTEMS_CONFIG" ] || [ "$(_system_count)" = "0" ]; }; then
+        printf "  ${DIM}No systems configured. Run: ${BOLD}ixora install${RESET}\n"
+    fi
+
+    printf '\n'
+    _total=$(_system_count)
+    [ -n "$_primary_host" ] && _total=$((_total + 1))
+    if [ "$_total" -gt 1 ]; then
+        printf "  ${DIM}Multi-system mode: each system runs on its own port (8000, 8001, ...)${RESET}\n"
+    fi
+    printf "  ${DIM}Add: ixora system add  |  Remove: ixora system remove <id>${RESET}\n"
+    printf '\n'
+}
+
+# ---------------------------------------------------------------------------
+# system — dispatch subcommands
+# ---------------------------------------------------------------------------
+cmd_system() {
+    _subcmd="${1:-}"
+    shift 2>/dev/null || true
+
+    case "$_subcmd" in
+        add)    cmd_system_add ;;
+        remove) cmd_system_remove "$@" ;;
+        list)   cmd_system_list ;;
+        "")
+            printf '\n'
+            printf "  ${BOLD}ixora system${RESET} — manage IBM i systems\n"
+            printf '\n'
+            printf "  ${BOLD}Commands:${RESET}\n"
+            printf "    add       Add an IBM i system\n"
+            printf "    remove    Remove a system by ID\n"
+            printf "    list      Show configured systems\n"
+            printf '\n'
+            printf "  ${BOLD}Usage:${RESET}\n"
+            printf "    ixora system add         # Add another IBM i system\n"
+            printf "    ixora restart            # Restart with multi-system support\n"
+            printf '\n'
+            ;;
+        *)
+            die "Unknown system subcommand: $_subcmd (use: add, remove, list)"
+            ;;
+    esac
+}
+
 # ---------------------------------------------------------------------------
 # Version command
 # ---------------------------------------------------------------------------
@@ -1066,16 +1515,26 @@ ${BOLD}Usage:${RESET}
   ixora [command] [options]
 
 ${BOLD}Commands:${RESET}
-  install     First-time setup
+  install     First-time setup (single IBM i system)
   start       Start services
   stop        Stop services
   restart     Restart all services, or a specific service by name
   status      Show service status and deployed profile
   upgrade     Pull latest images and restart
   config      View and edit deployment configuration
+  system      Manage IBM i systems (add, remove, list)
   uninstall   Stop services and remove images (config preserved)
   logs        Tail service logs (optional service name argument)
   version     Show script and image versions
+
+${BOLD}Multi-System:${RESET}
+  system add          Add another IBM i system
+  system remove <id>  Remove a system
+  system list         Show all configured systems
+
+  When 2+ systems are configured, ixora automatically deploys per-system
+  agents and a fleet gateway with cross-system coordination teams.
+  Port 8000 always serves the API — single or multi-system.
 
 ${BOLD}Options:${RESET}
   --profile <name>   Set agent profile (full|sql-services|security|knowledge)
@@ -1087,19 +1546,16 @@ ${BOLD}Options:${RESET}
 
 ${BOLD}Examples:${RESET}
   ixora install                           # First-time setup (interactive)
-  ixora start --profile security          # Start with security profile
-  ixora upgrade --version 0.0.3           # Upgrade and pin version
-  ixora restart                           # Restart all services
-  ixora restart api                       # Restart just the API
-  ixora config                            # Show current configuration
-  ixora config set DB2i_HOST myibmi.com   # Update a config value
-  ixora config edit                       # Open config in editor
+  ixora start                             # Start services
+  ixora system add                        # Add another IBM i system
+  ixora restart                           # Restart (now multi-system)
+  ixora system list                       # Show all systems
+  ixora config set DB2i_HOST myibmi.com   # Update primary system
   ixora logs api                          # Tail API logs
-  ixora status                            # Show running services
 
 ${BOLD}Config:${RESET}
-  ~/.ixora/docker-compose.yml       # Compose file
-  ~/.ixora/.env                     # Environment configuration
+  ~/.ixora/docker-compose.yml       # Compose file (auto-generated)
+  ~/.ixora/.env                     # Environment and credentials
 
 USAGE
 }
@@ -1120,10 +1576,13 @@ main() {
     CONFIG_ARG2=""
     CONFIG_ARG3=""
     _config_argc=0
+    SYSTEM_ARG1=""
+    SYSTEM_ARG2=""
+    _system_argc=0
 
     while [ $# -gt 0 ]; do
         case "$1" in
-            install|start|stop|restart|status|upgrade|uninstall|logs|config|version)
+            install|start|stop|restart|status|upgrade|uninstall|logs|config|system|version)
                 if [ -n "$COMMAND" ]; then
                     # Already have a command — treat as positional arg for
                     # commands that accept them (e.g. config set KEY VALUE
@@ -1138,6 +1597,12 @@ main() {
                             1) CONFIG_ARG1="$1" ;;
                             2) CONFIG_ARG2="$1" ;;
                             3) CONFIG_ARG3="$1" ;;
+                        esac
+                    elif [ "$COMMAND" = "system" ]; then
+                        _system_argc=$((_system_argc + 1))
+                        case "$_system_argc" in
+                            1) SYSTEM_ARG1="$1" ;;
+                            2) SYSTEM_ARG2="$1" ;;
                         esac
                     else
                         die "Unknown argument: $1 (see --help)"
@@ -1190,6 +1655,12 @@ main() {
                         2) CONFIG_ARG2="$1" ;;
                         3) CONFIG_ARG3="$1" ;;
                     esac
+                elif [ "$COMMAND" = "system" ]; then
+                    _system_argc=$((_system_argc + 1))
+                    case "$_system_argc" in
+                        1) SYSTEM_ARG1="$1" ;;
+                        2) SYSTEM_ARG2="$1" ;;
+                    esac
                 else
                     die "Unknown argument: $1 (see --help)"
                 fi
@@ -1214,6 +1685,7 @@ main() {
         uninstall) cmd_uninstall ;;
         logs)      cmd_logs "$LOG_SERVICE" ;;
         config)    cmd_config "$CONFIG_ARG1" "$CONFIG_ARG2" "$CONFIG_ARG3" ;;
+        system)    cmd_system "$SYSTEM_ARG1" "$SYSTEM_ARG2" ;;
         version)   cmd_version ;;
         *)         die "Unknown command: $COMMAND" ;;
     esac
