@@ -14,7 +14,7 @@ IXORA_DIR="$HOME/.ixora"
 COMPOSE_FILE="$IXORA_DIR/docker-compose.yml"
 SYSTEMS_CONFIG="$IXORA_DIR/ixora-systems.yaml"
 ENV_FILE="$IXORA_DIR/.env"
-SCRIPT_VERSION="0.0.9"
+SCRIPT_VERSION="0.0.10"
 HEALTH_TIMEOUT=30
 
 # ---------------------------------------------------------------------------
@@ -1631,7 +1631,7 @@ main() {
                 ;;
             --version)
                 [ -n "${2:-}" ] || die "--version requires a value (e.g., --version 0.0.3). Use 'ixora version' to show versions."
-                OPT_VERSION="${2#v}"
+                OPT_VERSION="$2"
                 shift 2
                 ;;
             --no-pull)
