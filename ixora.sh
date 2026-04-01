@@ -14,7 +14,7 @@ IXORA_DIR="$HOME/.ixora"
 COMPOSE_FILE="$IXORA_DIR/docker-compose.yml"
 SYSTEMS_CONFIG="$IXORA_DIR/ixora-systems.yaml"
 ENV_FILE="$IXORA_DIR/.env"
-SCRIPT_VERSION="0.0.8"
+SCRIPT_VERSION="0.0.9"
 HEALTH_TIMEOUT=30
 
 # ---------------------------------------------------------------------------
