@@ -48,7 +48,7 @@ export async function waitForHealthy(
 
       if (state === "exited" || state === "dead") {
         spinner.fail("API container failed to start");
-        console.log(`\n  Run ${bold("ixora-cli logs api")} to investigate.`);
+        console.log(`\n  Run ${bold("ixora logs api")} to investigate.`);
         return false;
       }
 
@@ -76,6 +76,6 @@ export async function waitForHealthy(
   spinner.warn(
     `Services did not become healthy within ${timeout}s — they may still be starting`,
   );
-  console.log(`  Run ${bold("ixora-cli logs api")} to investigate.`);
+  console.log(`  Run ${bold("ixora logs api")} to investigate.`);
   return false;
 }

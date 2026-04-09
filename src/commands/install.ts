@@ -313,7 +313,7 @@ export async function cmdInstall(opts: InstallOptions): Promise<void> {
   console.log(`  ${bold("Profile:")} ${profile}`);
   console.log();
   console.log(
-    `  Manage with: ${bold("ixora-cli start|stop|restart|status|upgrade|config|logs")}`,
+    `  Manage with: ${bold("ixora start|stop|restart|status|upgrade|config|logs")}`,
   );
   console.log(`  Config dir:  ${dim(IXORA_DIR)}`);
   console.log();

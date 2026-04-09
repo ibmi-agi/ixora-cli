@@ -17,7 +17,7 @@ import {
 
 export function cmdConfigShow(): void {
   if (!existsSync(ENV_FILE)) {
-    die("ixora is not installed. Run: ixora-cli install");
+    die("ixora is not installed. Run: ixora install");
   }
 
   console.log();
@@ -103,24 +103,24 @@ export function cmdConfigShow(): void {
     console.log();
   }
 
-  console.log(`  ${dim("Edit with: ixora-cli config edit")}`);
-  console.log(`  ${dim("Set a value: ixora-cli config set KEY VALUE")}`);
+  console.log(`  ${dim("Edit with: ixora config edit")}`);
+  console.log(`  ${dim("Set a value: ixora config set KEY VALUE")}`);
   console.log();
 }
 
 export function cmdConfigSet(key: string, value: string): void {
   if (!existsSync(ENV_FILE)) {
-    die("ixora is not installed. Run: ixora-cli install");
+    die("ixora is not installed. Run: ixora install");
   }
 
   updateEnvKey(key, value);
   success(`Set ${key}`);
-  console.log(`  Restart to apply: ${bold("ixora-cli restart")}`);
+  console.log(`  Restart to apply: ${bold("ixora restart")}`);
 }
 
 export async function cmdConfigEdit(): Promise<void> {
   if (!existsSync(ENV_FILE)) {
-    die("ixora is not installed. Run: ixora-cli install");
+    die("ixora is not installed. Run: ixora install");
   }
 
   const editor =
@@ -149,5 +149,5 @@ export async function cmdConfigEdit(): Promise<void> {
 
   console.log();
   success("Config saved");
-  console.log(`  Restart to apply: ${bold("ixora-cli restart")}`);
+  console.log(`  Restart to apply: ${bold("ixora restart")}`);
 }

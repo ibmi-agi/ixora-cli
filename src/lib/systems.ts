@@ -104,7 +104,7 @@ export function addSystem(
   if (!existsSync(configFile) || systemCount(configFile) === 0) {
     const content = `# yaml-language-server: $schema=
 # Ixora Systems Configuration
-# Manage with: ixora-cli system add|remove|list
+# Manage with: ixora system add|remove|list
 # Credentials stored in .env (SYSTEM_<ID>_USER, SYSTEM_<ID>_PASS)
 systems:
 ${entry}`;

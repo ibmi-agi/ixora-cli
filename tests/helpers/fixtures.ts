@@ -34,7 +34,7 @@ RAG_API_URL='http://rag.example.com'
 
 export const SAMPLE_SYSTEMS_YAML = `# yaml-language-server: $schema=
 # Ixora Systems Configuration
-# Manage with: ixora-cli system add|remove|list
+# Manage with: ixora system add|remove|list
 # Credentials stored in .env (SYSTEM_<ID>_USER, SYSTEM_<ID>_PASS)
 systems:
   - id: dev

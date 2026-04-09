@@ -4,7 +4,7 @@ import { createProgram } from "../../src/cli.js";
 describe("CLI program", () => {
   it("creates a program with correct name", () => {
     const program = createProgram();
-    expect(program.name()).toBe("ixora-cli");
+    expect(program.name()).toBe("ixora");
   });
 
   it("has all expected commands", () => {

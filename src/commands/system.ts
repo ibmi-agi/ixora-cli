@@ -94,7 +94,7 @@ export async function cmdSystemAdd(): Promise<void> {
   success(`Added system '${cleanId}' (${host.trim()})`);
   console.log(`  Credentials stored in ${dim(ENV_FILE)}`);
   console.log(`  Systems: ${systemCount()}`);
-  console.log(`  Restart to apply: ${bold("ixora-cli restart")}`);
+  console.log(`  Restart to apply: ${bold("ixora restart")}`);
   console.log();
 }
 
@@ -107,7 +107,7 @@ export function cmdSystemRemove(id: string): void {
 
   success(`Removed system '${id}'`);
   console.log(`  Systems: ${systemCount()}`);
-  console.log(`  Restart to apply: ${bold("ixora-cli restart")}`);
+  console.log(`  Restart to apply: ${bold("ixora restart")}`);
 }
 
 export function cmdSystemList(): void {
@@ -134,7 +134,7 @@ export function cmdSystemList(): void {
   }
 
   if (!primaryHost && systems.length === 0) {
-    console.log(`  ${dim(`No systems configured. Run: ${bold("ixora-cli install")}`)}`);
+    console.log(`  ${dim(`No systems configured. Run: ${bold("ixora install")}`)}`);
   }
 
   console.log();
@@ -146,7 +146,7 @@ export function cmdSystemList(): void {
     );
   }
   console.log(
-    `  ${dim("Add: ixora-cli system add  |  Remove: ixora-cli system remove <id>")}`,
+    `  ${dim("Add: ixora system add  |  Remove: ixora system remove <id>")}`,
   );
   console.log();
 }

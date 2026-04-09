@@ -22,7 +22,7 @@ import {
 
 export function createProgram(): Command {
   const program = new Command()
-    .name("ixora-cli")
+    .name("ixora")
     .description("Manage ixora AI agent deployments on IBM i")
     .version(SCRIPT_VERSION, "-V, --cli-version", "Show CLI version number")
     .option(
