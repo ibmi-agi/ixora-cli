@@ -64,6 +64,7 @@ describe("env", () => {
         db2Host: "ibmi.local",
         db2User: "ADMIN",
         db2Pass: "pass123",
+        db2Port: "8076",
         profile: "full",
         version: "latest",
       };
@@ -89,6 +90,7 @@ describe("env", () => {
         db2Host: "ibmi.local",
         db2User: "ADMIN",
         db2Pass: "pass",
+        db2Port: "8076",
         profile: "full",
         version: "latest",
       };
@@ -107,6 +109,7 @@ describe("env", () => {
         db2Host: "new-host.com",
         db2User: "USER2",
         db2Pass: "newpass",
+        db2Port: "8076",
         profile: "security",
         version: "v1.0.0",
       };
@@ -128,6 +131,7 @@ describe("env", () => {
         db2Host: "host",
         db2User: "user",
         db2Pass: "pass",
+        db2Port: "8076",
         profile: "full",
         version: "latest",
       };
@@ -146,6 +150,7 @@ describe("env", () => {
         db2Host: "host",
         db2User: "user",
         db2Pass: "pass'with'quotes",
+        db2Port: "8076",
         profile: "full",
         version: "latest",
       };
@@ -162,6 +167,7 @@ describe("env", () => {
         db2Host: "h",
         db2User: "u",
         db2Pass: "p",
+        db2Port: "8076",
         profile: "full",
         version: "latest",
       };

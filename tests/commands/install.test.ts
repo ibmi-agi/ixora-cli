@@ -41,7 +41,8 @@ vi.mock("@inquirer/prompts", () => ({
     .mockResolvedValueOnce("full"),        // profile
   input: vi.fn()
     .mockResolvedValueOnce("myibmi.com")  // host
-    .mockResolvedValueOnce("QSECOFR"),    // user
+    .mockResolvedValueOnce("QSECOFR")    // user
+    .mockResolvedValueOnce("8076"),       // port
   password: vi.fn()
     .mockResolvedValueOnce("sk-ant-test123")  // API key
     .mockResolvedValueOnce("mypassword"),      // IBM i password

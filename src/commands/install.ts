@@ -180,6 +180,7 @@ async function promptIbmiConnection(): Promise<{
   host: string;
   user: string;
   pass: string;
+  port: string;
 }> {
   info("IBM i Connection");
   console.log();
@@ -187,28 +188,39 @@ async function promptIbmiConnection(): Promise<{
   const curHost = envGet("DB2i_HOST");
   const curUser = envGet("DB2i_USER");
   const curPass = envGet("DB2i_PASS");
+  const curPort = envGet("DB2_PORT");
 
   const host = await input({
-    message: "IBM i hostname",
+    message: "IBM i hostname:",
     default: curHost || undefined,
     validate: (value) => (value.trim() ? true : "IBM i hostname is required"),
   });
 
   const user = await input({
-    message: "IBM i username",
+    message: "IBM i username:",
     default: curUser || undefined,
     validate: (value) => (value.trim() ? true : "IBM i username is required"),
   });
 
   const pass = await password({
-    message: "IBM i password",
+    message: "IBM i password:",
     validate: (value) => {
       if (!value && !curPass) return "IBM i password is required";
       return true;
     },
   });
 
-  return { host: host.trim(), user: user.trim(), pass: pass || curPass };
+  const port = await input({
+    message: "IBM i port:",
+    default: curPort || "8076",
+    validate: (value) => {
+      const n = parseInt(value.trim(), 10);
+      if (isNaN(n) || n < 1 || n > 65535) return "Enter a valid port number";
+      return true;
+    },
+  });
+
+  return { host: host.trim(), user: user.trim(), pass: pass || curPass, port: port.trim() };
 }
 
 async function promptProfile(): Promise<ProfileName> {
@@ -266,7 +278,7 @@ export async function cmdInstall(opts: InstallOptions): Promise<void> {
     await promptModelProvider();
   console.log();
 
-  const { host, user, pass } = await promptIbmiConnection();
+  const { host, user, pass, port } = await promptIbmiConnection();
   console.log();
 
   const profile = opts.profile
@@ -285,6 +297,7 @@ export async function cmdInstall(opts: InstallOptions): Promise<void> {
     db2Host: host,
     db2User: user,
     db2Pass: pass,
+    db2Port: port,
     profile,
     version,
   };

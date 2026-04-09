@@ -35,6 +35,7 @@ export interface EnvConfig {
   db2Host: string;
   db2User: string;
   db2Pass: string;
+  db2Port: string;
   profile: string;
   version: string;
 }
@@ -91,6 +92,7 @@ IXORA_TEAM_MODEL='${sqEscape(config.teamModel)}'
 DB2i_HOST='${sqEscape(config.db2Host)}'
 DB2i_USER='${sqEscape(config.db2User)}'
 DB2i_PASS='${sqEscape(config.db2Pass)}'
+DB2_PORT='${sqEscape(config.db2Port)}'
 
 # Deployment
 IXORA_PROFILE='${sqEscape(config.profile)}'
