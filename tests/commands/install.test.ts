@@ -34,11 +34,17 @@ vi.mock("execa", () => ({
   execa: vi.fn().mockResolvedValue({ stdout: "", stderr: "", exitCode: 0 }),
 }));
 
-// Mock prompts in order: provider select, API key, IBM i host, user, password, profile select
+vi.mock("../../src/lib/registry.js", () => ({
+  fetchImageTags: vi.fn().mockResolvedValue(["v0.0.11", "v0.0.10", "v0.0.9"]),
+  normalizeVersion: vi.fn((v: string) => v.startsWith("v") ? v : `v${v}`),
+}));
+
+// Mock prompts in order: provider select, API key, IBM i host, user, password, profile select, version select
 vi.mock("@inquirer/prompts", () => ({
   select: vi.fn()
     .mockResolvedValueOnce("anthropic")   // provider
-    .mockResolvedValueOnce("full"),        // profile
+    .mockResolvedValueOnce("full")        // profile
+    .mockResolvedValueOnce("v0.0.11"),    // image version
   input: vi.fn()
     .mockResolvedValueOnce("myibmi.com")  // host
     .mockResolvedValueOnce("QSECOFR")    // user

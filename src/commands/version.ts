@@ -26,7 +26,7 @@ export async function cmdVersion(opts?: { runtime?: string }): Promise<void> {
   console.log(`  images:  ${version}`);
   console.log(`  model:   ${agentModel}`);
 
-  // Try to show actual running container images with IDs
+  // Try to show actual running container images
   if (existsSync(COMPOSE_FILE)) {
     try {
       const composeCmd = await detectComposeCmd(opts?.runtime);
@@ -44,10 +44,7 @@ export async function cmdVersion(opts?: { runtime?: string }): Promise<void> {
           for (const img of images) {
             const tag = img.Tag || "unknown";
             const id = img.ID ? dim(` (${img.ID.slice(0, 12)})`) : "";
-            const imageStr =
-              tag === "latest"
-                ? `${img.Repository || ""}:latest${id}`
-                : `${img.Repository || ""}:${tag}`;
+            const imageStr = `${img.Repository || ""}:${tag}${id}`;
             console.log(
               `    ${(img.Service || "").padEnd(22)} ${dim(imageStr)}`,
             );
@@ -64,15 +61,11 @@ function parseComposeImages(output: string): ComposeImage[] {
   const trimmed = output.trim();
   if (!trimmed) return [];
 
-  // docker compose images --format json outputs one JSON object per line
-  // (NDJSON), not a JSON array
   try {
-    // Try as JSON array first
     const parsed = JSON.parse(trimmed);
     if (Array.isArray(parsed)) return parsed;
     return [parsed];
   } catch {
-    // Try as newline-delimited JSON
     return trimmed
       .split("\n")
       .filter((line) => line.trim())

@@ -33,6 +33,18 @@ vi.mock("execa", () => ({
   execa: vi.fn().mockResolvedValue({ stdout: "", stderr: "", exitCode: 0 }),
 }));
 
+vi.mock("../../src/lib/registry.js", () => ({
+  fetchImageTags: vi.fn().mockResolvedValue(["v0.0.11", "v0.0.10", "v0.0.9"]),
+  normalizeVersion: vi.fn((v: string) => v.startsWith("v") ? v : `v${v}`),
+}));
+
+vi.mock("@inquirer/prompts", () => ({
+  select: vi.fn().mockResolvedValue("v0.0.11"),
+  input: vi.fn(),
+  password: vi.fn(),
+  confirm: vi.fn(),
+}));
+
 describe("upgrade command", () => {
   let consoleSpy: ReturnType<typeof vi.spyOn>;
   let ENV_FILE: string;
@@ -48,29 +60,47 @@ describe("upgrade command", () => {
     consoleSpy.mockRestore();
   });
 
-  it("upgrades successfully", async () => {
+  it("upgrades successfully with interactive version select", async () => {
     const { cmdUpgrade } = await import("../../src/commands/upgrade.js");
     await cmdUpgrade({ runtime: undefined });
 
     const output = consoleSpy.mock.calls.map((c) => String(c[0])).join("\n");
     expect(output).toContain("Upgrade complete");
+
+    const content = readFileSync(ENV_FILE, "utf-8");
+    expect(content).toContain("IXORA_VERSION='v0.0.11'");
   });
 
-  it("pins version and shows before/after", async () => {
+  it("pins version with explicit arg", async () => {
     const { cmdUpgrade } = await import("../../src/commands/upgrade.js");
-    await cmdUpgrade({ runtime: undefined, imageVersion: "v2.0.0" });
+    await cmdUpgrade({ runtime: undefined, version: "v2.0.0" });
 
     const content = readFileSync(ENV_FILE, "utf-8");
     expect(content).toContain("IXORA_VERSION='v2.0.0'");
 
     const output = consoleSpy.mock.calls.map((c) => String(c[0])).join("\n");
-    expect(output).toContain("latest → v2.0.0");
     expect(output).toContain("v2.0.0");
+  });
+
+  it("strips v prefix and normalizes version arg", async () => {
+    const { cmdUpgrade } = await import("../../src/commands/upgrade.js");
+    await cmdUpgrade({ runtime: undefined, version: "0.0.10" });
+
+    const content = readFileSync(ENV_FILE, "utf-8");
+    expect(content).toContain("IXORA_VERSION='v0.0.10'");
+  });
+
+  it("imageVersion flag works as override", async () => {
+    const { cmdUpgrade } = await import("../../src/commands/upgrade.js");
+    await cmdUpgrade({ runtime: undefined, imageVersion: "v2.0.0" });
+
+    const content = readFileSync(ENV_FILE, "utf-8");
+    expect(content).toContain("IXORA_VERSION='v2.0.0'");
   });
 
   it("updates profile when specified", async () => {
     const { cmdUpgrade } = await import("../../src/commands/upgrade.js");
-    await cmdUpgrade({ runtime: undefined, profile: "security" });
+    await cmdUpgrade({ runtime: undefined, version: "v0.0.10", profile: "security" });
 
     const content = readFileSync(ENV_FILE, "utf-8");
     expect(content).toContain("IXORA_PROFILE='security'");
@@ -79,9 +109,8 @@ describe("upgrade command", () => {
   it("skips pull when --no-pull", async () => {
     const { execa } = await import("execa");
     const { cmdUpgrade } = await import("../../src/commands/upgrade.js");
-    await cmdUpgrade({ runtime: undefined, pull: false });
+    await cmdUpgrade({ runtime: undefined, version: "v0.0.10", pull: false });
 
-    // Should not have called pull
     const calls = (execa as any).mock.calls;
     const pullCalls = calls.filter((c: any[]) =>
       c[1]?.includes("pull"),

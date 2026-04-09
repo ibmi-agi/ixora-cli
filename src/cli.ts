@@ -81,9 +81,10 @@ export function createProgram(): Command {
   program
     .command("upgrade")
     .description("Pull latest images and restart")
-    .action(async () => {
+    .argument("[version]", "Target version (e.g., 0.0.11 or v0.0.11)")
+    .action(async (version?: string) => {
       const opts = program.opts();
-      await cmdUpgrade(opts);
+      await cmdUpgrade({ ...opts, version });
     });
 
   program

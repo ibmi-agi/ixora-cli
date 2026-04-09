@@ -24,6 +24,7 @@ import {
   VALID_PROFILES,
 } from "../lib/constants.js";
 import { info, success, warn, die, bold, dim } from "../lib/ui.js";
+import { fetchImageTags, normalizeVersion } from "../lib/registry.js";
 
 interface InstallOptions {
   runtime?: string;
@@ -240,7 +241,7 @@ async function promptProfile(): Promise<ProfileName> {
 }
 
 export async function cmdInstall(opts: InstallOptions): Promise<void> {
-  info(`Installing ixora (v${SCRIPT_VERSION}) — latest container images`);
+  info(`Installing ixora (v${SCRIPT_VERSION})`);
   console.log();
 
   let composeCmd;
@@ -286,7 +287,32 @@ export async function cmdInstall(opts: InstallOptions): Promise<void> {
     : await promptProfile();
   console.log();
 
-  const version = opts.imageVersion ?? envGet("IXORA_VERSION") ?? "latest";
+  // Version selection
+  let version: string;
+  if (opts.imageVersion) {
+    version = normalizeVersion(opts.imageVersion);
+  } else {
+    let tags: string[] = [];
+    try {
+      tags = await fetchImageTags("ibmi-agi/ixora-api");
+    } catch {
+      warn("Could not fetch available versions from registry");
+    }
+
+    if (tags.length > 0) {
+      const curVersion = envGet("IXORA_VERSION") || undefined;
+      version = await select<string>({
+        message: "Select image version",
+        choices: tags.map((t) => ({
+          value: t,
+          name: t === curVersion ? `${t} (current)` : t,
+        })),
+      });
+    } else {
+      version = envGet("IXORA_VERSION") || "latest";
+    }
+  }
+  console.log();
 
   const envConfig: EnvConfig = {
     agentModel,
