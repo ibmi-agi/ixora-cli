@@ -9,6 +9,13 @@ interface StatusOptions {
   runtime?: string;
 }
 
+interface ComposeImage {
+  Service?: string;
+  Repository?: string;
+  Tag?: string;
+  ID?: string;
+}
+
 export async function cmdStatus(opts: StatusOptions): Promise<void> {
   try {
     requireComposeFile();
@@ -36,27 +43,55 @@ export async function cmdStatus(opts: StatusOptions): Promise<void> {
 
   await runCompose(composeCmd, ["ps"]);
 
-  // Show running container images so users can verify versions
+  // Show running container images so users can verify actual versions
   try {
     const output = await runComposeCapture(composeCmd, [
       "images",
       "--format",
-      "{{.Service}} {{.Repository}}:{{.Tag}}",
+      "json",
     ]);
 
     if (output.trim()) {
-      console.log();
-      console.log(`  ${chalk.bold("Images:")}`);
-      for (const line of output.trim().split("\n")) {
-        const [service, ...imageParts] = line.split(" ");
-        const image = imageParts.join(" ");
-        if (service && image) {
-          console.log(`    ${service.padEnd(22)} ${dim(image)}`);
+      const images = parseComposeImages(output);
+      if (images.length > 0) {
+        console.log();
+        console.log(`  ${chalk.bold("Images:")}`);
+        for (const img of images) {
+          const tag = img.Tag || "unknown";
+          const id = img.ID ? ` (${img.ID.slice(0, 12)})` : "";
+          const tagDisplay =
+            tag === "latest" ? `${tag}${dim(id)}` : tag;
+          console.log(
+            `    ${(img.Service || "").padEnd(22)} ${dim(`${img.Repository || ""}:`)}${tagDisplay}`,
+          );
         }
+        console.log();
       }
-      console.log();
     }
   } catch {
-    // Compose images may not be available if services aren't running
+    // Compose images not available if services aren't running
+  }
+}
+
+function parseComposeImages(output: string): ComposeImage[] {
+  const trimmed = output.trim();
+  if (!trimmed) return [];
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (Array.isArray(parsed)) return parsed;
+    return [parsed];
+  } catch {
+    return trimmed
+      .split("\n")
+      .filter((line) => line.trim())
+      .map((line) => {
+        try {
+          return JSON.parse(line);
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean) as ComposeImage[];
   }
 }

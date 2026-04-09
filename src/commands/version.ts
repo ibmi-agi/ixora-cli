@@ -6,6 +6,14 @@ import { runComposeCapture } from "../lib/compose.js";
 import { detectComposeCmd } from "../lib/platform.js";
 import { dim } from "../lib/ui.js";
 
+interface ComposeImage {
+  Service?: string;
+  Repository?: string;
+  Tag?: string;
+  ID?: string;
+  Size?: number;
+}
+
 export async function cmdVersion(opts?: { runtime?: string }): Promise<void> {
   console.log(`ixora ${SCRIPT_VERSION}`);
 
@@ -18,29 +26,63 @@ export async function cmdVersion(opts?: { runtime?: string }): Promise<void> {
   console.log(`  images:  ${version}`);
   console.log(`  model:   ${agentModel}`);
 
-  // Try to show actual running container images
+  // Try to show actual running container images with IDs
   if (existsSync(COMPOSE_FILE)) {
     try {
       const composeCmd = await detectComposeCmd(opts?.runtime);
       const output = await runComposeCapture(composeCmd, [
         "images",
         "--format",
-        "{{.Service}} {{.Repository}}:{{.Tag}}",
+        "json",
       ]);
 
       if (output.trim()) {
-        console.log();
-        console.log(`  ${chalk.bold("Running containers:")}`);
-        for (const line of output.trim().split("\n")) {
-          const [service, ...imageParts] = line.split(" ");
-          const image = imageParts.join(" ");
-          if (service && image) {
-            console.log(`    ${service.padEnd(22)} ${dim(image)}`);
+        const images = parseComposeImages(output);
+        if (images.length > 0) {
+          console.log();
+          console.log(`  ${chalk.bold("Running containers:")}`);
+          for (const img of images) {
+            const tag = img.Tag || "unknown";
+            const id = img.ID ? dim(` (${img.ID.slice(0, 12)})`) : "";
+            const imageStr =
+              tag === "latest"
+                ? `${img.Repository || ""}:latest${id}`
+                : `${img.Repository || ""}:${tag}`;
+            console.log(
+              `    ${(img.Service || "").padEnd(22)} ${dim(imageStr)}`,
+            );
           }
         }
       }
     } catch {
       // Docker not running or compose not available — skip silently
     }
+  }
+}
+
+function parseComposeImages(output: string): ComposeImage[] {
+  const trimmed = output.trim();
+  if (!trimmed) return [];
+
+  // docker compose images --format json outputs one JSON object per line
+  // (NDJSON), not a JSON array
+  try {
+    // Try as JSON array first
+    const parsed = JSON.parse(trimmed);
+    if (Array.isArray(parsed)) return parsed;
+    return [parsed];
+  } catch {
+    // Try as newline-delimited JSON
+    return trimmed
+      .split("\n")
+      .filter((line) => line.trim())
+      .map((line) => {
+        try {
+          return JSON.parse(line);
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean) as ComposeImage[];
   }
 }
