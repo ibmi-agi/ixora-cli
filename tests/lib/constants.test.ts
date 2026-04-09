@@ -18,7 +18,7 @@ import { join } from "node:path";
 
 describe("constants", () => {
   it("has correct version", () => {
-    expect(SCRIPT_VERSION).toBe("0.1.2");
+    expect(SCRIPT_VERSION).toBe("0.1.3");
   });
 
   it("has correct health timeout", () => {
