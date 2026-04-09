@@ -91,6 +91,7 @@ services:
       AUTH_ENABLED: "false"
       MCP_AUTH_MODE: "none"
       IXORA_ENABLE_BUILDER: "true"
+      A2A_INTERFACE: \${A2A_INTERFACE:-false}
       DB2i_HOST: \${SYSTEM_${idUpper}_HOST}
       DB2i_USER: \${SYSTEM_${idUpper}_USER}
       DB2i_PASS: \${SYSTEM_${idUpper}_PASS}
