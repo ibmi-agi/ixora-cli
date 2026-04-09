@@ -1,4 +1,10 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync, chmodSync } from "node:fs";
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+  chmodSync,
+} from "node:fs";
 import { dirname } from "node:path";
 import { ENV_FILE, IXORA_DIR } from "./constants.js";
 

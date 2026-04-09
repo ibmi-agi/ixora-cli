@@ -59,9 +59,7 @@ describe("constants", () => {
     expect(PROVIDERS["anthropic"].agentModel).toBe(
       "anthropic:claude-sonnet-4-6",
     );
-    expect(PROVIDERS["anthropic"].teamModel).toBe(
-      "anthropic:claude-haiku-4-5",
-    );
+    expect(PROVIDERS["anthropic"].teamModel).toBe("anthropic:claude-haiku-4-5");
   });
 
   it("ollama needs no API key", () => {

@@ -39,9 +39,7 @@ export async function cmdUninstall(opts: UninstallOptions): Promise<void> {
       ),
     );
   } else {
-    console.log(
-      chalk.yellow("This will stop containers and remove images."),
-    );
+    console.log(chalk.yellow("This will stop containers and remove images."));
     console.log(
       dim(
         `Configuration in ${IXORA_DIR} will be preserved. Run 'ixora start' to re-pull and restart.`,

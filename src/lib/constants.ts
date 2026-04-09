@@ -13,17 +13,20 @@ export const PROFILES = {
   full: {
     name: "full",
     label: "Full",
-    description: "All agents, teams, and workflows (3 agents, 2 teams, 1 workflow)",
+    description:
+      "All agents, teams, and workflows (3 agents, 2 teams, 1 workflow)",
   },
   "sql-services": {
     name: "sql-services",
     label: "SQL Services",
-    description: "SQL Services agent for database queries and performance monitoring",
+    description:
+      "SQL Services agent for database queries and performance monitoring",
   },
   security: {
     name: "security",
     label: "Security",
-    description: "Security agent, multi-system security team, and assessment workflow",
+    description:
+      "Security agent, multi-system security team, and assessment workflow",
   },
   knowledge: {
     name: "knowledge",

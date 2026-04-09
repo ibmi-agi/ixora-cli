@@ -1,15 +1,8 @@
 import { execa, type Options as ExecaOptions } from "execa";
 import { existsSync, mkdirSync } from "node:fs";
 import { writeFileSync } from "node:fs";
-import {
-  COMPOSE_FILE,
-  ENV_FILE,
-  IXORA_DIR,
-} from "./constants.js";
+import { COMPOSE_FILE, ENV_FILE, IXORA_DIR } from "./constants.js";
 import { type ComposeCmd, getComposeParts } from "./platform.js";
-import { envGet } from "./env.js";
-import { totalSystemCount } from "./systems.js";
-import { generateSingleCompose } from "./templates/single-compose.js";
 import { generateMultiCompose } from "./templates/multi-compose.js";
 import { error, bold } from "./ui.js";
 
@@ -73,16 +66,7 @@ export async function runComposeCapture(
 
 export function writeComposeFile(envFile: string = ENV_FILE): void {
   mkdirSync(IXORA_DIR, { recursive: true });
-
-  const total = totalSystemCount(envFile);
-
-  let content: string;
-  if (total > 1) {
-    content = generateMultiCompose(envFile);
-  } else {
-    content = generateSingleCompose();
-  }
-
+  const content = generateMultiCompose(envFile);
   writeFileSync(COMPOSE_FILE, content, "utf-8");
 }
 

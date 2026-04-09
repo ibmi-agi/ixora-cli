@@ -8,7 +8,9 @@ const baseDir = mkdtempSync(join(tmpdir(), "ixora-install-"));
 const tmpDir = join(baseDir, "ixora");
 
 vi.mock("../../src/lib/constants.js", async () => {
-  const actual = await vi.importActual<typeof import("../../src/lib/constants.js")>("../../src/lib/constants.js");
+  const actual = await vi.importActual<
+    typeof import("../../src/lib/constants.js")
+  >("../../src/lib/constants.js");
   return {
     ...actual,
     IXORA_DIR: tmpDir,
@@ -36,22 +38,26 @@ vi.mock("execa", () => ({
 
 vi.mock("../../src/lib/registry.js", () => ({
   fetchImageTags: vi.fn().mockResolvedValue(["v0.0.11", "v0.0.10", "v0.0.9"]),
-  normalizeVersion: vi.fn((v: string) => v.startsWith("v") ? v : `v${v}`),
+  normalizeVersion: vi.fn((v: string) => (v.startsWith("v") ? v : `v${v}`)),
 }));
 
 // Mock prompts in order: provider select, API key, IBM i host, user, password, profile select, version select
 vi.mock("@inquirer/prompts", () => ({
-  select: vi.fn()
-    .mockResolvedValueOnce("anthropic")   // provider
-    .mockResolvedValueOnce("full")        // profile
-    .mockResolvedValueOnce("v0.0.11"),    // image version
-  input: vi.fn()
-    .mockResolvedValueOnce("myibmi.com")  // host
-    .mockResolvedValueOnce("QSECOFR")    // user
-    .mockResolvedValueOnce("8076"),       // port
-  password: vi.fn()
-    .mockResolvedValueOnce("sk-ant-test123")  // API key
-    .mockResolvedValueOnce("mypassword"),      // IBM i password
+  select: vi
+    .fn()
+    .mockResolvedValueOnce("anthropic") // provider
+    .mockResolvedValueOnce("full") // profile
+    .mockResolvedValueOnce("v0.0.11"), // image version
+  input: vi
+    .fn()
+    .mockResolvedValueOnce("myibmi.com") // host
+    .mockResolvedValueOnce("QSECOFR") // user
+    .mockResolvedValueOnce("8076") // port
+    .mockResolvedValueOnce("myibmi.com"), // display name
+  password: vi
+    .fn()
+    .mockResolvedValueOnce("sk-ant-test123") // API key
+    .mockResolvedValueOnce("mypassword"), // IBM i password
   confirm: vi.fn().mockResolvedValue(true),
 }));
 

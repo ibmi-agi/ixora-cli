@@ -65,8 +65,7 @@ export async function cmdUpgrade(opts: UpgradeOptions): Promise<void> {
       message: "Select version to upgrade to",
       choices: tags.map((t) => ({
         value: t,
-        name:
-          t === previousVersion ? `${t} (current)` : t,
+        name: t === previousVersion ? `${t} (current)` : t,
       })),
     });
   }

@@ -28,8 +28,7 @@ export function cmdConfigShow(): void {
   section("Model");
   const agentModel =
     envGet("IXORA_AGENT_MODEL") || "anthropic:claude-sonnet-4-6";
-  const teamModel =
-    envGet("IXORA_TEAM_MODEL") || "anthropic:claude-haiku-4-5";
+  const teamModel = envGet("IXORA_TEAM_MODEL") || "anthropic:claude-haiku-4-5";
   const anthKey = envGet("ANTHROPIC_API_KEY");
   const oaiKey = envGet("OPENAI_API_KEY");
   const googKey = envGet("GOOGLE_API_KEY");
@@ -37,9 +36,12 @@ export function cmdConfigShow(): void {
 
   console.log(`  ${cyan("IXORA_AGENT_MODEL")}   ${agentModel}`);
   console.log(`  ${cyan("IXORA_TEAM_MODEL")}    ${teamModel}`);
-  if (anthKey) console.log(`  ${cyan("ANTHROPIC_API_KEY")}   ${maskValue(anthKey)}`);
-  if (oaiKey) console.log(`  ${cyan("OPENAI_API_KEY")}      ${maskValue(oaiKey)}`);
-  if (googKey) console.log(`  ${cyan("GOOGLE_API_KEY")}      ${maskValue(googKey)}`);
+  if (anthKey)
+    console.log(`  ${cyan("ANTHROPIC_API_KEY")}   ${maskValue(anthKey)}`);
+  if (oaiKey)
+    console.log(`  ${cyan("OPENAI_API_KEY")}      ${maskValue(oaiKey)}`);
+  if (googKey)
+    console.log(`  ${cyan("GOOGLE_API_KEY")}      ${maskValue(googKey)}`);
   if (ollamaHost) console.log(`  ${cyan("OLLAMA_HOST")}         ${ollamaHost}`);
   console.log();
 
@@ -50,8 +52,12 @@ export function cmdConfigShow(): void {
   const db2Pass = envGet("DB2i_PASS");
   const db2Port = envGet("DB2_PORT");
 
-  console.log(`  ${cyan("DB2i_HOST")}           ${db2Host || dim("(not set)")}`);
-  console.log(`  ${cyan("DB2i_USER")}           ${db2User || dim("(not set)")}`);
+  console.log(
+    `  ${cyan("DB2i_HOST")}           ${db2Host || dim("(not set)")}`,
+  );
+  console.log(
+    `  ${cyan("DB2i_USER")}           ${db2User || dim("(not set)")}`,
+  );
   console.log(`  ${cyan("DB2i_PASS")}           ${maskValue(db2Pass)}`);
   console.log(`  ${cyan("DB2_PORT")}            ${db2Port || "8076"}`);
   console.log();
@@ -123,8 +129,7 @@ export async function cmdConfigEdit(): Promise<void> {
     die("ixora is not installed. Run: ixora install");
   }
 
-  const editor =
-    process.env["EDITOR"] ?? process.env["VISUAL"] ?? "";
+  const editor = process.env["EDITOR"] ?? process.env["VISUAL"] ?? "";
 
   let editorCmd = editor;
   if (!editorCmd) {

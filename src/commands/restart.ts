@@ -1,4 +1,9 @@
-import { requireInstalled, writeComposeFile, runCompose, resolveService } from "../lib/compose.js";
+import {
+  requireInstalled,
+  writeComposeFile,
+  runCompose,
+  resolveService,
+} from "../lib/compose.js";
 import {
   detectComposeCmd,
   verifyRuntimeRunning,
@@ -46,7 +51,12 @@ export async function cmdRestart(
     success(`Restarted ${svc}`);
   } else {
     info("Restarting all services...");
-    await runCompose(composeCmd, ["up", "-d", "--force-recreate", "--remove-orphans"]);
+    await runCompose(composeCmd, [
+      "up",
+      "-d",
+      "--force-recreate",
+      "--remove-orphans",
+    ]);
     await waitForHealthy(composeCmd);
     console.log();
     success("All services restarted");

@@ -21,8 +21,7 @@ export async function waitForHealthy(
       "{{.Name}}",
     ]);
     const containers = output.split("\n").filter(Boolean);
-    apiContainer =
-      containers.find((c) => c.includes("ixora-api-")) ?? "";
+    apiContainer = containers.find((c) => c.includes("ixora-api-")) ?? "";
   } catch {
     // Ignore errors finding container
   }

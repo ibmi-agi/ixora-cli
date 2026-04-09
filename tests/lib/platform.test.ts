@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { detectPlatform, getComposeParts, getRuntimeBin } from "../../src/lib/platform.js";
+import {
+  detectPlatform,
+  getComposeParts,
+  getRuntimeBin,
+} from "../../src/lib/platform.js";
 
 // We can't easily mock execa in ESM for detectComposeCmd, but we can test the pure functions
 

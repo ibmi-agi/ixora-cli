@@ -11,7 +11,7 @@ import {
   detectPlatform,
 } from "../lib/platform.js";
 import { waitForHealthy } from "../lib/health.js";
-import { totalSystemCount, readSystems } from "../lib/systems.js";
+import { readSystems } from "../lib/systems.js";
 import { info, success, die, dim, bold } from "../lib/ui.js";
 import { VALID_PROFILES, type ProfileName } from "../lib/constants.js";
 
@@ -57,24 +57,16 @@ export async function cmdStart(opts: StartOptions): Promise<void> {
 
   await waitForHealthy(composeCmd);
 
-  const profile = envGet("IXORA_PROFILE") || "full";
-  const total = totalSystemCount();
+  const systems = readSystems();
 
   console.log();
   success("ixora is running!");
   console.log(`  ${bold("UI:")}      http://localhost:3000`);
   console.log(`  ${bold("API:")}     http://localhost:8000`);
-  console.log(`  ${bold("Profile:")} ${profile}`);
 
-  if (total > 1) {
-    console.log(`  ${bold("Systems:")} ${total}`);
+  if (systems.length > 1) {
+    console.log(`  ${bold("Systems:")} ${systems.length}`);
     let port = 8000;
-    const primaryHost = envGet("DB2i_HOST");
-    if (primaryHost) {
-      console.log(`    ${dim(`:${port} → default (${primaryHost})`)}`);
-      port++;
-    }
-    const systems = readSystems();
     for (const sys of systems) {
       const idUpper = sys.id.toUpperCase().replace(/-/g, "_");
       const sysHost = envGet(`SYSTEM_${idUpper}_HOST`);
@@ -82,8 +74,10 @@ export async function cmdStart(opts: StartOptions): Promise<void> {
       port++;
     }
     console.log(
-      `  ${dim("Note: UI connects to primary system (:8000) only. Use API ports for other systems.")}`,
+      `  ${dim("Note: UI connects to first system (:8000) only. Use API ports for other systems.")}`,
     );
+  } else if (systems.length === 1) {
+    console.log(`  ${bold("Profile:")} ${systems[0].profile || "full"}`);
   }
   console.log();
 }

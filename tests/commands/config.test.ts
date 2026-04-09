@@ -6,7 +6,9 @@ import { SAMPLE_ENV } from "../helpers/fixtures.js";
 
 // We need to mock the constants to point to our temp dir
 vi.mock("../../src/lib/constants.js", async () => {
-  const actual = await vi.importActual<typeof import("../../src/lib/constants.js")>("../../src/lib/constants.js");
+  const actual = await vi.importActual<
+    typeof import("../../src/lib/constants.js")
+  >("../../src/lib/constants.js");
   const tmpDir = mkdtempSync(join(tmpdir(), "ixora-cfg-test-"));
   return {
     ...actual,

@@ -1,7 +1,15 @@
 import chalk from "chalk";
 import { envGet } from "../lib/env.js";
-import { requireComposeFile, runCompose, runComposeCapture } from "../lib/compose.js";
-import { detectComposeCmd, verifyRuntimeRunning, detectPlatform } from "../lib/platform.js";
+import {
+  requireComposeFile,
+  runCompose,
+  runComposeCapture,
+} from "../lib/compose.js";
+import {
+  detectComposeCmd,
+  verifyRuntimeRunning,
+  detectPlatform,
+} from "../lib/platform.js";
 import { IXORA_DIR } from "../lib/constants.js";
 import { die, dim } from "../lib/ui.js";
 
@@ -59,11 +67,8 @@ export async function cmdStatus(opts: StatusOptions): Promise<void> {
         for (const img of images) {
           const tag = img.Tag || "unknown";
           const id = img.ID ? ` (${img.ID.slice(0, 12)})` : "";
-          const tagDisplay =
-            tag === "latest" ? `${tag}${dim(id)}` : tag;
-          console.log(
-            `    ${dim(`${img.Repository || ""}:`)}${tagDisplay}`,
-          );
+          const tagDisplay = tag === "latest" ? `${tag}${dim(id)}` : tag;
+          console.log(`    ${dim(`${img.Repository || ""}:`)}${tagDisplay}`);
         }
         console.log();
       }

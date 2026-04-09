@@ -2,11 +2,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { SAMPLE_SYSTEMS_YAML_SINGLE } from "../helpers/fixtures.js";
 
 const tmpDir = mkdtempSync(join(tmpdir(), "ixora-restart-"));
 
 vi.mock("../../src/lib/constants.js", async () => {
-  const actual = await vi.importActual<typeof import("../../src/lib/constants.js")>("../../src/lib/constants.js");
+  const actual = await vi.importActual<
+    typeof import("../../src/lib/constants.js")
+  >("../../src/lib/constants.js");
   return {
     ...actual,
     IXORA_DIR: tmpDir,
@@ -37,7 +40,14 @@ describe("restart command", () => {
 
   beforeEach(() => {
     consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    writeFileSync(join(tmpDir, ".env"), "DB2i_HOST='test'\nIXORA_VERSION='latest'\n");
+    writeFileSync(
+      join(tmpDir, ".env"),
+      "DB2i_HOST='test'\nIXORA_VERSION='latest'\nSYSTEM_DEFAULT_HOST='test'\nSYSTEM_DEFAULT_USER='user'\nSYSTEM_DEFAULT_PASS='pass'\n",
+    );
+    writeFileSync(
+      join(tmpDir, "ixora-systems.yaml"),
+      SAMPLE_SYSTEMS_YAML_SINGLE,
+    );
   });
 
   afterEach(() => {

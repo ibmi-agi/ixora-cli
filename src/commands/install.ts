@@ -1,13 +1,9 @@
 import { existsSync } from "node:fs";
-import {
-  input,
-  password,
-  select,
-  confirm,
-} from "@inquirer/prompts";
+import { input, password, select, confirm } from "@inquirer/prompts";
 import chalk from "chalk";
 import { envGet, writeEnvFile, type EnvConfig } from "../lib/env.js";
 import { writeComposeFile, runCompose } from "../lib/compose.js";
+import { addSystem, systemIdExists } from "../lib/systems.js";
 import {
   detectComposeCmd,
   verifyRuntimeRunning,
@@ -174,7 +170,14 @@ async function promptModelProvider(): Promise<{
 
   success(`Provider: ${provider} (${agentModel})`);
 
-  return { provider, agentModel, teamModel, apiKeyVar, apiKeyValue, ollamaHost };
+  return {
+    provider,
+    agentModel,
+    teamModel,
+    apiKeyVar,
+    apiKeyValue,
+    ollamaHost,
+  };
 }
 
 async function promptIbmiConnection(): Promise<{
@@ -221,7 +224,12 @@ async function promptIbmiConnection(): Promise<{
     },
   });
 
-  return { host: host.trim(), user: user.trim(), pass: pass || curPass, port: port.trim() };
+  return {
+    host: host.trim(),
+    user: user.trim(),
+    pass: pass || curPass,
+    port: port.trim(),
+  };
 }
 
 async function promptProfile(): Promise<ProfileName> {
@@ -261,7 +269,10 @@ export async function cmdInstall(opts: InstallOptions): Promise<void> {
     const action = await select({
       message: "What would you like to do?",
       choices: [
-        { name: "Reconfigure — re-run setup prompts (overwrites current config)", value: "reconfigure" },
+        {
+          name: "Reconfigure — re-run setup prompts (overwrites current config)",
+          value: "reconfigure",
+        },
         { name: "Cancel — keep existing installation", value: "cancel" },
       ],
       default: "reconfigure",
@@ -280,6 +291,11 @@ export async function cmdInstall(opts: InstallOptions): Promise<void> {
   console.log();
 
   const { host, user, pass, port } = await promptIbmiConnection();
+
+  const displayName = await input({
+    message: "Display name:",
+    default: host,
+  });
   console.log();
 
   const profile = opts.profile
@@ -330,6 +346,24 @@ export async function cmdInstall(opts: InstallOptions): Promise<void> {
 
   writeEnvFile(envConfig);
   success("Wrote .env");
+
+  // Register default system in YAML (create or overwrite)
+  if (systemIdExists("default")) {
+    // Reconfigure: remove old default entry before re-adding
+    const { removeSystem } = await import("../lib/systems.js");
+    removeSystem("default");
+  }
+  addSystem({
+    id: "default",
+    name: displayName,
+    profile,
+    agents: [],
+    host,
+    port,
+    user: user,
+    pass,
+  });
+  success("Wrote ixora-systems.yaml");
 
   writeComposeFile();
   success("Wrote docker-compose.yml");

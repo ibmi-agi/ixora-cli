@@ -2,12 +2,18 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SAMPLE_ENV, SAMPLE_SYSTEMS_YAML } from "../helpers/fixtures.js";
+import {
+  SAMPLE_ENV,
+  SAMPLE_SYSTEMS_YAML,
+  SAMPLE_SYSTEMS_YAML_SINGLE,
+} from "../helpers/fixtures.js";
 
 const tmpDir = mkdtempSync(join(tmpdir(), "ixora-start-"));
 
 vi.mock("../../src/lib/constants.js", async () => {
-  const actual = await vi.importActual<typeof import("../../src/lib/constants.js")>("../../src/lib/constants.js");
+  const actual = await vi.importActual<
+    typeof import("../../src/lib/constants.js")
+  >("../../src/lib/constants.js");
   return {
     ...actual,
     IXORA_DIR: tmpDir,
@@ -57,7 +63,9 @@ describe("start command", () => {
 
     const { cmdStart } = await import("../../src/commands/start.js");
 
-    await expect(cmdStart({ runtime: undefined })).rejects.toThrow("process.exit");
+    await expect(cmdStart({ runtime: undefined })).rejects.toThrow(
+      "process.exit",
+    );
     expect(errSpy).toHaveBeenCalledWith(
       expect.stringContaining("not installed"),
     );
@@ -68,6 +76,10 @@ describe("start command", () => {
 
   it("writes compose file and starts services", async () => {
     writeFileSync(ENV_FILE, SAMPLE_ENV);
+    writeFileSync(
+      join(tmpDir, "ixora-systems.yaml"),
+      SAMPLE_SYSTEMS_YAML_SINGLE,
+    );
 
     const { cmdStart } = await import("../../src/commands/start.js");
     await cmdStart({ runtime: undefined });
@@ -79,17 +91,18 @@ describe("start command", () => {
   });
 
   it("shows multi-system info when multiple systems configured", async () => {
-    writeFileSync(ENV_FILE, SAMPLE_ENV + "SYSTEM_DEV_HOST='dev.ibmi.com'\n");
     writeFileSync(
-      join(tmpDir, "ixora-systems.yaml"),
-      SAMPLE_SYSTEMS_YAML.replace(/prod[\s\S]*$/, "").trim() + "\n",
+      ENV_FILE,
+      SAMPLE_ENV +
+        "SYSTEM_DEV_HOST='dev.ibmi.com'\nSYSTEM_PROD_HOST='prod.ibmi.com'\n",
     );
+    writeFileSync(join(tmpDir, "ixora-systems.yaml"), SAMPLE_SYSTEMS_YAML);
 
-    // Need a fresh import to pick up new file state
     const { cmdStart } = await import("../../src/commands/start.js");
     await cmdStart({ runtime: undefined });
 
     const output = consoleSpy.mock.calls.map((c) => String(c[0])).join("\n");
     expect(output).toContain("ixora is running");
+    expect(output).toContain("Systems:");
   });
 });

@@ -7,7 +7,9 @@ import { SAMPLE_ENV } from "../helpers/fixtures.js";
 const tmpDir = mkdtempSync(join(tmpdir(), "ixora-status-"));
 
 vi.mock("../../src/lib/constants.js", async () => {
-  const actual = await vi.importActual<typeof import("../../src/lib/constants.js")>("../../src/lib/constants.js");
+  const actual = await vi.importActual<
+    typeof import("../../src/lib/constants.js")
+  >("../../src/lib/constants.js");
   return {
     ...actual,
     IXORA_DIR: tmpDir,
@@ -65,7 +67,9 @@ describe("status command", () => {
     if (existsSync(composeFile)) unlinkSync(composeFile);
 
     const { cmdStatus } = await import("../../src/commands/status.js");
-    await expect(cmdStatus({ runtime: undefined })).rejects.toThrow("process.exit");
+    await expect(cmdStatus({ runtime: undefined })).rejects.toThrow(
+      "process.exit",
+    );
 
     exitSpy.mockRestore();
     errSpy.mockRestore();

@@ -1,4 +1,8 @@
-import { requireComposeFile, runCompose, resolveService } from "../lib/compose.js";
+import {
+  requireComposeFile,
+  runCompose,
+  resolveService,
+} from "../lib/compose.js";
 import {
   detectComposeCmd,
   verifyRuntimeRunning,

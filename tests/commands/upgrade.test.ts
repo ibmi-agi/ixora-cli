@@ -2,12 +2,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SAMPLE_ENV } from "../helpers/fixtures.js";
+import { SAMPLE_ENV, SAMPLE_SYSTEMS_YAML_SINGLE } from "../helpers/fixtures.js";
 
 const tmpDir = mkdtempSync(join(tmpdir(), "ixora-upgrade-"));
 
 vi.mock("../../src/lib/constants.js", async () => {
-  const actual = await vi.importActual<typeof import("../../src/lib/constants.js")>("../../src/lib/constants.js");
+  const actual = await vi.importActual<
+    typeof import("../../src/lib/constants.js")
+  >("../../src/lib/constants.js");
   return {
     ...actual,
     IXORA_DIR: tmpDir,
@@ -35,7 +37,7 @@ vi.mock("execa", () => ({
 
 vi.mock("../../src/lib/registry.js", () => ({
   fetchImageTags: vi.fn().mockResolvedValue(["v0.0.11", "v0.0.10", "v0.0.9"]),
-  normalizeVersion: vi.fn((v: string) => v.startsWith("v") ? v : `v${v}`),
+  normalizeVersion: vi.fn((v: string) => (v.startsWith("v") ? v : `v${v}`)),
 }));
 
 vi.mock("@inquirer/prompts", () => ({
@@ -54,6 +56,10 @@ describe("upgrade command", () => {
     ENV_FILE = constants.ENV_FILE;
     consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     writeFileSync(ENV_FILE, SAMPLE_ENV);
+    writeFileSync(
+      join(tmpDir, "ixora-systems.yaml"),
+      SAMPLE_SYSTEMS_YAML_SINGLE,
+    );
   });
 
   afterEach(() => {
@@ -100,7 +106,11 @@ describe("upgrade command", () => {
 
   it("updates profile when specified", async () => {
     const { cmdUpgrade } = await import("../../src/commands/upgrade.js");
-    await cmdUpgrade({ runtime: undefined, version: "v0.0.10", profile: "security" });
+    await cmdUpgrade({
+      runtime: undefined,
+      version: "v0.0.10",
+      profile: "security",
+    });
 
     const content = readFileSync(ENV_FILE, "utf-8");
     expect(content).toContain("IXORA_PROFILE='security'");
@@ -112,9 +122,7 @@ describe("upgrade command", () => {
     await cmdUpgrade({ runtime: undefined, version: "v0.0.10", pull: false });
 
     const calls = (execa as any).mock.calls;
-    const pullCalls = calls.filter((c: any[]) =>
-      c[1]?.includes("pull"),
-    );
+    const pullCalls = calls.filter((c: any[]) => c[1]?.includes("pull"));
     expect(pullCalls).toHaveLength(0);
   });
 });

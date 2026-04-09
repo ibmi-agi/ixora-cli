@@ -7,12 +7,13 @@ import {
 } from "node:fs";
 import { dirname } from "node:path";
 import { SYSTEMS_CONFIG } from "./constants.js";
-import { envGet, updateEnvKey } from "./env.js";
+import { updateEnvKey } from "./env.js";
 import { ENV_FILE } from "./constants.js";
 
 export interface SystemConfig {
   id: string;
   name: string;
+  profile: string;
   agents: string[];
 }
 
@@ -32,6 +33,7 @@ export function readSystems(
         systems.push({
           id: current.id,
           name: current.name ?? current.id,
+          profile: current.profile ?? "full",
           agents: current.agents ?? [],
         });
       }
@@ -47,9 +49,18 @@ export function readSystems(
       continue;
     }
 
+    const profileMatch = line.match(/profile: *'?([^']*)'?/);
+    if (profileMatch) {
+      current.profile = profileMatch[1];
+      continue;
+    }
+
     const agentsMatch = line.match(/agents: *\[([^\]]*)\]/);
     if (agentsMatch) {
-      current.agents = agentsMatch[1].split(",").map((a) => a.trim()).filter(Boolean);
+      current.agents = agentsMatch[1]
+        .split(",")
+        .map((a) => a.trim())
+        .filter(Boolean);
     }
   }
 
@@ -58,6 +69,7 @@ export function readSystems(
     systems.push({
       id: current.id,
       name: current.name ?? current.id,
+      profile: current.profile ?? "full",
       agents: current.agents ?? [],
     });
   }
@@ -76,14 +88,20 @@ export function systemIdExists(
   return readSystems(configFile).some((s) => s.id === id);
 }
 
-export function totalSystemCount(envFile: string = ENV_FILE, configFile: string = SYSTEMS_CONFIG): number {
-  const additional = systemCount(configFile);
-  const primaryHost = envGet("DB2i_HOST", envFile);
-  return primaryHost ? additional + 1 : additional;
+export function totalSystemCount(
+  envFile: string = ENV_FILE,
+  configFile: string = SYSTEMS_CONFIG,
+): number {
+  return readSystems(configFile).length;
 }
 
 export function addSystem(
-  system: SystemConfig & { host: string; port: string; user: string; pass: string },
+  system: SystemConfig & {
+    host: string;
+    port: string;
+    user: string;
+    pass: string;
+  },
   envFile: string = ENV_FILE,
   configFile: string = SYSTEMS_CONFIG,
 ): void {
@@ -96,8 +114,9 @@ export function addSystem(
   updateEnvKey(`SYSTEM_${idUpper}_PASS`, system.pass, envFile);
 
   const escapedName = system.name.replace(/'/g, "'\\''");
+  const profile = system.profile || "full";
   const agentsList = system.agents.join(", ");
-  const entry = `  - id: ${system.id}\n    name: '${escapedName}'\n    agents: [${agentsList}]\n`;
+  const entry = `  - id: ${system.id}\n    name: '${escapedName}'\n    profile: ${profile}\n    agents: [${agentsList}]\n`;
 
   mkdirSync(dirname(configFile), { recursive: true });
 

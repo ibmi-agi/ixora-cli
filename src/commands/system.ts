@@ -1,11 +1,9 @@
-import { existsSync } from "node:fs";
 import { input, password, select, confirm } from "@inquirer/prompts";
 import chalk from "chalk";
 import {
   readSystems,
   systemCount,
   systemIdExists,
-  totalSystemCount,
   addSystem,
   removeSystem,
 } from "../lib/systems.js";
@@ -21,8 +19,12 @@ import {
   detectPlatform,
 } from "../lib/platform.js";
 import { waitForHealthy } from "../lib/health.js";
-import { ENV_FILE } from "../lib/constants.js";
-import { AGENT_PRESETS, ALL_AGENTS, OPS_AGENTS } from "../lib/constants.js";
+import {
+  ENV_FILE,
+  PROFILES,
+  VALID_PROFILES,
+  type ProfileName,
+} from "../lib/constants.js";
 import { info, success, die, bold, dim, cyan } from "../lib/ui.js";
 
 export async function cmdSystemAdd(): Promise<void> {
@@ -32,14 +34,9 @@ export async function cmdSystemAdd(): Promise<void> {
   const id = await input({
     message: "System ID (short name, e.g., dev, prod)",
     validate: (value) => {
-      const cleaned = value
-        .toLowerCase()
-        .replace(/[^a-z0-9-]/g, "");
+      const cleaned = value.toLowerCase().replace(/[^a-z0-9-]/g, "");
       if (!cleaned) return "System ID must contain alphanumeric characters";
-      if (cleaned === "default")
-        return "System ID 'default' is reserved for the primary system";
-      if (systemIdExists(cleaned))
-        return `System '${cleaned}' already exists`;
+      if (systemIdExists(cleaned)) return `System '${cleaned}' already exists`;
       return true;
     },
     transformer: (value) => value.toLowerCase().replace(/[^a-z0-9-]/g, ""),
@@ -53,49 +50,44 @@ export async function cmdSystemAdd(): Promise<void> {
   });
 
   const host = await input({
-    message: "IBM i hostname",
-    validate: (value) => (value.trim() ? true : "Hostname is required"),
-  });
-
-  const port = await input({
-    message: "IBM i Mapepire port",
-    default: "8076",
+    message: "IBM i hostname:",
+    validate: (value) => (value.trim() ? true : "IBM i hostname is required"),
   });
 
   const user = await input({
-    message: "IBM i username",
-    validate: (value) => (value.trim() ? true : "Username is required"),
+    message: "IBM i username:",
+    validate: (value) => (value.trim() ? true : "IBM i username is required"),
   });
 
   const pass = await password({
-    message: "IBM i password",
+    message: "IBM i password:",
     validate: (value) => (value ? true : "Password is required"),
   });
 
-  const agentChoice = await select({
-    message: "Select agents for this system",
-    choices: [
-      {
-        name: "All agents (security, operations, knowledge)",
-        value: "all",
-      },
-      { name: "Security + Operations", value: "security-ops" },
-      { name: "Security only", value: "security" },
-      {
-        name: "Operations only (health, database, work mgmt, config)",
-        value: "operations",
-      },
-      { name: "Knowledge only", value: "knowledge" },
-    ],
-    default: "all",
+  const port = await input({
+    message: "IBM i port:",
+    default: "8076",
+    validate: (value) => {
+      const n = parseInt(value.trim(), 10);
+      if (isNaN(n) || n < 1 || n > 65535) return "Enter a valid port number";
+      return true;
+    },
   });
 
-  const agents = AGENT_PRESETS[agentChoice as keyof typeof AGENT_PRESETS] as readonly string[];
+  const profile = await select<ProfileName>({
+    message: "Select an agent profile",
+    choices: VALID_PROFILES.map((p) => ({
+      name: `${PROFILES[p].name.padEnd(14)} ${dim(PROFILES[p].description)}`,
+      value: p,
+    })),
+    default: "full" as ProfileName,
+  });
 
   addSystem({
     id: cleanId,
     name,
-    agents: [...agents],
+    profile,
+    agents: [],
     host: host.trim(),
     port: port.trim(),
     user: user.trim(),
@@ -135,21 +127,10 @@ export function cmdSystemRemove(id: string): void {
 }
 
 function validateSystemId(id: string): void {
-  const primaryHost = envGet("DB2i_HOST");
-  if (id === "default") {
-    if (!primaryHost) die("No primary system configured");
-    return;
-  }
   if (!systemIdExists(id)) die(`System '${id}' not found`);
 }
 
 function systemServices(id: string): string[] {
-  const total = totalSystemCount();
-  if (total <= 1 && id === "default") {
-    // Single-system mode: services use base names
-    return ["ibmi-mcp-server", "api"];
-  }
-  // Multi-system mode: services are prefixed with system ID
   return [`mcp-${id}`, `api-${id}`];
 }
 
@@ -231,36 +212,31 @@ export async function cmdSystemRestart(id: string): Promise<void> {
 }
 
 export function cmdSystemList(): void {
-  const primaryHost = envGet("DB2i_HOST");
+  const systems = readSystems();
 
   console.log();
   console.log(`  ${chalk.bold("IBM i Systems")}`);
   console.log();
 
-  if (primaryHost) {
+  if (systems.length === 0) {
     console.log(
-      `  ${cyan("*")}  ${"default".padEnd(12)}  ${primaryHost.padEnd(30)}  ${dim("(primary — from install)")}`,
+      `  ${dim(`No systems configured. Run: ${bold("ixora install")}`)}`,
     );
   }
 
-  const systems = readSystems();
   for (const sys of systems) {
     const idUpper = sys.id.toUpperCase().replace(/-/g, "_");
     const sysHost = envGet(`SYSTEM_${idUpper}_HOST`) || dim("(no host)");
-    const agentsStr = sys.agents.join(", ");
+    const marker = sys.id === "default" ? cyan("*") : cyan(" ");
+    const profile = sys.profile || "full";
     console.log(
-      `  ${cyan(" ")}  ${sys.id.padEnd(12)}  ${String(sysHost).padEnd(30)}  ${agentsStr}`,
+      `  ${marker}  ${sys.id.padEnd(12)}  ${String(sysHost).padEnd(30)}  ${dim(profile)}`,
     );
-  }
-
-  if (!primaryHost && systems.length === 0) {
-    console.log(`  ${dim(`No systems configured. Run: ${bold("ixora install")}`)}`);
   }
 
   console.log();
 
-  const total = systems.length + (primaryHost ? 1 : 0);
-  if (total > 1) {
+  if (systems.length > 1) {
     console.log(
       `  ${dim("Multi-system mode: each system runs on its own port (8000, 8001, ...)")}`,
     );

@@ -6,7 +6,9 @@ import { tmpdir } from "node:os";
 const tmpDir = mkdtempSync(join(tmpdir(), "ixora-logs-"));
 
 vi.mock("../../src/lib/constants.js", async () => {
-  const actual = await vi.importActual<typeof import("../../src/lib/constants.js")>("../../src/lib/constants.js");
+  const actual = await vi.importActual<
+    typeof import("../../src/lib/constants.js")
+  >("../../src/lib/constants.js");
   return {
     ...actual,
     IXORA_DIR: tmpDir,
@@ -51,7 +53,9 @@ describe("logs command", () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const { cmdLogs } = await import("../../src/commands/logs.js");
-    await expect(cmdLogs({ runtime: undefined })).rejects.toThrow("process.exit");
+    await expect(cmdLogs({ runtime: undefined })).rejects.toThrow(
+      "process.exit",
+    );
 
     exitSpy.mockRestore();
     errSpy.mockRestore();

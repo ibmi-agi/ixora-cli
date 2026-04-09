@@ -50,9 +50,7 @@ export async function verifyRuntimeRunning(
     await execa(runtime, ["info"]);
   } catch {
     const name = runtime === "docker" ? "Docker Desktop" : "Podman";
-    throw new Error(
-      `${name} is not running. Please start it and try again.`,
-    );
+    throw new Error(`${name} is not running. Please start it and try again.`);
   }
 }
 

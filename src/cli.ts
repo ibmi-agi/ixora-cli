@@ -35,10 +35,7 @@ export function createProgram(): Command {
     .option("--image-version <tag>", "Pin image version (e.g., v1.2.0)")
     .option("--no-pull", "Skip pulling images")
     .option("--purge", "Remove volumes too (with uninstall)")
-    .option(
-      "--runtime <name>",
-      "Force container runtime (docker or podman)",
-    );
+    .option("--runtime <name>", "Force container runtime (docker or podman)");
 
   program
     .command("install")

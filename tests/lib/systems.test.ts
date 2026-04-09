@@ -36,19 +36,27 @@ describe("systems", () => {
       expect(readSystems(configFile)).toEqual([]);
     });
 
-    it("parses multiple systems", () => {
+    it("parses multiple systems with profile", () => {
       writeFileSync(configFile, SAMPLE_SYSTEMS_YAML);
       const systems = readSystems(configFile);
 
-      expect(systems).toHaveLength(2);
+      expect(systems).toHaveLength(3);
       expect(systems[0]).toEqual({
-        id: "dev",
-        name: "Development",
-        agents: ["ibmi-security-assistant", "ibmi-system-health"],
+        id: "default",
+        name: "myibmi.example.com",
+        profile: "full",
+        agents: [],
       });
       expect(systems[1]).toEqual({
+        id: "dev",
+        name: "Development",
+        profile: "security",
+        agents: ["ibmi-security-assistant", "ibmi-system-health"],
+      });
+      expect(systems[2]).toEqual({
         id: "prod",
         name: "Production",
+        profile: "full",
         agents: [
           "ibmi-security-assistant",
           "ibmi-system-health",
@@ -62,8 +70,9 @@ describe("systems", () => {
       const systems = readSystems(configFile);
 
       expect(systems).toHaveLength(1);
-      expect(systems[0].id).toBe("staging");
-      expect(systems[0].name).toBe("Staging");
+      expect(systems[0].id).toBe("default");
+      expect(systems[0].name).toBe("myibmi.example.com");
+      expect(systems[0].profile).toBe("full");
     });
   });
 
@@ -74,7 +83,7 @@ describe("systems", () => {
 
     it("counts systems correctly", () => {
       writeFileSync(configFile, SAMPLE_SYSTEMS_YAML);
-      expect(systemCount(configFile)).toBe(2);
+      expect(systemCount(configFile)).toBe(3);
     });
   });
 
@@ -85,6 +94,7 @@ describe("systems", () => {
 
     it("returns true for existing system", () => {
       writeFileSync(configFile, SAMPLE_SYSTEMS_YAML);
+      expect(systemIdExists("default", configFile)).toBe(true);
       expect(systemIdExists("dev", configFile)).toBe(true);
       expect(systemIdExists("prod", configFile)).toBe(true);
     });
@@ -96,25 +106,17 @@ describe("systems", () => {
   });
 
   describe("totalSystemCount", () => {
-    it("counts only additional systems when no primary", () => {
-      writeFileSync(envFile, "IXORA_PROFILE='full'\n");
-      writeFileSync(configFile, SAMPLE_SYSTEMS_YAML);
-      expect(totalSystemCount(envFile, configFile)).toBe(2);
-    });
-
-    it("includes primary system in count", () => {
-      writeFileSync(envFile, SAMPLE_ENV);
+    it("counts all systems from YAML", () => {
       writeFileSync(configFile, SAMPLE_SYSTEMS_YAML);
       expect(totalSystemCount(envFile, configFile)).toBe(3);
     });
 
-    it("returns 1 with only primary system", () => {
-      writeFileSync(envFile, SAMPLE_ENV);
+    it("returns 1 with single system", () => {
+      writeFileSync(configFile, SAMPLE_SYSTEMS_YAML_SINGLE);
       expect(totalSystemCount(envFile, configFile)).toBe(1);
     });
 
-    it("returns 0 with nothing configured", () => {
-      writeFileSync(envFile, "IXORA_PROFILE='full'\n");
+    it("returns 0 with no YAML file", () => {
       expect(totalSystemCount(envFile, configFile)).toBe(0);
     });
   });
@@ -126,6 +128,7 @@ describe("systems", () => {
         {
           id: "test",
           name: "Test System",
+          profile: "security",
           agents: ["ibmi-security-assistant"],
           host: "test.ibmi.com",
           port: "8076",
@@ -139,11 +142,33 @@ describe("systems", () => {
       const systems = readSystems(configFile);
       expect(systems).toHaveLength(1);
       expect(systems[0].id).toBe("test");
+      expect(systems[0].profile).toBe("security");
 
       // Check credentials in env
       const envContent = readFileSync(envFile, "utf-8");
       expect(envContent).toContain("SYSTEM_TEST_HOST='test.ibmi.com'");
       expect(envContent).toContain("SYSTEM_TEST_USER='TESTUSER'");
+    });
+
+    it("writes profile to YAML", () => {
+      writeFileSync(envFile, "");
+      addSystem(
+        {
+          id: "test",
+          name: "Test",
+          profile: "knowledge",
+          agents: [],
+          host: "h",
+          port: "8076",
+          user: "u",
+          pass: "p",
+        },
+        envFile,
+        configFile,
+      );
+
+      const content = readFileSync(configFile, "utf-8");
+      expect(content).toContain("profile: knowledge");
     });
 
     it("appends to existing config", () => {
@@ -154,6 +179,7 @@ describe("systems", () => {
         {
           id: "new-sys",
           name: "New System",
+          profile: "full",
           agents: ["ibmi-db-explorer"],
           host: "new.ibmi.com",
           port: "8076",
@@ -173,6 +199,7 @@ describe("systems", () => {
         {
           id: "my-system",
           name: "My System",
+          profile: "full",
           agents: [],
           host: "host",
           port: "8076",
@@ -190,14 +217,17 @@ describe("systems", () => {
 
   describe("removeSystem", () => {
     it("removes a system from config", () => {
-      writeFileSync(envFile, "SYSTEM_DEV_HOST='dev.ibmi.com'\nSYSTEM_DEV_USER='user'\n");
+      writeFileSync(
+        envFile,
+        "SYSTEM_DEV_HOST='dev.ibmi.com'\nSYSTEM_DEV_USER='user'\n",
+      );
       writeFileSync(configFile, SAMPLE_SYSTEMS_YAML);
 
       removeSystem("dev", envFile, configFile);
 
       const systems = readSystems(configFile);
-      expect(systems).toHaveLength(1);
-      expect(systems[0].id).toBe("prod");
+      expect(systems).toHaveLength(2);
+      expect(systems.map((s) => s.id)).toEqual(["default", "prod"]);
     });
 
     it("removes credentials from env", () => {

@@ -2,7 +2,12 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { envGet, writeEnvFile, updateEnvKey, type EnvConfig } from "../../src/lib/env.js";
+import {
+  envGet,
+  writeEnvFile,
+  updateEnvKey,
+  type EnvConfig,
+} from "../../src/lib/env.js";
 import { SAMPLE_ENV, SAMPLE_ENV_WITH_EXTRAS } from "../helpers/fixtures.js";
 
 describe("env", () => {
@@ -72,8 +77,12 @@ describe("env", () => {
       writeEnvFile(config, envFile);
       const content = readFileSync(envFile, "utf-8");
 
-      expect(content).toContain("IXORA_AGENT_MODEL='anthropic:claude-sonnet-4-6'");
-      expect(content).toContain("IXORA_TEAM_MODEL='anthropic:claude-haiku-4-5'");
+      expect(content).toContain(
+        "IXORA_AGENT_MODEL='anthropic:claude-sonnet-4-6'",
+      );
+      expect(content).toContain(
+        "IXORA_TEAM_MODEL='anthropic:claude-haiku-4-5'",
+      );
       expect(content).toContain("ANTHROPIC_API_KEY='sk-test'");
       expect(content).toContain("DB2i_HOST='ibmi.local'");
       expect(content).toContain("DB2i_USER='ADMIN'");
