@@ -62,7 +62,7 @@ export async function cmdStatus(opts: StatusOptions): Promise<void> {
           const tagDisplay =
             tag === "latest" ? `${tag}${dim(id)}` : tag;
           console.log(
-            `    ${(img.Service || "").padEnd(22)} ${dim(`${img.Repository || ""}:`)}${tagDisplay}`,
+            `    ${dim(`${img.Repository || ""}:`)}${tagDisplay}`,
           );
         }
         console.log();

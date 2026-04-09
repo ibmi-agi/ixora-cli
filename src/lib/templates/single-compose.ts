@@ -40,6 +40,7 @@ export function generateSingleCompose(): string {
       MCP_RATE_LIMIT_MAX_REQUESTS: "5000"
       MCP_RATE_LIMIT_WINDOW_MS: "60000"
       MCP_RATE_LIMIT_SKIP_DEV: "true"
+      MCP_POOL_QUERY_TIMEOUT_MS: "120000"
     healthcheck:
       test: ["CMD-SHELL", "node -e \\"fetch('http://localhost:3010/healthz').then(function(r){process.exit(r.ok?0:1)}).catch(function(){process.exit(1)})\\""]
       interval: 5s
@@ -74,8 +75,19 @@ export function generateSingleCompose(): string {
       RAG_API_TIMEOUT: \${RAG_API_TIMEOUT:-120}
       AUTH_ENABLED: "false"
       MCP_AUTH_MODE: "none"
+      CORS_ORIGINS: \${CORS_ORIGINS:-*}
+      IXORA_ENABLE_BUILDER: "true"
+      DB2i_HOST: \${DB2i_HOST}
+      DB2i_USER: \${DB2i_USER}
+      DB2i_PASS: \${DB2i_PASS}
+      DB2_PORT: \${DB2_PORT:-8076}
     volumes:
       - agentos-data:/data
+      - type: bind
+        source: \${HOME}/.ixora/user_tools
+        target: /data/user_tools
+        bind:
+          create_host_path: true
     depends_on:
       agentos-db:
         condition: service_healthy

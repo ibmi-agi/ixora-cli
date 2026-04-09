@@ -82,6 +82,7 @@ services:
       IBMI_ENABLE_DEFAULT_TOOLS: "true"
       MCP_AUTH_MODE: "none"
       IBMI_HTTP_AUTH_ENABLED: "false"
+      MCP_POOL_QUERY_TIMEOUT_MS: "120000"
     healthcheck:
       test: ["CMD-SHELL", "node -e \\"fetch('http://localhost:3010/healthz').then(function(r){process.exit(r.ok?0:1)}).catch(function(){process.exit(1)})\\""]
       interval: 5s
@@ -119,8 +120,18 @@ services:
       CORS_ORIGINS: \${CORS_ORIGINS:-*}
       AUTH_ENABLED: "false"
       MCP_AUTH_MODE: "none"
+      IXORA_ENABLE_BUILDER: "true"
+      DB2i_HOST: \${SYSTEM_${idUpper}_HOST}
+      DB2i_USER: \${SYSTEM_${idUpper}_USER}
+      DB2i_PASS: \${SYSTEM_${idUpper}_PASS}
+      DB2_PORT: \${SYSTEM_${idUpper}_PORT:-8076}
     volumes:
       - agentos-data:/data
+      - type: bind
+        source: \${HOME}/.ixora/user_tools
+        target: /data/user_tools
+        bind:
+          create_host_path: true
     depends_on:
       agentos-db:
         condition: service_healthy

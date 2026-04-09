@@ -40,6 +40,32 @@ describe("templates", () => {
       const content = generateSingleCompose();
       expect(content).toContain("condition: service_healthy");
     });
+
+    it("includes MCP pool query timeout", () => {
+      const content = generateSingleCompose();
+      expect(content).toContain('MCP_POOL_QUERY_TIMEOUT_MS: "120000"');
+    });
+
+    it("includes CORS_ORIGINS in api service", () => {
+      const content = generateSingleCompose();
+      expect(content).toContain("CORS_ORIGINS: ${CORS_ORIGINS:-*}");
+    });
+
+    it("includes agent builder env vars", () => {
+      const content = generateSingleCompose();
+      expect(content).toContain('IXORA_ENABLE_BUILDER: "true"');
+      expect(content).toContain("DB2i_HOST: ${DB2i_HOST}");
+      expect(content).toContain("DB2i_USER: ${DB2i_USER}");
+      expect(content).toContain("DB2i_PASS: ${DB2i_PASS}");
+      expect(content).toContain("DB2_PORT: ${DB2_PORT:-8076}");
+    });
+
+    it("includes user_tools bind mount", () => {
+      const content = generateSingleCompose();
+      expect(content).toContain("source: ${HOME}/.ixora/user_tools");
+      expect(content).toContain("target: /data/user_tools");
+      expect(content).toContain("create_host_path: true");
+    });
   });
 
   describe("generateMultiCompose", () => {
@@ -97,6 +123,35 @@ describe("templates", () => {
       expect(content).toContain("${SYSTEM_DEFAULT_HOST}");
       expect(content).toContain("${SYSTEM_DEV_HOST}");
       expect(content).toContain("${SYSTEM_PROD_HOST}");
+    });
+
+    it("includes MCP pool query timeout", () => {
+      writeFileSync(envFile, SAMPLE_ENV);
+      writeFileSync(configFile, SAMPLE_SYSTEMS_YAML);
+
+      const content = generateMultiCompose(envFile, configFile);
+      expect(content).toContain('MCP_POOL_QUERY_TIMEOUT_MS: "120000"');
+    });
+
+    it("includes agent builder env vars with system-specific credentials", () => {
+      writeFileSync(envFile, SAMPLE_ENV);
+      writeFileSync(configFile, SAMPLE_SYSTEMS_YAML);
+
+      const content = generateMultiCompose(envFile, configFile);
+      expect(content).toContain('IXORA_ENABLE_BUILDER: "true"');
+      expect(content).toContain("DB2i_HOST: ${SYSTEM_DEFAULT_HOST}");
+      expect(content).toContain("DB2i_HOST: ${SYSTEM_DEV_HOST}");
+      expect(content).toContain("DB2i_HOST: ${SYSTEM_PROD_HOST}");
+    });
+
+    it("includes user_tools bind mount", () => {
+      writeFileSync(envFile, SAMPLE_ENV);
+      writeFileSync(configFile, SAMPLE_SYSTEMS_YAML);
+
+      const content = generateMultiCompose(envFile, configFile);
+      expect(content).toContain("source: ${HOME}/.ixora/user_tools");
+      expect(content).toContain("target: /data/user_tools");
+      expect(content).toContain("create_host_path: true");
     });
 
     it("works without primary system", () => {
