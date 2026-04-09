@@ -56,12 +56,16 @@ describe("upgrade command", () => {
     expect(output).toContain("Upgrade complete");
   });
 
-  it("pins version when specified", async () => {
+  it("pins version and shows before/after", async () => {
     const { cmdUpgrade } = await import("../../src/commands/upgrade.js");
     await cmdUpgrade({ runtime: undefined, imageVersion: "v2.0.0" });
 
     const content = readFileSync(ENV_FILE, "utf-8");
     expect(content).toContain("IXORA_VERSION='v2.0.0'");
+
+    const output = consoleSpy.mock.calls.map((c) => String(c[0])).join("\n");
+    expect(output).toContain("latest → v2.0.0");
+    expect(output).toContain("v2.0.0");
   });
 
   it("updates profile when specified", async () => {

@@ -115,6 +115,30 @@ async function promptModelProvider(): Promise<{
 
     agentModel = `ollama:${modelName}`;
     teamModel = `ollama:${modelName}`;
+
+    // Test Ollama connectivity
+    try {
+      let testUrl = ollamaHost;
+      if (testUrl.includes("host.docker.internal")) {
+        testUrl = testUrl.replace("host.docker.internal", "localhost");
+      }
+      const response = await fetch(`${testUrl}/api/tags`, {
+        signal: AbortSignal.timeout(5000),
+      });
+      if (response.ok) {
+        success("Ollama is reachable");
+      } else {
+        warn(`Could not reach Ollama at ${testUrl}`);
+        console.log(
+          "  Make sure Ollama is running and accessible from Docker containers.",
+        );
+      }
+    } catch {
+      warn(`Could not reach Ollama at ${ollamaHost}`);
+      console.log(
+        "  Make sure Ollama is running and accessible from Docker containers.",
+      );
+    }
   } else if (provider === "custom") {
     const curAm = envGet("IXORA_AGENT_MODEL");
     const curTm = envGet("IXORA_TEAM_MODEL");
@@ -265,11 +289,11 @@ export async function cmdInstall(opts: InstallOptions): Promise<void> {
     version,
   };
 
-  writeComposeFile();
-  success("Wrote docker-compose.yml");
-
   writeEnvFile(envConfig);
   success("Wrote .env");
+
+  writeComposeFile();
+  success("Wrote docker-compose.yml");
 
   if (opts.pull !== false) {
     info("Pulling images...");

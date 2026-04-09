@@ -119,6 +119,26 @@ describe("env", () => {
       expect(content).toContain("DB2i_HOST='new-host.com'");
     });
 
+    it("does not wipe DB2_PORT as an unknown key", () => {
+      writeFileSync(envFile, SAMPLE_ENV + "DB2_PORT='9876'\n");
+
+      const config: EnvConfig = {
+        agentModel: "anthropic:claude-sonnet-4-6",
+        teamModel: "anthropic:claude-haiku-4-5",
+        db2Host: "host",
+        db2User: "user",
+        db2Pass: "pass",
+        profile: "full",
+        version: "latest",
+      };
+
+      writeEnvFile(config, envFile);
+      const content = readFileSync(envFile, "utf-8");
+      // DB2_PORT is a known key, so it should not appear in preserved user settings
+      // (it would only appear there if it were NOT in KNOWN_KEYS)
+      expect(content).not.toContain("Preserved user settings");
+    });
+
     it("escapes single quotes in values", () => {
       const config: EnvConfig = {
         agentModel: "test",

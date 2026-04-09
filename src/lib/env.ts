@@ -47,6 +47,7 @@ const KNOWN_KEYS = [
   "DB2i_HOST",
   "DB2i_USER",
   "DB2i_PASS",
+  "DB2_PORT",
   "IXORA_PROFILE",
   "IXORA_VERSION",
   "IXORA_AGENT_MODEL",

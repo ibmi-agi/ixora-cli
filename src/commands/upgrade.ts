@@ -10,7 +10,7 @@ import {
   detectPlatform,
 } from "../lib/platform.js";
 import { waitForHealthy } from "../lib/health.js";
-import { info, success, die } from "../lib/ui.js";
+import { info, success, die, dim, bold } from "../lib/ui.js";
 import { VALID_PROFILES, type ProfileName } from "../lib/constants.js";
 
 interface UpgradeOptions {
@@ -36,6 +36,7 @@ export async function cmdUpgrade(opts: UpgradeOptions): Promise<void> {
   }
   detectPlatform();
 
+  const previousVersion = envGet("IXORA_VERSION") || "latest";
   info("Upgrading ixora...");
 
   // Update compose file
@@ -43,7 +44,7 @@ export async function cmdUpgrade(opts: UpgradeOptions): Promise<void> {
   success("Wrote docker-compose.yml");
 
   if (opts.imageVersion) {
-    info(`Pinning version to: ${opts.imageVersion}`);
+    info(`Pinning version: ${previousVersion} → ${opts.imageVersion}`);
     updateEnvKey("IXORA_VERSION", opts.imageVersion);
   }
 
@@ -67,7 +68,15 @@ export async function cmdUpgrade(opts: UpgradeOptions): Promise<void> {
 
   await waitForHealthy(composeCmd);
 
+  const newVersion = envGet("IXORA_VERSION") || "latest";
+  const profile = envGet("IXORA_PROFILE") || "full";
+
   console.log();
   success("Upgrade complete!");
+  console.log(`  ${bold("Version:")} ${newVersion}`);
+  console.log(`  ${bold("Profile:")} ${profile}`);
+  if (opts.imageVersion && previousVersion !== opts.imageVersion) {
+    console.log(`  ${dim(`(was ${previousVersion})`)}`);
+  }
   console.log();
 }

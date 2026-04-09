@@ -106,8 +106,9 @@ export function createProgram(): Command {
   program
     .command("version")
     .description("Show CLI and image versions")
-    .action(() => {
-      cmdVersion();
+    .action(async () => {
+      const opts = program.opts();
+      await cmdVersion(opts);
     });
 
   // Config subcommands

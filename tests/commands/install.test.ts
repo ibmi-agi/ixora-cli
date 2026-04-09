@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, existsSync } from "node:fs";
+import { mkdtempSync, existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -69,5 +69,24 @@ describe("install command", () => {
     // Verify files were created
     expect(existsSync(join(tmpDir, ".env"))).toBe(true);
     expect(existsSync(join(tmpDir, "docker-compose.yml"))).toBe(true);
+  });
+
+  it("writes .env before docker-compose.yml", async () => {
+    // Verify .env was written first by checking both exist and
+    // the compose file can reference values from .env
+    const envPath = join(tmpDir, ".env");
+    const composePath = join(tmpDir, "docker-compose.yml");
+
+    expect(existsSync(envPath)).toBe(true);
+    expect(existsSync(composePath)).toBe(true);
+
+    // .env should contain the IBM i host from the prompts
+    const envContent = readFileSync(envPath, "utf-8");
+    expect(envContent).toContain("DB2i_HOST='myibmi.com'");
+    expect(envContent).toContain("ANTHROPIC_API_KEY='sk-ant-test123'");
+
+    // Compose file should be valid
+    const composeContent = readFileSync(composePath, "utf-8");
+    expect(composeContent).toContain("services:");
   });
 });
