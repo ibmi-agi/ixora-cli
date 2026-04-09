@@ -16,7 +16,7 @@ describe("version command", () => {
     await cmdVersion();
 
     expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("ixora 0.1.0"),
+      expect.stringContaining("ixora 0.1.1"),
     );
   });
 });

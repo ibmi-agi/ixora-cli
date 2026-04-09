@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-export const SCRIPT_VERSION = "0.1.0";
+export const SCRIPT_VERSION = "0.1.1";
 export const HEALTH_TIMEOUT = 30;
 
 export const IXORA_DIR = join(homedir(), ".ixora");
