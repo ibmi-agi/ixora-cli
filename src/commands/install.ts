@@ -228,7 +228,7 @@ async function promptProfile(): Promise<ProfileName> {
 }
 
 export async function cmdInstall(opts: InstallOptions): Promise<void> {
-  info(`Installing ixora (v${SCRIPT_VERSION})`);
+  info(`Installing ixora (v${SCRIPT_VERSION}) — latest container images`);
   console.log();
 
   let composeCmd;
