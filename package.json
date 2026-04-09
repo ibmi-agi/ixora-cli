@@ -1,5 +1,5 @@
 {
-  "name": "@ibmi-agi/ixora",
+  "name": "@ibm/ixora",
   "version": "0.1.0",
   "description": "CLI for managing ixora AI agent deployments on IBM i",
   "type": "module",
