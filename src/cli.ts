@@ -18,6 +18,9 @@ import {
   cmdSystemAdd,
   cmdSystemRemove,
   cmdSystemList,
+  cmdSystemStart,
+  cmdSystemStop,
+  cmdSystemRestart,
 } from "./commands/system.js";
 
 export function createProgram(): Command {
@@ -165,6 +168,30 @@ export function createProgram(): Command {
     .description("List configured systems")
     .action(() => {
       cmdSystemList();
+    });
+
+  systemCmd
+    .command("start")
+    .argument("<id>", "System ID (from ixora system)")
+    .description("Start a specific system's services")
+    .action(async (id: string) => {
+      await cmdSystemStart(id);
+    });
+
+  systemCmd
+    .command("stop")
+    .argument("<id>", "System ID (from ixora system)")
+    .description("Stop a specific system's services")
+    .action(async (id: string) => {
+      await cmdSystemStop(id);
+    });
+
+  systemCmd
+    .command("restart")
+    .argument("<id>", "System ID (from ixora system)")
+    .description("Restart a specific system's services")
+    .action(async (id: string) => {
+      await cmdSystemRestart(id);
     });
 
   return program;

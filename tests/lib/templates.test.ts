@@ -66,6 +66,12 @@ describe("templates", () => {
       expect(content).toContain("target: /data/user_tools");
       expect(content).toContain("create_host_path: true");
     });
+
+    it("includes IXORA_SYSTEM_NAME and IXORA_SYSTEM_ID", () => {
+      const content = generateSingleCompose();
+      expect(content).toContain("IXORA_SYSTEM_ID: default");
+      expect(content).toContain("IXORA_SYSTEM_NAME: ${DB2i_HOST}");
+    });
   });
 
   describe("generateMultiCompose", () => {

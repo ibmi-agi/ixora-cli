@@ -53,7 +53,7 @@ export async function cmdStart(opts: StartOptions): Promise<void> {
   success("Wrote docker-compose.yml");
 
   info("Starting ixora services...");
-  await runCompose(composeCmd, ["up", "-d"]);
+  await runCompose(composeCmd, ["up", "-d", "--remove-orphans"]);
 
   await waitForHealthy(composeCmd);
 

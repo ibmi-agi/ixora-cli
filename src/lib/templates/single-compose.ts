@@ -67,6 +67,8 @@ export function generateSingleCompose(): string {
       DB_PASS: \${DB_PASS:-ai}
       DB_DATABASE: \${DB_DATABASE:-ai}
       MCP_URL: http://ibmi-mcp-server:3010/mcp
+      IXORA_SYSTEM_ID: default
+      IXORA_SYSTEM_NAME: \${DB2i_HOST}
       IAASSIST_DEPLOYMENT_CONFIG: app/config/deployments/\${IXORA_PROFILE:-full}.yaml
       DATA_DIR: /data
       RUNTIME_ENV: docker

@@ -1,4 +1,4 @@
-import { requireComposeFile, runCompose, resolveService } from "../lib/compose.js";
+import { requireInstalled, writeComposeFile, runCompose, resolveService } from "../lib/compose.js";
 import {
   detectComposeCmd,
   verifyRuntimeRunning,
@@ -16,7 +16,7 @@ export async function cmdRestart(
   service?: string,
 ): Promise<void> {
   try {
-    requireComposeFile();
+    requireInstalled();
   } catch (e: unknown) {
     die((e as Error).message);
   }
@@ -29,6 +29,9 @@ export async function cmdRestart(
     die((e as Error).message);
   }
   detectPlatform();
+
+  // Regenerate compose file for current system count
+  writeComposeFile();
 
   if (service) {
     const svc = resolveService(service);
@@ -43,7 +46,7 @@ export async function cmdRestart(
     success(`Restarted ${svc}`);
   } else {
     info("Restarting all services...");
-    await runCompose(composeCmd, ["up", "-d", "--force-recreate"]);
+    await runCompose(composeCmd, ["up", "-d", "--force-recreate", "--remove-orphans"]);
     await waitForHealthy(composeCmd);
     console.log();
     success("All services restarted");

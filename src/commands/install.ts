@@ -340,7 +340,7 @@ export async function cmdInstall(opts: InstallOptions): Promise<void> {
   }
 
   info("Starting services...");
-  await runCompose(composeCmd, ["up", "-d"]);
+  await runCompose(composeCmd, ["up", "-d", "--remove-orphans"]);
 
   await waitForHealthy(composeCmd);
 

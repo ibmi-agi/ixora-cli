@@ -37,7 +37,7 @@ describe("restart command", () => {
 
   beforeEach(() => {
     consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    writeFileSync(join(tmpDir, "docker-compose.yml"), "services: {}");
+    writeFileSync(join(tmpDir, ".env"), "DB2i_HOST='test'\nIXORA_VERSION='latest'\n");
   });
 
   afterEach(() => {
