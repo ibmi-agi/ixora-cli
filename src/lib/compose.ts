@@ -9,8 +9,9 @@ import { error, bold } from "./ui.js";
 export async function runCompose(
   composeCmd: ComposeCmd,
   args: string[],
-  options: ExecaOptions = {},
+  options: ExecaOptions & { throwOnError?: boolean } = {},
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  const { throwOnError, ...execaOpts } = options;
   const [bin, subArgs] = getComposeParts(composeCmd);
   const fullArgs = [
     ...subArgs,
@@ -26,7 +27,7 @@ export async function runCompose(
   try {
     const result = await execa(bin, fullArgs, {
       stdio: "inherit",
-      ...options,
+      ...execaOpts,
     });
     return {
       stdout: String(result.stdout ?? ""),
@@ -38,6 +39,13 @@ export async function runCompose(
       err && typeof err === "object" && "exitCode" in err
         ? (err as { exitCode: number }).exitCode
         : 1;
+
+    if (throwOnError) {
+      throw new Error(
+        `Compose command failed (exit ${exitCode}): ${args.join(" ")}`,
+      );
+    }
+
     error(`Command failed: ${composeCmd} ${args.join(" ")}`);
     console.log(`  Check ${bold("ixora logs")} for details.`);
     process.exit(exitCode);
