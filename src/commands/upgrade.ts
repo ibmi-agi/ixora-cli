@@ -11,7 +11,7 @@ import {
   detectPlatform,
 } from "../lib/platform.js";
 import { waitForHealthy } from "../lib/health.js";
-import { info, success, warn, die, dim, bold } from "../lib/ui.js";
+import { info, success, warn, error, die, dim, bold } from "../lib/ui.js";
 import { VALID_PROFILES, type ProfileName } from "../lib/constants.js";
 import { fetchImageTags, normalizeVersion } from "../lib/registry.js";
 
@@ -21,6 +21,13 @@ interface UpgradeOptions {
   version?: string;
   profile?: string;
   pull?: boolean;
+}
+
+function rollback(previousVersion: string): void {
+  warn("Rolling back to previous version...");
+  updateEnvKey("IXORA_VERSION", previousVersion);
+  writeComposeFile();
+  info(`Reverted IXORA_VERSION to ${previousVersion}`);
 }
 
 export async function cmdUpgrade(opts: UpgradeOptions): Promise<void> {
@@ -70,13 +77,16 @@ export async function cmdUpgrade(opts: UpgradeOptions): Promise<void> {
     });
   }
 
-  info(`Upgrading ixora: ${previousVersion} → ${targetVersion}`);
+  info(`Upgrading ixora: ${previousVersion} -> ${targetVersion}`);
 
-  // Stop existing services to avoid port conflicts with orphaned containers
+  // Persist previous version for rollback support
+  updateEnvKey("IXORA_PREVIOUS_VERSION", previousVersion);
+
+  // Stop services -- downtime is acceptable
   info("Stopping services...");
   await runCompose(composeCmd, ["down", "--remove-orphans"]);
 
-  // Pin version and regenerate compose
+  // Write new version to .env so compose pull resolves correct image tags
   updateEnvKey("IXORA_VERSION", targetVersion);
   writeComposeFile();
   success("Wrote docker-compose.yml");
@@ -91,15 +101,41 @@ export async function cmdUpgrade(opts: UpgradeOptions): Promise<void> {
     updateEnvKey("IXORA_PROFILE", opts.profile);
   }
 
-  if (opts.pull !== false) {
-    info("Pulling images...");
-    await runCompose(composeCmd, ["pull"]);
+  try {
+    // Pull images -- if this fails, rollback .env
+    if (opts.pull !== false) {
+      info("Pulling images...");
+      await runCompose(composeCmd, ["pull"], { throwOnError: true });
+    }
+
+    // Start services
+    info("Starting services...");
+    await runCompose(composeCmd, ["up", "-d"], { throwOnError: true });
+
+    // Health validation -- check return value
+    const healthy = await waitForHealthy(composeCmd);
+    if (!healthy) {
+      throw new Error(
+        "Services did not become healthy after upgrade",
+      );
+    }
+  } catch (err) {
+    // Automatic rollback on any failure
+    rollback(previousVersion);
+
+    // Stop broken services so user isn't left with unhealthy containers
+    try {
+      await runCompose(composeCmd, ["down", "--remove-orphans"]);
+    } catch {
+      // Best-effort stop -- don't mask the original error
+    }
+
+    error((err as Error).message);
+    info(
+      `Run ${bold("ixora logs")} to investigate, then retry with ${bold(`ixora upgrade ${targetVersion}`)}`,
+    );
+    process.exit(1);
   }
-
-  info("Restarting services...");
-  await runCompose(composeCmd, ["up", "-d"]);
-
-  await waitForHealthy(composeCmd);
 
   const profile = envGet("IXORA_PROFILE") || "full";
 
