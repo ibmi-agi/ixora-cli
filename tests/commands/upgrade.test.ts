@@ -31,8 +31,14 @@ vi.mock("../../src/lib/health.js", () => ({
   waitForHealthy: vi.fn().mockResolvedValue(true),
 }));
 
+const execaMock = vi.fn().mockResolvedValue({
+  stdout: "",
+  stderr: "",
+  exitCode: 0,
+});
+
 vi.mock("execa", () => ({
-  execa: vi.fn().mockResolvedValue({ stdout: "", stderr: "", exitCode: 0 }),
+  execa: (...args: unknown[]) => execaMock(...args),
 }));
 
 vi.mock("../../src/lib/registry.js", () => ({
@@ -49,12 +55,21 @@ vi.mock("@inquirer/prompts", () => ({
 
 describe("upgrade command", () => {
   let consoleSpy: ReturnType<typeof vi.spyOn>;
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
   let ENV_FILE: string;
 
   beforeEach(async () => {
     const constants = await import("../../src/lib/constants.js");
     ENV_FILE = constants.ENV_FILE;
     consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    execaMock.mockReset().mockResolvedValue({
+      stdout: "",
+      stderr: "",
+      exitCode: 0,
+    });
     writeFileSync(ENV_FILE, SAMPLE_ENV);
     writeFileSync(
       join(tmpDir, "ixora-systems.yaml"),
@@ -64,6 +79,7 @@ describe("upgrade command", () => {
 
   afterEach(() => {
     consoleSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
   });
 
   it("upgrades successfully with interactive version select", async () => {
@@ -117,12 +133,124 @@ describe("upgrade command", () => {
   });
 
   it("skips pull when --no-pull", async () => {
-    const { execa } = await import("execa");
     const { cmdUpgrade } = await import("../../src/commands/upgrade.js");
     await cmdUpgrade({ runtime: undefined, version: "v0.0.10", pull: false });
 
-    const calls = (execa as any).mock.calls;
-    const pullCalls = calls.filter((c: any[]) => c[1]?.includes("pull"));
+    const pullCalls = execaMock.mock.calls.filter((c: unknown[]) =>
+      (c[1] as string[])?.includes("pull"),
+    );
     expect(pullCalls).toHaveLength(0);
+  });
+
+  describe("rollback behavior", () => {
+    it("writes IXORA_PREVIOUS_VERSION before upgrade", async () => {
+      const { cmdUpgrade } = await import("../../src/commands/upgrade.js");
+      await cmdUpgrade({ version: "v1.0.0" });
+
+      const content = readFileSync(ENV_FILE, "utf-8");
+      expect(content).toContain("IXORA_PREVIOUS_VERSION='latest'");
+      expect(content).toContain("IXORA_VERSION='v1.0.0'");
+    });
+
+    it("reverts IXORA_VERSION when pull fails", async () => {
+      execaMock.mockImplementation(
+        async (_bin: string, args: string[]) => {
+          if (args.includes("pull")) {
+            const err = new Error("pull failed") as Error & {
+              exitCode: number;
+            };
+            err.exitCode = 1;
+            throw err;
+          }
+          return { stdout: "", stderr: "", exitCode: 0 };
+        },
+      );
+
+      const exitSpy = vi
+        .spyOn(process, "exit")
+        .mockImplementation((() => {
+          throw new Error("EXIT");
+        }) as never);
+
+      const { cmdUpgrade } = await import("../../src/commands/upgrade.js");
+      try {
+        await cmdUpgrade({ version: "v1.0.0" });
+      } catch {
+        // Expected -- process.exit mock throws
+      }
+
+      const content = readFileSync(ENV_FILE, "utf-8");
+      expect(content).toContain("IXORA_VERSION='latest'");
+      expect(content).toContain("IXORA_PREVIOUS_VERSION='latest'");
+      expect(exitSpy).toHaveBeenCalledWith(1);
+
+      exitSpy.mockRestore();
+    });
+
+    it("reverts IXORA_VERSION when compose up fails", async () => {
+      execaMock.mockImplementation(
+        async (_bin: string, args: string[]) => {
+          if (args.includes("up")) {
+            const err = new Error("up failed") as Error & {
+              exitCode: number;
+            };
+            err.exitCode = 1;
+            throw err;
+          }
+          return { stdout: "", stderr: "", exitCode: 0 };
+        },
+      );
+
+      const exitSpy = vi
+        .spyOn(process, "exit")
+        .mockImplementation((() => {
+          throw new Error("EXIT");
+        }) as never);
+
+      const { cmdUpgrade } = await import("../../src/commands/upgrade.js");
+      try {
+        await cmdUpgrade({ version: "v1.0.0" });
+      } catch {
+        // Expected -- process.exit mock throws
+      }
+
+      const content = readFileSync(ENV_FILE, "utf-8");
+      expect(content).toContain("IXORA_VERSION='latest'");
+
+      exitSpy.mockRestore();
+    });
+
+    it("reverts IXORA_VERSION when health check fails", async () => {
+      const healthMod = await import("../../src/lib/health.js");
+      vi.mocked(healthMod.waitForHealthy).mockResolvedValueOnce(false);
+
+      const exitSpy = vi
+        .spyOn(process, "exit")
+        .mockImplementation((() => {
+          throw new Error("EXIT");
+        }) as never);
+
+      const { cmdUpgrade } = await import("../../src/commands/upgrade.js");
+      try {
+        await cmdUpgrade({ version: "v1.0.0" });
+      } catch {
+        // Expected -- process.exit mock throws
+      }
+
+      const content = readFileSync(ENV_FILE, "utf-8");
+      expect(content).toContain("IXORA_VERSION='latest'");
+      expect(exitSpy).toHaveBeenCalledWith(1);
+
+      exitSpy.mockRestore();
+    });
+
+    it("successful upgrade keeps new version after health check", async () => {
+      const { cmdUpgrade } = await import("../../src/commands/upgrade.js");
+      await cmdUpgrade({ version: "v2.0.0" });
+
+      const content = readFileSync(ENV_FILE, "utf-8");
+      expect(content).toContain("IXORA_VERSION='v2.0.0'");
+      expect(content).toContain("IXORA_PREVIOUS_VERSION='latest'");
+    });
   });
 });
