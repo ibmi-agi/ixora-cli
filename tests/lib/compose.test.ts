@@ -1,13 +1,22 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { resolveService } from "../../src/lib/compose.js";
+import { resolveService, runCompose } from "../../src/lib/compose.js";
 import { generateMultiCompose } from "../../src/lib/templates/multi-compose.js";
 import {
   SAMPLE_ENV_WITH_SYSTEM,
   SAMPLE_SYSTEMS_YAML_SINGLE,
 } from "../helpers/fixtures.js";
+
+vi.mock("execa", () => ({
+  execa: vi.fn(),
+}));
+
+vi.mock("../../src/lib/ui.js", () => ({
+  error: vi.fn(),
+  bold: (s: string) => s,
+}));
 
 describe("compose", () => {
   describe("resolveService", () => {
@@ -100,6 +109,63 @@ describe("compose", () => {
       const content = generateMultiCompose(envFile, configFile);
       expect(content).toContain("${SYSTEM_DEFAULT_HOST}");
       expect(content).toContain("${IXORA_VERSION:-latest}");
+    });
+  });
+
+  describe("runCompose", () => {
+    let mockExeca: ReturnType<typeof vi.fn>;
+    let exitSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(async () => {
+      const execaMod = await import("execa");
+      mockExeca = execaMod.execa as unknown as ReturnType<typeof vi.fn>;
+      exitSpy = vi
+        .spyOn(process, "exit")
+        .mockImplementation((() => {}) as unknown as (code?: number) => never);
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("throws Error when throwOnError is true and command fails", async () => {
+      mockExeca.mockRejectedValueOnce({ exitCode: 1 });
+
+      await expect(
+        runCompose("docker compose", ["pull"], { throwOnError: true }),
+      ).rejects.toThrow("Compose command failed (exit 1): pull");
+    });
+
+    it("calls process.exit when throwOnError is not set and command fails", async () => {
+      mockExeca.mockRejectedValueOnce({ exitCode: 2 });
+
+      await runCompose("docker compose", ["up", "-d"]);
+
+      expect(exitSpy).toHaveBeenCalledWith(2);
+    });
+
+    it("returns result on success with throwOnError true", async () => {
+      mockExeca.mockResolvedValueOnce({
+        stdout: "ok",
+        stderr: "",
+        exitCode: 0,
+      });
+
+      const result = await runCompose("docker compose", ["ps"], {
+        throwOnError: true,
+      });
+
+      expect(result).toEqual({ stdout: "ok", stderr: "", exitCode: 0 });
+    });
+
+    it("includes failed args in thrown error message", async () => {
+      mockExeca.mockRejectedValueOnce({ exitCode: 3 });
+
+      await expect(
+        runCompose("docker compose", ["up", "-d", "--remove-orphans"], {
+          throwOnError: true,
+        }),
+      ).rejects.toThrow("up -d --remove-orphans");
     });
   });
 });
