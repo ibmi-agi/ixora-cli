@@ -57,6 +57,7 @@ const KNOWN_KEYS = [
   "DB2_PORT",
   "IXORA_PROFILE",
   "IXORA_VERSION",
+  "IXORA_PREVIOUS_VERSION",
   "IXORA_AGENT_MODEL",
   "IXORA_TEAM_MODEL",
 ];
@@ -69,15 +70,21 @@ export function writeEnvFile(
 
   // Preserve any extra keys the user may have added manually
   let extra = "";
+  let prevVersionLine = "";
   if (existsSync(envFile)) {
     const existing = readFileSync(envFile, "utf-8");
-    const extraLines = existing.split("\n").filter((line) => {
+    const lines = existing.split("\n");
+    const extraLines = lines.filter((line) => {
       const trimmed = line.trim();
       if (!trimmed || trimmed.startsWith("#")) return false;
       const lineKey = trimmed.split("=")[0];
       return !KNOWN_KEYS.includes(lineKey);
     });
     extra = extraLines.join("\n");
+    const pvLine = lines.find((l) =>
+      l.startsWith("IXORA_PREVIOUS_VERSION="),
+    );
+    if (pvLine) prevVersionLine = pvLine;
   }
 
   let content = `# Model provider
@@ -104,6 +111,11 @@ DB2_PORT='${sqEscape(config.db2Port)}'
 IXORA_PROFILE='${sqEscape(config.profile)}'
 IXORA_VERSION='${sqEscape(config.version)}'
 `;
+
+  // Preserve previous version if set (written by upgrade command)
+  if (prevVersionLine) {
+    content += `${prevVersionLine}\n`;
+  }
 
   if (extra) {
     content += `\n# Preserved user settings\n${extra}\n`;
