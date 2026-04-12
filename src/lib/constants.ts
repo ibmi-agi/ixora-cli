@@ -1,7 +1,35 @@
+import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-export const SCRIPT_VERSION = "0.1.3";
+/**
+ * Read the CLI version from package.json at runtime.
+ *
+ * Walks upward from this module's location looking for a package.json whose
+ * `name` matches our package. Works in both the bundled dist/ layout
+ * (dist/*.js → ../package.json) and the unbundled dev layout
+ * (src/lib/constants.ts → ../../package.json) without needing build config.
+ */
+function readCliVersion(): string {
+  let dir = dirname(fileURLToPath(import.meta.url));
+  for (let i = 0; i < 5; i++) {
+    try {
+      const pkg = JSON.parse(
+        readFileSync(join(dir, "package.json"), "utf8"),
+      ) as { name?: string; version?: string };
+      if (pkg.name === "@ibm/ixora" && pkg.version) return pkg.version;
+    } catch {
+      // not here — keep walking up
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return "unknown";
+}
+
+export const SCRIPT_VERSION = readCliVersion();
 export const HEALTH_TIMEOUT = 30;
 
 export const IXORA_DIR = join(homedir(), ".ixora");

@@ -13,12 +13,21 @@ import {
   OPS_AGENTS,
   AGENT_PRESETS,
 } from "../../src/lib/constants.js";
+import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const pkg = JSON.parse(
+  readFileSync(
+    join(fileURLToPath(import.meta.url), "..", "..", "..", "package.json"),
+    "utf8",
+  ),
+) as { version: string };
 
 describe("constants", () => {
-  it("has correct version", () => {
-    expect(SCRIPT_VERSION).toBe("0.1.3");
+  it("matches the version in package.json", () => {
+    expect(SCRIPT_VERSION).toBe(pkg.version);
   });
 
   it("has correct health timeout", () => {
