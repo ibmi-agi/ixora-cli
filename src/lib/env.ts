@@ -38,6 +38,8 @@ export interface EnvConfig {
   apiKeyVar?: string;
   apiKeyValue?: string;
   ollamaHost?: string;
+  openaiBaseUrl?: string;
+  modelProviderKind?: string;
   db2Host: string;
   db2User: string;
   db2Pass: string;
@@ -51,6 +53,8 @@ const KNOWN_KEYS = [
   "OPENAI_API_KEY",
   "GOOGLE_API_KEY",
   "OLLAMA_HOST",
+  "IXORA_OPENAI_BASE_URL",
+  "IXORA_MODEL_PROVIDER",
   "DB2i_HOST",
   "DB2i_USER",
   "DB2i_PASS",
@@ -98,6 +102,14 @@ IXORA_TEAM_MODEL='${sqEscape(config.teamModel)}'
 
   if (config.ollamaHost) {
     content += `OLLAMA_HOST='${sqEscape(config.ollamaHost)}'\n`;
+  }
+
+  if (config.openaiBaseUrl) {
+    content += `IXORA_OPENAI_BASE_URL='${sqEscape(config.openaiBaseUrl)}'\n`;
+  }
+
+  if (config.modelProviderKind) {
+    content += `IXORA_MODEL_PROVIDER='${sqEscape(config.modelProviderKind)}'\n`;
   }
 
   content += `

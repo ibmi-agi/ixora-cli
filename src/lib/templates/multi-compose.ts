@@ -73,6 +73,8 @@ services:
       OPENAI_API_KEY: \${OPENAI_API_KEY:-}
       GOOGLE_API_KEY: \${GOOGLE_API_KEY:-}
       OLLAMA_HOST: \${OLLAMA_HOST:-http://host.docker.internal:11434}
+      IXORA_OPENAI_BASE_URL: \${IXORA_OPENAI_BASE_URL:-}
+      IXORA_MODEL_PROVIDER: \${IXORA_MODEL_PROVIDER:-}
       IXORA_AGENT_MODEL: \${IXORA_AGENT_MODEL:-anthropic:claude-sonnet-4-6}
       IXORA_TEAM_MODEL: \${IXORA_TEAM_MODEL:-anthropic:claude-haiku-4-5}
       DB_HOST: agentos-db
