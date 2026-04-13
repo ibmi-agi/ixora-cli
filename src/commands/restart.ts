@@ -11,6 +11,7 @@ import {
 } from "../lib/platform.js";
 import { waitForHealthy } from "../lib/health.js";
 import { info, success, die } from "../lib/ui.js";
+import { printRunningBanner } from "../lib/banner.js";
 
 interface RestartOptions {
   runtime?: string;
@@ -58,7 +59,6 @@ export async function cmdRestart(
       "--remove-orphans",
     ]);
     await waitForHealthy(composeCmd);
-    console.log();
-    success("All services restarted");
+    printRunningBanner();
   }
 }

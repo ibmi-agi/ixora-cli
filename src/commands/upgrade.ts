@@ -11,7 +11,8 @@ import {
   detectPlatform,
 } from "../lib/platform.js";
 import { waitForHealthy } from "../lib/health.js";
-import { info, success, warn, error, die, dim, bold } from "../lib/ui.js";
+import { info, warn, error, die, bold } from "../lib/ui.js";
+import { printRunningBanner } from "../lib/banner.js";
 import { VALID_PROFILES, type ProfileName } from "../lib/constants.js";
 import { fetchImageTags, normalizeVersion } from "../lib/registry.js";
 
@@ -89,7 +90,7 @@ export async function cmdUpgrade(opts: UpgradeOptions): Promise<void> {
   // Write new version to .env so compose pull resolves correct image tags
   updateEnvKey("IXORA_VERSION", targetVersion);
   writeComposeFile();
-  success("Wrote docker-compose.yml");
+  info("Wrote docker-compose.yml");
 
   if (opts.profile) {
     if (!VALID_PROFILES.includes(opts.profile as ProfileName)) {
@@ -137,14 +138,9 @@ export async function cmdUpgrade(opts: UpgradeOptions): Promise<void> {
     process.exit(1);
   }
 
-  const profile = envGet("IXORA_PROFILE") || "full";
-
-  console.log();
-  success("Upgrade complete!");
-  console.log(`  ${bold("Version:")} ${targetVersion}`);
-  console.log(`  ${bold("Profile:")} ${profile}`);
-  if (previousVersion !== targetVersion) {
-    console.log(`  ${dim(`(was ${previousVersion})`)}`);
-  }
-  console.log();
+  printRunningBanner({
+    title: "Upgrade complete!",
+    version: targetVersion,
+    previousVersion,
+  });
 }

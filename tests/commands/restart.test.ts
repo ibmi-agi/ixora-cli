@@ -59,7 +59,8 @@ describe("restart command", () => {
     await cmdRestart({ runtime: undefined });
 
     const output = consoleSpy.mock.calls.map((c) => String(c[0])).join("\n");
-    expect(output).toContain("All services restarted");
+    expect(output).toContain("ixora is running!");
+    expect(output).toContain("http://localhost:8000/mcp");
   });
 
   it("restarts a specific service", async () => {

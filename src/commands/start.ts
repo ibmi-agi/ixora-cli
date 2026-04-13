@@ -1,5 +1,4 @@
-import chalk from "chalk";
-import { envGet, updateEnvKey } from "../lib/env.js";
+import { updateEnvKey } from "../lib/env.js";
 import {
   requireInstalled,
   writeComposeFile,
@@ -11,8 +10,8 @@ import {
   detectPlatform,
 } from "../lib/platform.js";
 import { waitForHealthy } from "../lib/health.js";
-import { readSystems } from "../lib/systems.js";
-import { info, success, die, dim, bold } from "../lib/ui.js";
+import { info, success, die } from "../lib/ui.js";
+import { printRunningBanner } from "../lib/banner.js";
 import { VALID_PROFILES, type ProfileName } from "../lib/constants.js";
 
 interface StartOptions {
@@ -57,27 +56,5 @@ export async function cmdStart(opts: StartOptions): Promise<void> {
 
   await waitForHealthy(composeCmd);
 
-  const systems = readSystems();
-
-  console.log();
-  success("ixora is running!");
-  console.log(`  ${bold("UI:")}      http://localhost:3000`);
-  console.log(`  ${bold("API:")}     http://localhost:8000`);
-
-  if (systems.length > 1) {
-    console.log(`  ${bold("Systems:")} ${systems.length}`);
-    let port = 8000;
-    for (const sys of systems) {
-      const idUpper = sys.id.toUpperCase().replace(/-/g, "_");
-      const sysHost = envGet(`SYSTEM_${idUpper}_HOST`);
-      console.log(`    ${dim(`:${port} → ${sys.id} (${sysHost})`)}`);
-      port++;
-    }
-    console.log(
-      `  ${dim("Note: UI connects to first system (:8000) only. Use API ports for other systems.")}`,
-    );
-  } else if (systems.length === 1) {
-    console.log(`  ${bold("Profile:")} ${systems[0].profile || "full"}`);
-  }
-  console.log();
+  printRunningBanner();
 }

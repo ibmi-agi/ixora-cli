@@ -20,6 +20,7 @@ import {
   VALID_PROFILES,
 } from "../lib/constants.js";
 import { info, success, warn, die, bold, dim } from "../lib/ui.js";
+import { printRunningBanner } from "../lib/banner.js";
 import { fetchImageTags, normalizeVersion } from "../lib/registry.js";
 
 interface InstallOptions {
@@ -457,13 +458,7 @@ export async function cmdInstall(opts: InstallOptions): Promise<void> {
 
   await waitForHealthy(composeCmd);
 
-  console.log();
-  success("ixora is running!");
-  console.log();
-  console.log(`  ${bold("UI:")}   http://localhost:3000`);
-  console.log(`  ${bold("API:")}  http://localhost:8000`);
-  console.log(`  ${bold("Profile:")} ${profile}`);
-  console.log();
+  printRunningBanner();
   console.log(
     `  Manage with: ${bold("ixora start|stop|restart|status|upgrade|config|logs")}`,
   );
