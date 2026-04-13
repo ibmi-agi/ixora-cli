@@ -92,6 +92,14 @@ export const PROVIDERS: Record<string, ProviderDef> = {
     apiKeyVar: "OPENAI_API_KEY",
     description: "GPT-4o / GPT-4o-mini",
   },
+  "openai-compatible": {
+    name: "openai-compatible",
+    label: "OpenAI-compatible",
+    agentModel: "",
+    teamModel: "",
+    apiKeyVar: "OPENAI_API_KEY",
+    description: "OpenAI-protocol endpoint (vLLM, LiteLLM, LocalAI, ...)",
+  },
   google: {
     name: "google",
     label: "Google",
@@ -114,7 +122,7 @@ export const PROVIDERS: Record<string, ProviderDef> = {
     agentModel: "",
     teamModel: "",
     apiKeyVar: "",
-    description: "Enter provider:model strings",
+    description: "Any Agno provider:model (groq, mistral, ...)",
   },
 };
 

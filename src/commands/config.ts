@@ -29,20 +29,27 @@ export function cmdConfigShow(): void {
   const agentModel =
     envGet("IXORA_AGENT_MODEL") || "anthropic:claude-sonnet-4-6";
   const teamModel = envGet("IXORA_TEAM_MODEL") || "anthropic:claude-haiku-4-5";
+  const providerKind = envGet("IXORA_MODEL_PROVIDER");
   const anthKey = envGet("ANTHROPIC_API_KEY");
   const oaiKey = envGet("OPENAI_API_KEY");
   const googKey = envGet("GOOGLE_API_KEY");
   const ollamaHost = envGet("OLLAMA_HOST");
+  const openaiBaseUrl = envGet("IXORA_OPENAI_BASE_URL");
 
-  console.log(`  ${cyan("IXORA_AGENT_MODEL")}   ${agentModel}`);
-  console.log(`  ${cyan("IXORA_TEAM_MODEL")}    ${teamModel}`);
+  console.log(`  ${cyan("IXORA_AGENT_MODEL")}      ${agentModel}`);
+  console.log(`  ${cyan("IXORA_TEAM_MODEL")}       ${teamModel}`);
+  if (providerKind)
+    console.log(`  ${cyan("IXORA_MODEL_PROVIDER")}   ${providerKind}`);
+  if (openaiBaseUrl)
+    console.log(`  ${cyan("IXORA_OPENAI_BASE_URL")}  ${openaiBaseUrl}`);
   if (anthKey)
-    console.log(`  ${cyan("ANTHROPIC_API_KEY")}   ${maskValue(anthKey)}`);
+    console.log(`  ${cyan("ANTHROPIC_API_KEY")}      ${maskValue(anthKey)}`);
   if (oaiKey)
-    console.log(`  ${cyan("OPENAI_API_KEY")}      ${maskValue(oaiKey)}`);
+    console.log(`  ${cyan("OPENAI_API_KEY")}         ${maskValue(oaiKey)}`);
   if (googKey)
-    console.log(`  ${cyan("GOOGLE_API_KEY")}      ${maskValue(googKey)}`);
-  if (ollamaHost) console.log(`  ${cyan("OLLAMA_HOST")}         ${ollamaHost}`);
+    console.log(`  ${cyan("GOOGLE_API_KEY")}         ${maskValue(googKey)}`);
+  if (ollamaHost)
+    console.log(`  ${cyan("OLLAMA_HOST")}            ${ollamaHost}`);
   console.log();
 
   // IBM i Connection
@@ -77,6 +84,8 @@ export function cmdConfigShow(): void {
     "OPENAI_API_KEY",
     "GOOGLE_API_KEY",
     "OLLAMA_HOST",
+    "IXORA_OPENAI_BASE_URL",
+    "IXORA_MODEL_PROVIDER",
     "DB2i_HOST",
     "DB2i_USER",
     "DB2i_PASS",

@@ -36,12 +36,16 @@ async function promptModelProvider(): Promise<{
   apiKeyVar: string;
   apiKeyValue: string;
   ollamaHost?: string;
+  openaiBaseUrl?: string;
 }> {
   const curAgentModel = envGet("IXORA_AGENT_MODEL");
 
-  // Detect current provider
+  // Detect current provider. The sentinel takes precedence over prefix
+  // detection because openai-compatible also uses an `openai:` model prefix.
   let defaultProvider: ProviderName = "anthropic";
-  if (curAgentModel.startsWith("openai:")) defaultProvider = "openai";
+  if (envGet("IXORA_MODEL_PROVIDER") === "openai-compatible") {
+    defaultProvider = "openai-compatible";
+  } else if (curAgentModel.startsWith("openai:")) defaultProvider = "openai";
   else if (curAgentModel.startsWith("google:")) defaultProvider = "google";
   else if (curAgentModel.startsWith("ollama:")) defaultProvider = "ollama";
 
@@ -49,23 +53,27 @@ async function promptModelProvider(): Promise<{
     message: "Select a model provider",
     choices: [
       {
-        name: `Anthropic     ${dim("Claude Sonnet 4.6 / Haiku 4.5 (recommended)")}`,
+        name: `Anthropic         ${dim("Claude Sonnet 4.6 / Haiku 4.5 (recommended)")}`,
         value: "anthropic" as const,
       },
       {
-        name: `OpenAI        ${dim("GPT-4o / GPT-4o-mini")}`,
+        name: `OpenAI            ${dim("GPT-4o / GPT-4o-mini")}`,
         value: "openai" as const,
       },
       {
-        name: `Google        ${dim("Gemini 2.5 Pro / Gemini 2.5 Flash")}`,
+        name: `OpenAI-compatible ${dim("OpenAI-protocol endpoint (vLLM, LiteLLM, LocalAI, ...)")}`,
+        value: "openai-compatible" as const,
+      },
+      {
+        name: `Google            ${dim("Gemini 2.5 Pro / Gemini 2.5 Flash")}`,
         value: "google" as const,
       },
       {
-        name: `Ollama        ${dim("Local models via Ollama (no API key needed)")}`,
+        name: `Ollama            ${dim("Local models via Ollama (no API key needed)")}`,
         value: "ollama" as const,
       },
       {
-        name: `Custom        ${dim("Enter provider:model strings")}`,
+        name: `Custom            ${dim("Any Agno provider:model (groq, mistral, ...)")}`,
         value: "custom" as const,
       },
     ],
@@ -78,8 +86,66 @@ async function promptModelProvider(): Promise<{
   let apiKeyVar = providerDef.apiKeyVar;
   let apiKeyValue = "";
   let ollamaHost: string | undefined;
+  let openaiBaseUrl: string | undefined;
 
-  if (provider === "ollama") {
+  if (provider === "openai-compatible") {
+    console.log();
+    info("OpenAI-Compatible Endpoint");
+    console.log();
+    console.log(
+      `  ${dim("Any OpenAI-protocol server: vLLM, LiteLLM, LocalAI, self-hosted fine-tunes, etc.")}`,
+    );
+    console.log(
+      `  ${dim("Base URL should include the API version (e.g., /v1).")}`,
+    );
+    console.log();
+
+    const curBaseUrl = envGet("IXORA_OPENAI_BASE_URL");
+    const baseUrl = await input({
+      message: "Endpoint base URL",
+      default: curBaseUrl || "http://host.docker.internal:8000/v1",
+      validate: (v) => (v.trim() ? true : "Base URL is required"),
+    });
+
+    const curModel = curAgentModel.startsWith("openai:")
+      ? curAgentModel.slice(7)
+      : "";
+    const modelName = await input({
+      message: "Model name",
+      default: curModel || undefined,
+      validate: (v) => (v.trim() ? true : "Model name is required"),
+    });
+
+    agentModel = `openai:${modelName.trim()}`;
+    teamModel = `openai:${modelName.trim()}`;
+    apiKeyVar = "OPENAI_API_KEY";
+    openaiBaseUrl = baseUrl.trim();
+
+    // Non-blocking reachability probe
+    try {
+      let testUrl = openaiBaseUrl;
+      if (testUrl.includes("host.docker.internal")) {
+        testUrl = testUrl.replace("host.docker.internal", "localhost");
+      }
+      const response = await fetch(
+        `${testUrl.replace(/\/$/, "")}/models`,
+        { signal: AbortSignal.timeout(5000) },
+      );
+      if (response.ok || response.status === 401) {
+        success("Endpoint is reachable");
+      } else {
+        warn(`Endpoint returned HTTP ${response.status}`);
+        console.log(
+          "  Install will continue; verify the URL if agents fail at runtime.",
+        );
+      }
+    } catch {
+      warn(`Could not reach ${openaiBaseUrl}`);
+      console.log(
+        "  Install will continue; verify the URL if agents fail at runtime.",
+      );
+    }
+  } else if (provider === "ollama") {
     // Ollama setup
     console.log();
     info("Ollama Setup");
@@ -158,9 +224,13 @@ async function promptModelProvider(): Promise<{
   // Prompt for API key if needed
   if (apiKeyVar) {
     const curKey = envGet(apiKeyVar);
+    const optional = provider === "openai-compatible";
     apiKeyValue = await password({
-      message: apiKeyVar,
+      message: optional
+        ? `${apiKeyVar} (optional — leave blank if endpoint has no auth)`
+        : apiKeyVar,
       validate: (value) => {
+        if (optional) return true;
         if (!value && !curKey) return `${apiKeyVar} is required`;
         return true;
       },
@@ -177,6 +247,7 @@ async function promptModelProvider(): Promise<{
     apiKeyVar,
     apiKeyValue,
     ollamaHost,
+    openaiBaseUrl,
   };
 }
 
@@ -286,8 +357,14 @@ export async function cmdInstall(opts: InstallOptions): Promise<void> {
     console.log();
   }
 
-  const { agentModel, teamModel, apiKeyVar, apiKeyValue, ollamaHost } =
-    await promptModelProvider();
+  const {
+    agentModel,
+    teamModel,
+    apiKeyVar,
+    apiKeyValue,
+    ollamaHost,
+    openaiBaseUrl,
+  } = await promptModelProvider();
   console.log();
 
   const { host, user, pass, port } = await promptIbmiConnection();
@@ -336,6 +413,8 @@ export async function cmdInstall(opts: InstallOptions): Promise<void> {
     apiKeyVar: apiKeyVar || undefined,
     apiKeyValue: apiKeyValue || undefined,
     ollamaHost,
+    openaiBaseUrl,
+    modelProviderKind: openaiBaseUrl ? "openai-compatible" : undefined,
     db2Host: host,
     db2User: user,
     db2Pass: pass,

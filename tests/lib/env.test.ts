@@ -109,6 +109,68 @@ describe("env", () => {
       expect(content).toContain("OLLAMA_HOST='http://localhost:11434'");
     });
 
+    it("writes openai base url and provider kind when provided", () => {
+      const config: EnvConfig = {
+        agentModel: "openai:llama3.1",
+        teamModel: "openai:llama3.1",
+        apiKeyVar: "OPENAI_API_KEY",
+        apiKeyValue: "sk-test",
+        openaiBaseUrl: "http://host.docker.internal:8000/v1",
+        modelProviderKind: "openai-compatible",
+        db2Host: "ibmi.local",
+        db2User: "ADMIN",
+        db2Pass: "pass",
+        db2Port: "8076",
+        profile: "full",
+        version: "latest",
+      };
+
+      writeEnvFile(config, envFile);
+      const content = readFileSync(envFile, "utf-8");
+      expect(content).toContain(
+        "IXORA_OPENAI_BASE_URL='http://host.docker.internal:8000/v1'",
+      );
+      expect(content).toContain("IXORA_MODEL_PROVIDER='openai-compatible'");
+      expect(content).toContain("IXORA_AGENT_MODEL='openai:llama3.1'");
+    });
+
+    it("drops openai base url and provider kind when omitted on reconfigure", () => {
+      // Seed with openai-compatible config
+      const initial: EnvConfig = {
+        agentModel: "openai:llama3.1",
+        teamModel: "openai:llama3.1",
+        openaiBaseUrl: "http://host.docker.internal:8000/v1",
+        modelProviderKind: "openai-compatible",
+        db2Host: "ibmi.local",
+        db2User: "ADMIN",
+        db2Pass: "pass",
+        db2Port: "8076",
+        profile: "full",
+        version: "latest",
+      };
+      writeEnvFile(initial, envFile);
+
+      // Reconfigure: switch to anthropic, omit openai-compat fields
+      const next: EnvConfig = {
+        agentModel: "anthropic:claude-sonnet-4-6",
+        teamModel: "anthropic:claude-haiku-4-5",
+        apiKeyVar: "ANTHROPIC_API_KEY",
+        apiKeyValue: "sk-ant-test",
+        db2Host: "ibmi.local",
+        db2User: "ADMIN",
+        db2Pass: "pass",
+        db2Port: "8076",
+        profile: "full",
+        version: "latest",
+      };
+      writeEnvFile(next, envFile);
+
+      const content = readFileSync(envFile, "utf-8");
+      expect(content).not.toContain("IXORA_OPENAI_BASE_URL");
+      expect(content).not.toContain("IXORA_MODEL_PROVIDER");
+      expect(content).toContain("IXORA_AGENT_MODEL='anthropic:claude-sonnet-4-6'");
+    });
+
     it("preserves extra user keys", () => {
       writeFileSync(envFile, SAMPLE_ENV_WITH_EXTRAS);
 
