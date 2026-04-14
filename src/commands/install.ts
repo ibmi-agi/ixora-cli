@@ -261,10 +261,10 @@ async function promptIbmiConnection(): Promise<{
   info("IBM i Connection");
   console.log();
 
-  const curHost = envGet("DB2i_HOST");
-  const curUser = envGet("DB2i_USER");
-  const curPass = envGet("DB2i_PASS");
-  const curPort = envGet("DB2_PORT");
+  const curHost = envGet("SYSTEM_DEFAULT_HOST");
+  const curUser = envGet("SYSTEM_DEFAULT_USER");
+  const curPass = envGet("SYSTEM_DEFAULT_PASS");
+  const curPort = envGet("SYSTEM_DEFAULT_PORT");
 
   const host = await input({
     message: "IBM i hostname:",
@@ -416,10 +416,6 @@ export async function cmdInstall(opts: InstallOptions): Promise<void> {
     ollamaHost,
     openaiBaseUrl,
     modelProviderKind: openaiBaseUrl ? "openai-compatible" : undefined,
-    db2Host: host,
-    db2User: user,
-    db2Pass: pass,
-    db2Port: port,
     profile,
     version,
   };

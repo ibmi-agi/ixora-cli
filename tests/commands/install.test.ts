@@ -93,10 +93,13 @@ describe("install command", () => {
     expect(existsSync(envPath)).toBe(true);
     expect(existsSync(composePath)).toBe(true);
 
-    // .env should contain the IBM i host from the prompts
+    // .env should contain the IBM i host from the prompts — written by
+    // addSystem() as SYSTEM_DEFAULT_HOST, not by writeEnvFile as DB2i_HOST
+    // (the latter was removed as dead duplication).
     const envContent = readFileSync(envPath, "utf-8");
-    expect(envContent).toContain("DB2i_HOST='myibmi.com'");
+    expect(envContent).toContain("SYSTEM_DEFAULT_HOST='myibmi.com'");
     expect(envContent).toContain("ANTHROPIC_API_KEY='sk-ant-test123'");
+    expect(envContent).not.toContain("DB2i_HOST");
 
     // Compose file should be valid
     const composeContent = readFileSync(composePath, "utf-8");

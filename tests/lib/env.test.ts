@@ -35,7 +35,9 @@ describe("env", () => {
 
     it("reads single-quoted values", () => {
       writeFileSync(envFile, SAMPLE_ENV);
-      expect(envGet("DB2i_HOST", envFile)).toBe("myibmi.example.com");
+      expect(envGet("SYSTEM_DEFAULT_HOST", envFile)).toBe(
+        "myibmi.example.com",
+      );
     });
 
     it("reads double-quoted values", () => {
@@ -66,10 +68,6 @@ describe("env", () => {
         teamModel: "anthropic:claude-haiku-4-5",
         apiKeyVar: "ANTHROPIC_API_KEY",
         apiKeyValue: "sk-test",
-        db2Host: "ibmi.local",
-        db2User: "ADMIN",
-        db2Pass: "pass123",
-        db2Port: "8076",
         profile: "full",
         version: "latest",
       };
@@ -84,11 +82,15 @@ describe("env", () => {
         "IXORA_TEAM_MODEL='anthropic:claude-haiku-4-5'",
       );
       expect(content).toContain("ANTHROPIC_API_KEY='sk-test'");
-      expect(content).toContain("DB2i_HOST='ibmi.local'");
-      expect(content).toContain("DB2i_USER='ADMIN'");
-      expect(content).toContain("DB2i_PASS='pass123'");
       expect(content).toContain("IXORA_PROFILE='full'");
       expect(content).toContain("IXORA_VERSION='latest'");
+      // IBM i credentials are written by addSystem() as SYSTEM_<ID>_*,
+      // never by writeEnvFile. DB2i_* at the host .env level was dead
+      // weight that duplicated the SYSTEM_DEFAULT_* block.
+      expect(content).not.toContain("DB2i_HOST");
+      expect(content).not.toContain("DB2i_USER");
+      expect(content).not.toContain("DB2i_PASS");
+      expect(content).not.toContain("DB2_PORT");
     });
 
     it("writes ollama host when provided", () => {
@@ -96,10 +98,6 @@ describe("env", () => {
         agentModel: "ollama:llama3.1",
         teamModel: "ollama:llama3.1",
         ollamaHost: "http://localhost:11434",
-        db2Host: "ibmi.local",
-        db2User: "ADMIN",
-        db2Pass: "pass",
-        db2Port: "8076",
         profile: "full",
         version: "latest",
       };
@@ -117,10 +115,6 @@ describe("env", () => {
         apiKeyValue: "sk-test",
         openaiBaseUrl: "http://host.docker.internal:8000/v1",
         modelProviderKind: "openai-compatible",
-        db2Host: "ibmi.local",
-        db2User: "ADMIN",
-        db2Pass: "pass",
-        db2Port: "8076",
         profile: "full",
         version: "latest",
       };
@@ -141,10 +135,6 @@ describe("env", () => {
         teamModel: "openai:llama3.1",
         openaiBaseUrl: "http://host.docker.internal:8000/v1",
         modelProviderKind: "openai-compatible",
-        db2Host: "ibmi.local",
-        db2User: "ADMIN",
-        db2Pass: "pass",
-        db2Port: "8076",
         profile: "full",
         version: "latest",
       };
@@ -156,10 +146,6 @@ describe("env", () => {
         teamModel: "anthropic:claude-haiku-4-5",
         apiKeyVar: "ANTHROPIC_API_KEY",
         apiKeyValue: "sk-ant-test",
-        db2Host: "ibmi.local",
-        db2User: "ADMIN",
-        db2Pass: "pass",
-        db2Port: "8076",
         profile: "full",
         version: "latest",
       };
@@ -168,7 +154,9 @@ describe("env", () => {
       const content = readFileSync(envFile, "utf-8");
       expect(content).not.toContain("IXORA_OPENAI_BASE_URL");
       expect(content).not.toContain("IXORA_MODEL_PROVIDER");
-      expect(content).toContain("IXORA_AGENT_MODEL='anthropic:claude-sonnet-4-6'");
+      expect(content).toContain(
+        "IXORA_AGENT_MODEL='anthropic:claude-sonnet-4-6'",
+      );
     });
 
     it("preserves extra user keys", () => {
@@ -177,10 +165,6 @@ describe("env", () => {
       const config: EnvConfig = {
         agentModel: "anthropic:claude-sonnet-4-6",
         teamModel: "anthropic:claude-haiku-4-5",
-        db2Host: "new-host.com",
-        db2User: "USER2",
-        db2Pass: "newpass",
-        db2Port: "8076",
         profile: "security",
         version: "v1.0.0",
       };
@@ -190,55 +174,71 @@ describe("env", () => {
 
       expect(content).toContain("CUSTOM_VAR='custom_value'");
       expect(content).toContain("RAG_API_URL='http://rag.example.com'");
-      expect(content).toContain("DB2i_HOST='new-host.com'");
     });
 
-    it("does not wipe DB2_PORT as an unknown key", () => {
-      writeFileSync(envFile, SAMPLE_ENV + "DB2_PORT='9876'\n");
+    it("drops stale DB2i_* lines from a pre-migration .env", () => {
+      // Seed a .env that looks like a pre-migration install: DB2i_* block
+      // from the old writeEnvFile template plus the SYSTEM_DEFAULT_* block
+      // that addSystem() has always written in parallel.
+      writeFileSync(
+        envFile,
+        `IXORA_AGENT_MODEL='anthropic:claude-sonnet-4-6'
+IXORA_TEAM_MODEL='anthropic:claude-haiku-4-5'
+DB2i_HOST='stale.example.com'
+DB2i_USER='STALE'
+DB2i_PASS='stale-pass'
+DB2_PORT='9876'
+IXORA_PROFILE='full'
+IXORA_VERSION='latest'
+SYSTEM_DEFAULT_HOST='current.example.com'
+SYSTEM_DEFAULT_USER='CURRENT'
+SYSTEM_DEFAULT_PASS='current-pass'
+SYSTEM_DEFAULT_PORT='8076'
+`,
+      );
 
       const config: EnvConfig = {
         agentModel: "anthropic:claude-sonnet-4-6",
         teamModel: "anthropic:claude-haiku-4-5",
-        db2Host: "host",
-        db2User: "user",
-        db2Pass: "pass",
-        db2Port: "8076",
         profile: "full",
         version: "latest",
       };
-
       writeEnvFile(config, envFile);
+
       const content = readFileSync(envFile, "utf-8");
-      // DB2_PORT is a known key, so it should not appear in preserved user settings
-      // (it would only appear there if it were NOT in KNOWN_KEYS)
-      expect(content).not.toContain("Preserved user settings");
+      // DB2i_* remains in KNOWN_KEYS so the preserved-extras filter drops
+      // the stale lines on rewrite — this is the migration lever.
+      expect(content).not.toContain("DB2i_HOST");
+      expect(content).not.toContain("DB2i_USER");
+      expect(content).not.toContain("DB2i_PASS");
+      expect(content).not.toContain("DB2_PORT");
+      // SYSTEM_DEFAULT_* is an "extra" from writeEnvFile's perspective
+      // (it's written by addSystem, not the template) so it is preserved.
+      expect(content).toContain("SYSTEM_DEFAULT_HOST='current.example.com'");
+      expect(content).toContain("SYSTEM_DEFAULT_USER='CURRENT'");
+      expect(content).toContain("SYSTEM_DEFAULT_PASS='current-pass'");
+      expect(content).toContain("SYSTEM_DEFAULT_PORT='8076'");
     });
 
     it("escapes single quotes in values", () => {
       const config: EnvConfig = {
         agentModel: "test",
         teamModel: "test",
-        db2Host: "host",
-        db2User: "user",
-        db2Pass: "pass'with'quotes",
-        db2Port: "8076",
+        apiKeyVar: "ANTHROPIC_API_KEY",
+        apiKeyValue: "key'with'quotes",
         profile: "full",
         version: "latest",
       };
 
       writeEnvFile(config, envFile);
       const content = readFileSync(envFile, "utf-8");
-      expect(content).toContain("pass'\\''with'\\''quotes");
+      expect(content).toContain("key'\\''with'\\''quotes");
     });
 
     it("sets file permissions to 600", () => {
       const config: EnvConfig = {
         agentModel: "test",
         teamModel: "test",
-        db2Host: "h",
-        db2User: "u",
-        db2Pass: "p",
-        db2Port: "8076",
         profile: "full",
         version: "latest",
       };
@@ -280,7 +280,9 @@ describe("env", () => {
       writeFileSync(envFile, SAMPLE_ENV);
       updateEnvKey("IXORA_PROFILE", "knowledge", envFile);
 
-      expect(envGet("DB2i_HOST", envFile)).toBe("myibmi.example.com");
+      expect(envGet("SYSTEM_DEFAULT_HOST", envFile)).toBe(
+        "myibmi.example.com",
+      );
       expect(envGet("IXORA_VERSION", envFile)).toBe("latest");
     });
 

@@ -2,7 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SAMPLE_ENV } from "../helpers/fixtures.js";
+import {
+  SAMPLE_ENV,
+  SAMPLE_SYSTEMS_YAML_SINGLE,
+} from "../helpers/fixtures.js";
 
 // We need to mock the constants to point to our temp dir
 vi.mock("../../src/lib/constants.js", async () => {
@@ -22,10 +25,12 @@ vi.mock("../../src/lib/constants.js", async () => {
 describe("config commands", () => {
   let consoleSpy: ReturnType<typeof vi.spyOn>;
   let ENV_FILE: string;
+  let SYSTEMS_CONFIG: string;
 
   beforeEach(async () => {
     const constants = await import("../../src/lib/constants.js");
     ENV_FILE = constants.ENV_FILE;
+    SYSTEMS_CONFIG = constants.SYSTEMS_CONFIG;
     consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
   });
 
@@ -34,15 +39,39 @@ describe("config commands", () => {
   });
 
   describe("cmdConfigShow", () => {
-    it("displays config with masked secrets", async () => {
+    it("displays model + per-system IBM i credentials with masked secrets", async () => {
       writeFileSync(ENV_FILE, SAMPLE_ENV);
+      writeFileSync(SYSTEMS_CONFIG, SAMPLE_SYSTEMS_YAML_SINGLE);
       const { cmdConfigShow } = await import("../../src/commands/config.js");
       cmdConfigShow();
 
       const output = consoleSpy.mock.calls.map((c) => c[0]).join("\n");
       expect(output).toContain("IXORA_AGENT_MODEL");
-      expect(output).toContain("DB2i_HOST");
+      expect(output).toContain("IBM i Systems");
+      // Per-system entry rendered from ixora-systems.yaml + SYSTEM_DEFAULT_*
+      expect(output).toContain("default");
+      expect(output).toContain("myibmi.example.com");
+      // Password is masked, never raw
+      expect(output).not.toContain("secret123");
       expect(output).toContain("IXORA_PROFILE");
+      // Legacy DB2i_* block is gone from the canonical display
+      expect(output).not.toContain("DB2i_HOST");
+    });
+
+    it("shows a 'no systems configured' hint when ixora-systems.yaml is empty", async () => {
+      writeFileSync(ENV_FILE, SAMPLE_ENV);
+      // No SYSTEMS_CONFIG file written — simulate a partial install
+      try {
+        rmSync(SYSTEMS_CONFIG, { force: true });
+      } catch {
+        // not there, fine
+      }
+      const { cmdConfigShow } = await import("../../src/commands/config.js");
+      cmdConfigShow();
+
+      const output = consoleSpy.mock.calls.map((c) => c[0]).join("\n");
+      expect(output).toContain("IBM i Systems");
+      expect(output).toContain("no systems configured");
     });
   });
 

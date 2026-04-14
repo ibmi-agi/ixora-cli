@@ -3,6 +3,7 @@ import { execa } from "execa";
 import chalk from "chalk";
 import { envGet, updateEnvKey } from "../lib/env.js";
 import { ENV_FILE } from "../lib/constants.js";
+import { readSystems } from "../lib/systems.js";
 import {
   die,
   success,
@@ -52,22 +53,30 @@ export function cmdConfigShow(): void {
     console.log(`  ${cyan("OLLAMA_HOST")}            ${ollamaHost}`);
   console.log();
 
-  // IBM i Connection
-  section("IBM i Connection");
-  const db2Host = envGet("DB2i_HOST");
-  const db2User = envGet("DB2i_USER");
-  const db2Pass = envGet("DB2i_PASS");
-  const db2Port = envGet("DB2_PORT");
+  // IBM i Systems — one entry per configured system from ixora-systems.yaml
+  section("IBM i Systems");
+  const systems = readSystems();
+  if (systems.length === 0) {
+    console.log(
+      `  ${dim("(no systems configured — run `ixora system add`)")}`,
+    );
+  } else {
+    for (const sys of systems) {
+      const idUpper = sys.id.toUpperCase().replace(/-/g, "_");
+      const host = envGet(`SYSTEM_${idUpper}_HOST`);
+      const user = envGet(`SYSTEM_${idUpper}_USER`);
+      const pass = envGet(`SYSTEM_${idUpper}_PASS`);
+      const port = envGet(`SYSTEM_${idUpper}_PORT`) || "8076";
 
-  console.log(
-    `  ${cyan("DB2i_HOST")}           ${db2Host || dim("(not set)")}`,
-  );
-  console.log(
-    `  ${cyan("DB2i_USER")}           ${db2User || dim("(not set)")}`,
-  );
-  console.log(`  ${cyan("DB2i_PASS")}           ${maskValue(db2Pass)}`);
-  console.log(`  ${cyan("DB2_PORT")}            ${db2Port || "8076"}`);
-  console.log();
+      console.log(`  ${bold(sys.id)}  ${dim(sys.name)}`);
+      console.log(`    ${cyan("host")}      ${host || dim("(not set)")}`);
+      console.log(`    ${cyan("user")}      ${user || dim("(not set)")}`);
+      console.log(`    ${cyan("password")}  ${maskValue(pass)}`);
+      console.log(`    ${cyan("port")}      ${port}`);
+      console.log(`    ${cyan("profile")}   ${sys.profile}`);
+      console.log();
+    }
+  }
 
   // Deployment
   section("Deployment");
@@ -78,7 +87,11 @@ export function cmdConfigShow(): void {
   console.log(`  ${cyan("IXORA_VERSION")}       ${version}`);
   console.log();
 
-  // Extra keys
+  // Extra keys — filter out anything already surfaced above, plus the
+  // per-system SYSTEM_<ID>_* credentials which are rendered under "IBM i
+  // Systems". DB2i_*/DB2_PORT are intentionally NOT in this set so any
+  // stale lines from a pre-migration install surface under "Other" as a
+  // one-time signal they're dead weight.
   const knownKeys = new Set([
     "ANTHROPIC_API_KEY",
     "OPENAI_API_KEY",
@@ -86,12 +99,9 @@ export function cmdConfigShow(): void {
     "OLLAMA_HOST",
     "IXORA_OPENAI_BASE_URL",
     "IXORA_MODEL_PROVIDER",
-    "DB2i_HOST",
-    "DB2i_USER",
-    "DB2i_PASS",
-    "DB2_PORT",
     "IXORA_PROFILE",
     "IXORA_VERSION",
+    "IXORA_PREVIOUS_VERSION",
     "IXORA_AGENT_MODEL",
     "IXORA_TEAM_MODEL",
   ]);
@@ -101,7 +111,10 @@ export function cmdConfigShow(): void {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) return false;
     const key = trimmed.split("=")[0];
-    return !knownKeys.has(key);
+    if (knownKeys.has(key)) return false;
+    // Per-system credentials are displayed under "IBM i Systems" above.
+    if (/^SYSTEM_[A-Z0-9_]+_(HOST|USER|PASS|PORT)$/.test(key)) return false;
+    return true;
   });
 
   if (extraLines.length > 0) {
