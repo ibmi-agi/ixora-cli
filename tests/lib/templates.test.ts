@@ -100,6 +100,10 @@ describe("templates", () => {
       expect(content).toContain(
         "IXORA_ENABLE_EXPERIMENTAL: ${IXORA_ENABLE_EXPERIMENTAL:-false}",
       );
+      // RAG API passthrough — empty default means the api container skips
+      // RAG tools unless the user sets RAG_API_URL in ~/.ixora/.env
+      expect(content).toContain("RAG_API_URL: ${RAG_API_URL:-}");
+      expect(content).toContain("RAG_API_TIMEOUT: ${RAG_API_TIMEOUT:-120}");
       // Per-system creds still resolve via compose interpolation
       expect(content).toContain("DB2i_HOST: ${SYSTEM_DEFAULT_HOST}");
       expect(content).toContain("DB2i_HOST: ${SYSTEM_DEV_HOST}");
