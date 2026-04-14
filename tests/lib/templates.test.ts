@@ -85,12 +85,22 @@ describe("templates", () => {
       expect(content).toContain('MCP_POOL_QUERY_TIMEOUT_MS: "120000"');
     });
 
-    it("includes agent builder env vars with system-specific credentials", () => {
+    it("includes agent feature flags with .env passthrough + defaults", () => {
       writeFileSync(envFile, SAMPLE_ENV_WITH_SYSTEM);
       writeFileSync(configFile, SAMPLE_SYSTEMS_YAML);
 
       const content = generateMultiCompose(envFile, configFile);
-      expect(content).toContain('IXORA_ENABLE_BUILDER: "true"');
+      // Opt-out (default true) — user can disable via
+      // `ixora config set IXORA_ENABLE_BUILDER false && ixora restart`
+      expect(content).toContain(
+        "IXORA_ENABLE_BUILDER: ${IXORA_ENABLE_BUILDER:-true}",
+      );
+      // Opt-in (default false) — user enables via
+      // `ixora config set IXORA_ENABLE_EXPERIMENTAL true && ixora restart`
+      expect(content).toContain(
+        "IXORA_ENABLE_EXPERIMENTAL: ${IXORA_ENABLE_EXPERIMENTAL:-false}",
+      );
+      // Per-system creds still resolve via compose interpolation
       expect(content).toContain("DB2i_HOST: ${SYSTEM_DEFAULT_HOST}");
       expect(content).toContain("DB2i_HOST: ${SYSTEM_DEV_HOST}");
       expect(content).toContain("DB2i_HOST: ${SYSTEM_PROD_HOST}");

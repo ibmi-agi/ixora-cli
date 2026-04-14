@@ -92,7 +92,8 @@ services:
       CORS_ORIGINS: \${CORS_ORIGINS:-*}
       AUTH_ENABLED: "false"
       MCP_AUTH_MODE: "none"
-      IXORA_ENABLE_BUILDER: "true"
+      IXORA_ENABLE_BUILDER: \${IXORA_ENABLE_BUILDER:-true}
+      IXORA_ENABLE_EXPERIMENTAL: \${IXORA_ENABLE_EXPERIMENTAL:-false}
       A2A_INTERFACE: \${A2A_INTERFACE:-false}
       DB2i_HOST: \${SYSTEM_${idUpper}_HOST}
       DB2i_USER: \${SYSTEM_${idUpper}_USER}
