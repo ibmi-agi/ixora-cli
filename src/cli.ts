@@ -48,18 +48,20 @@ export function createProgram(): Command {
 
   program
     .command("start")
-    .description("Start services")
-    .action(async () => {
+    .argument("[service]", "Service to start (omit for all)")
+    .description("Start all services, or a specific service by name")
+    .action(async (service?: string) => {
       const opts = program.opts();
-      await cmdStart(opts);
+      await cmdStart(opts, service);
     });
 
   program
     .command("stop")
-    .description("Stop services")
-    .action(async () => {
+    .argument("[service]", "Service to stop (omit for all)")
+    .description("Stop all services, or a specific service by name")
+    .action(async (service?: string) => {
       const opts = program.opts();
-      await cmdStop(opts);
+      await cmdStop(opts, service);
     });
 
   program

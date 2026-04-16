@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -6,8 +6,10 @@ import {
   envGet,
   writeEnvFile,
   updateEnvKey,
+  getApiPortBase,
   type EnvConfig,
 } from "../../src/lib/env.js";
+import { DEFAULT_API_PORT } from "../../src/lib/constants.js";
 import { SAMPLE_ENV, SAMPLE_ENV_WITH_EXTRAS } from "../helpers/fixtures.js";
 
 describe("env", () => {
@@ -319,6 +321,46 @@ SYSTEM_DEFAULT_PORT='8076'
     it("does nothing when file does not exist", async () => {
       const { removeEnvKey } = await import("../../src/lib/env.js");
       removeEnvKey("SOME_KEY", join(tmpDir, "nonexistent", ".env"));
+    });
+  });
+
+  describe("getApiPortBase", () => {
+    it("returns DEFAULT_API_PORT when IXORA_API_PORT is unset", () => {
+      writeFileSync(envFile, SAMPLE_ENV);
+      expect(getApiPortBase(envFile)).toBe(DEFAULT_API_PORT);
+    });
+
+    it("returns DEFAULT_API_PORT when env file is missing", () => {
+      expect(getApiPortBase(join(tmpDir, "nonexistent", ".env"))).toBe(
+        DEFAULT_API_PORT,
+      );
+    });
+
+    it("returns the configured port when valid", () => {
+      writeFileSync(envFile, SAMPLE_ENV + "IXORA_API_PORT='9000'\n");
+      expect(getApiPortBase(envFile)).toBe(9000);
+    });
+
+    it("falls back to default and warns when value is non-numeric", () => {
+      writeFileSync(envFile, SAMPLE_ENV + "IXORA_API_PORT='not-a-port'\n");
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      expect(getApiPortBase(envFile)).toBe(DEFAULT_API_PORT);
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    it("falls back to default when value is below privileged-port boundary", () => {
+      writeFileSync(envFile, SAMPLE_ENV + "IXORA_API_PORT='80'\n");
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      expect(getApiPortBase(envFile)).toBe(DEFAULT_API_PORT);
+      warnSpy.mockRestore();
+    });
+
+    it("falls back to default when value exceeds 65535", () => {
+      writeFileSync(envFile, SAMPLE_ENV + "IXORA_API_PORT='99999'\n");
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      expect(getApiPortBase(envFile)).toBe(DEFAULT_API_PORT);
+      warnSpy.mockRestore();
     });
   });
 });

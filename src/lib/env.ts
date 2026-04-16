@@ -6,7 +6,7 @@ import {
   chmodSync,
 } from "node:fs";
 import { dirname } from "node:path";
-import { ENV_FILE, IXORA_DIR } from "./constants.js";
+import { DEFAULT_API_PORT, ENV_FILE, IXORA_DIR } from "./constants.js";
 
 function sqEscape(value: string): string {
   return value.replace(/'/g, "'\\''");
@@ -60,6 +60,7 @@ const KNOWN_KEYS = [
   "IXORA_PREVIOUS_VERSION",
   "IXORA_AGENT_MODEL",
   "IXORA_TEAM_MODEL",
+  "IXORA_API_PORT",
 ];
 
 export function writeEnvFile(
@@ -165,6 +166,19 @@ export function updateEnvKey(
   }
 
   chmodSync(envFile, 0o600);
+}
+
+export function getApiPortBase(envFile: string = ENV_FILE): number {
+  const raw = envGet("IXORA_API_PORT", envFile);
+  if (!raw) return DEFAULT_API_PORT;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1024 || n > 65535) {
+    console.warn(
+      `Invalid IXORA_API_PORT='${raw}' (must be integer 1024-65535); using default ${DEFAULT_API_PORT}`,
+    );
+    return DEFAULT_API_PORT;
+  }
+  return n;
 }
 
 export function removeEnvKey(

@@ -3,6 +3,7 @@ import {
   requireInstalled,
   writeComposeFile,
   runCompose,
+  resolveService,
 } from "../lib/compose.js";
 import {
   detectComposeCmd,
@@ -20,7 +21,10 @@ interface StartOptions {
   pull?: boolean;
 }
 
-export async function cmdStart(opts: StartOptions): Promise<void> {
+export async function cmdStart(
+  opts: StartOptions,
+  service?: string,
+): Promise<void> {
   try {
     requireInstalled();
   } catch (e: unknown) {
@@ -49,8 +53,17 @@ export async function cmdStart(opts: StartOptions): Promise<void> {
 
   // Regenerate compose file for current system count
   writeComposeFile();
-  success("Wrote docker-compose.yml");
 
+  if (service) {
+    const svc = resolveService(service);
+    info(`Starting ${svc}...`);
+    await runCompose(composeCmd, ["up", "-d", svc]);
+    await waitForHealthy(composeCmd);
+    success(`Started ${svc}`);
+    return;
+  }
+
+  success("Wrote docker-compose.yml");
   info("Starting ixora services...");
   await runCompose(composeCmd, ["up", "-d", "--remove-orphans"]);
 

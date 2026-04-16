@@ -151,5 +151,44 @@ describe("templates", () => {
       expect(content).toContain('"8000:8000"');
       expect(content).not.toContain('"8001:8000"');
     });
+
+    it("uses NEXT_PUBLIC_BACKEND_URL pointing at the API base port (default 8000)", () => {
+      writeFileSync(envFile, SAMPLE_ENV_WITH_SYSTEM);
+      writeFileSync(configFile, SAMPLE_SYSTEMS_YAML_SINGLE);
+
+      const content = generateMultiCompose(envFile, configFile);
+      expect(content).toContain(
+        "NEXT_PUBLIC_BACKEND_URL: http://localhost:8000",
+      );
+      expect(content).not.toContain("NEXT_PUBLIC_API_URL");
+    });
+
+    it("respects IXORA_API_PORT for host port mapping and UI backend URL", () => {
+      writeFileSync(
+        envFile,
+        SAMPLE_ENV_WITH_SYSTEM + "IXORA_API_PORT='9000'\n",
+      );
+      writeFileSync(configFile, SAMPLE_SYSTEMS_YAML_SINGLE);
+
+      const content = generateMultiCompose(envFile, configFile);
+      expect(content).toContain('"9000:8000"');
+      expect(content).not.toContain('"8000:8000"');
+      expect(content).toContain(
+        "NEXT_PUBLIC_BACKEND_URL: http://localhost:9000",
+      );
+    });
+
+    it("preserves per-system stride above the configured base", () => {
+      writeFileSync(
+        envFile,
+        SAMPLE_ENV_WITH_SYSTEM + "IXORA_API_PORT='9000'\n",
+      );
+      writeFileSync(configFile, SAMPLE_SYSTEMS_YAML);
+
+      const content = generateMultiCompose(envFile, configFile);
+      expect(content).toContain('"9000:8000"');
+      expect(content).toContain('"9001:8000"');
+      expect(content).toContain('"9002:8000"');
+    });
   });
 });
