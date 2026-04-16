@@ -31,6 +31,7 @@ function readCliVersion(): string {
 
 export const SCRIPT_VERSION = readCliVersion();
 export const HEALTH_TIMEOUT = 30;
+export const DEFAULT_API_PORT = 8000;
 
 export const IXORA_DIR = join(homedir(), ".ixora");
 export const COMPOSE_FILE = join(IXORA_DIR, "docker-compose.yml");

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { execa } from "execa";
 import chalk from "chalk";
-import { envGet, updateEnvKey } from "../lib/env.js";
+import { envGet, getApiPortBase, updateEnvKey } from "../lib/env.js";
 import { ENV_FILE } from "../lib/constants.js";
 import { readSystems } from "../lib/systems.js";
 import {
@@ -82,9 +82,11 @@ export function cmdConfigShow(): void {
   section("Deployment");
   const profile = envGet("IXORA_PROFILE") || "full";
   const version = envGet("IXORA_VERSION") || "latest";
+  const apiPort = getApiPortBase();
 
   console.log(`  ${cyan("IXORA_PROFILE")}       ${profile}`);
   console.log(`  ${cyan("IXORA_VERSION")}       ${version}`);
+  console.log(`  ${cyan("IXORA_API_PORT")}      ${apiPort}`);
   console.log();
 
   // Extra keys — filter out anything already surfaced above, plus the
@@ -104,6 +106,7 @@ export function cmdConfigShow(): void {
     "IXORA_PREVIOUS_VERSION",
     "IXORA_AGENT_MODEL",
     "IXORA_TEAM_MODEL",
+    "IXORA_API_PORT",
   ]);
 
   const content = readFileSync(ENV_FILE, "utf-8");

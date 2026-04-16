@@ -54,8 +54,27 @@ describe("config commands", () => {
       // Password is masked, never raw
       expect(output).not.toContain("secret123");
       expect(output).toContain("IXORA_PROFILE");
+      // IXORA_API_PORT is always shown (even at default) so users discover it
+      expect(output).toContain("IXORA_API_PORT");
+      expect(output).toContain("8000");
       // Legacy DB2i_* block is gone from the canonical display
       expect(output).not.toContain("DB2i_HOST");
+    });
+
+    it("reflects a custom IXORA_API_PORT under Deployment", async () => {
+      writeFileSync(ENV_FILE, SAMPLE_ENV + "IXORA_API_PORT='9000'\n");
+      writeFileSync(SYSTEMS_CONFIG, SAMPLE_SYSTEMS_YAML_SINGLE);
+      const { cmdConfigShow } = await import("../../src/commands/config.js");
+      cmdConfigShow();
+
+      const output = consoleSpy.mock.calls.map((c) => c[0]).join("\n");
+      expect(output).toContain("IXORA_API_PORT");
+      expect(output).toContain("9000");
+      // Should not double-print under "Other"
+      const otherIdx = output.indexOf("Other");
+      if (otherIdx >= 0) {
+        expect(output.slice(otherIdx)).not.toContain("IXORA_API_PORT");
+      }
     });
 
     it("shows a 'no systems configured' hint when ixora-systems.yaml is empty", async () => {

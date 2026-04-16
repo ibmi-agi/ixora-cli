@@ -1,5 +1,6 @@
 import { readSystems } from "../systems.js";
 import { ENV_FILE, SYSTEMS_CONFIG } from "../constants.js";
+import { getApiPortBase } from "../env.js";
 
 export function generateMultiCompose(
   envFile: string = ENV_FILE,
@@ -29,7 +30,8 @@ services:
 
 `;
 
-  let apiPort = 8000;
+  let apiPort = getApiPortBase(envFile);
+  const apiPortBase = apiPort;
   let firstApi = "";
 
   for (const sys of systems) {
@@ -133,7 +135,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:${apiPortBase}
     depends_on:
       ${firstApi}:
         condition: service_healthy

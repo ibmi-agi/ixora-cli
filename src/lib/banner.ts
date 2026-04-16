@@ -1,4 +1,4 @@
-import { envGet } from "./env.js";
+import { envGet, getApiPortBase } from "./env.js";
 import { readSystems } from "./systems.js";
 import { success, bold, dim } from "./ui.js";
 
@@ -20,10 +20,11 @@ export function printRunningBanner(opts: BannerOptions = {}): void {
   const profile = envGet("IXORA_PROFILE") || "full";
 
   // When runningServices is provided, filter systems to those whose api is up.
-  // Preserve original index so port assignments (sequential from 8000) stay correct.
+  // Preserve original index so port assignments (sequential from base) stay correct.
+  const apiPortBase = getApiPortBase();
   const filter = opts.runningServices;
   const systemsWithPort = allSystems
-    .map((sys, idx) => ({ sys, port: 8000 + idx }))
+    .map((sys, idx) => ({ sys, port: apiPortBase + idx }))
     .filter(
       ({ sys }) => !filter || filter.has(`api-${sys.id}`),
     );
@@ -31,7 +32,7 @@ export function printRunningBanner(opts: BannerOptions = {}): void {
   if (filter && systemsWithPort.length === 0) return;
 
   const uiRunning = !filter || filter.has("ui");
-  const firstSystemPort = systemsWithPort[0]?.port ?? 8000;
+  const firstSystemPort = systemsWithPort[0]?.port ?? apiPortBase;
 
   console.log();
   success(opts.title ?? "ixora is running!");
@@ -90,9 +91,9 @@ export function printRunningBanner(opts: BannerOptions = {}): void {
       }
       console.log(`  ${bold("Profile:")} ${sole.sys.profile || profile}`);
     } else {
-      console.log(`  ${bold("MCP:")}     http://localhost:8000/mcp`);
+      console.log(`  ${bold("MCP:")}     http://localhost:${apiPortBase}/mcp`);
       if (a2aEnabled) {
-        console.log(`  ${bold("A2A:")}     http://localhost:8000/a2a`);
+        console.log(`  ${bold("A2A:")}     http://localhost:${apiPortBase}/a2a`);
       }
       console.log(`  ${bold("Profile:")} ${profile}`);
     }
