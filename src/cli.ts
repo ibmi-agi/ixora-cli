@@ -22,6 +22,7 @@ import {
   cmdSystemStop,
   cmdSystemRestart,
 } from "./commands/system.js";
+import { cmdModelsShow, cmdModelsSet } from "./commands/models.js";
 
 export function createProgram(): Command {
   const program = new Command()
@@ -189,6 +190,29 @@ export function createProgram(): Command {
     .description("Restart a specific system's services")
     .action(async (id: string) => {
       await cmdSystemRestart(id);
+    });
+
+  // Models subcommands
+  const modelsCmd = program
+    .command("models")
+    .description("View and switch AI model configuration");
+
+  modelsCmd
+    .command("show", { isDefault: true })
+    .description("Show current model and provider")
+    .action(() => {
+      cmdModelsShow();
+    });
+
+  modelsCmd
+    .command("set")
+    .argument(
+      "[provider]",
+      "Provider name (anthropic, openai, google, ollama, openai-compatible, custom)",
+    )
+    .description("Switch model provider")
+    .action(async (provider?: string) => {
+      await cmdModelsSet(provider);
     });
 
   return program;

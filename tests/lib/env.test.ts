@@ -294,4 +294,31 @@ SYSTEM_DEFAULT_PORT='8076'
       expect(content).toContain("new'\\''val");
     });
   });
+
+  describe("removeEnvKey", () => {
+    it("removes a key from the env file", async () => {
+      writeFileSync(envFile, SAMPLE_ENV + "OLLAMA_HOST='http://localhost:11434'\n");
+      const { removeEnvKey } = await import("../../src/lib/env.js");
+      removeEnvKey("OLLAMA_HOST", envFile);
+
+      const content = readFileSync(envFile, "utf-8");
+      expect(content).not.toContain("OLLAMA_HOST");
+      expect(content).toContain("IXORA_AGENT_MODEL");
+      expect(content).toContain("IXORA_PROFILE");
+    });
+
+    it("does nothing when key does not exist", async () => {
+      writeFileSync(envFile, SAMPLE_ENV);
+      const { removeEnvKey } = await import("../../src/lib/env.js");
+      removeEnvKey("NONEXISTENT_KEY", envFile);
+
+      const content = readFileSync(envFile, "utf-8");
+      expect(content).toContain("IXORA_AGENT_MODEL");
+    });
+
+    it("does nothing when file does not exist", async () => {
+      const { removeEnvKey } = await import("../../src/lib/env.js");
+      removeEnvKey("SOME_KEY", join(tmpDir, "nonexistent", ".env"));
+    });
+  });
 });

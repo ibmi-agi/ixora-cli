@@ -166,3 +166,14 @@ export function updateEnvKey(
 
   chmodSync(envFile, 0o600);
 }
+
+export function removeEnvKey(
+  key: string,
+  envFile: string = ENV_FILE,
+): void {
+  if (!existsSync(envFile)) return;
+  const content = readFileSync(envFile, "utf-8");
+  const lines = content.split("\n").filter((line) => !line.startsWith(`${key}=`));
+  writeFileSync(envFile, lines.join("\n"), "utf-8");
+  chmodSync(envFile, 0o600);
+}
