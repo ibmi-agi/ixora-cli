@@ -117,9 +117,9 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c \\"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).getcode()==200 else 1)\\""]
-      interval: 10s
-      timeout: 5s
-      retries: 6
+      interval: 2s
+      timeout: 3s
+      retries: 30
       start_period: 30s
 
 `;
