@@ -60,10 +60,17 @@ export async function cmdUninstall(opts: UninstallOptions): Promise<void> {
   if (existsSync(COMPOSE_FILE)) {
     info("Stopping services and removing images...");
     try {
+      // Uninstall always tears down the FULL stack (incl. profile-gated
+      // services like the UI) regardless of the active stack profile —
+      // there should be nothing left running afterward.
       if (opts.purge) {
-        await runCompose(composeCmd, ["down", "--rmi", "all", "-v"]);
+        await runCompose(composeCmd, ["down", "--rmi", "all", "-v"], {
+          profile: "full",
+        });
       } else {
-        await runCompose(composeCmd, ["down", "--rmi", "all"]);
+        await runCompose(composeCmd, ["down", "--rmi", "all"], {
+          profile: "full",
+        });
       }
     } catch {
       // Ignore errors during cleanup

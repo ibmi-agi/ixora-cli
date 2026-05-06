@@ -9,9 +9,11 @@ import {
   detectPlatform,
 } from "../lib/platform.js";
 import { die } from "../lib/ui.js";
+import { resolveStackProfile } from "../lib/profile.js";
 
 interface LogsOptions {
   runtime?: string;
+  profile?: string;
 }
 
 export async function cmdLogs(
@@ -33,10 +35,17 @@ export async function cmdLogs(
   }
   detectPlatform();
 
+  const profile = resolveStackProfile(opts);
+
   if (service) {
     const svc = resolveService(service);
-    await runCompose(composeCmd, ["logs", "-f", svc]);
+    if (svc === "ui" && profile === "api") {
+      die(
+        "ui is not in the active profile (api). Use --profile full or omit --profile.",
+      );
+    }
+    await runCompose(composeCmd, ["logs", "-f", svc], { profile });
   } else {
-    await runCompose(composeCmd, ["logs", "-f"]);
+    await runCompose(composeCmd, ["logs", "-f"], { profile });
   }
 }

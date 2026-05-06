@@ -6,8 +6,10 @@ import {
   COMPOSE_FILE,
   SYSTEMS_CONFIG,
   ENV_FILE,
-  PROFILES,
-  VALID_PROFILES,
+  AGENT_PROFILES,
+  VALID_AGENT_PROFILES,
+  STACK_PROFILES,
+  VALID_STACK_PROFILES,
   PROVIDERS,
   ALL_AGENTS,
   OPS_AGENTS,
@@ -42,17 +44,26 @@ describe("constants", () => {
     expect(ENV_FILE).toBe(join(expected, ".env"));
   });
 
-  it("defines all four profiles", () => {
-    expect(VALID_PROFILES).toEqual([
+  it("defines all four agent profiles", () => {
+    expect(VALID_AGENT_PROFILES).toEqual([
       "full",
       "sql-services",
       "security",
       "knowledge",
     ]);
-    for (const p of VALID_PROFILES) {
-      expect(PROFILES[p]).toBeDefined();
-      expect(PROFILES[p].name).toBe(p);
-      expect(PROFILES[p].description).toBeTruthy();
+    for (const p of VALID_AGENT_PROFILES) {
+      expect(AGENT_PROFILES[p]).toBeDefined();
+      expect(AGENT_PROFILES[p].name).toBe(p);
+      expect(AGENT_PROFILES[p].description).toBeTruthy();
+    }
+  });
+
+  it("defines stack profiles full and api", () => {
+    expect(VALID_STACK_PROFILES).toEqual(["full", "api"]);
+    for (const p of VALID_STACK_PROFILES) {
+      expect(STACK_PROFILES[p]).toBeDefined();
+      expect(STACK_PROFILES[p].name).toBe(p);
+      expect(STACK_PROFILES[p].description).toBeTruthy();
     }
   });
 

@@ -67,6 +67,19 @@ describe("templates", () => {
       expect(content).toContain("api-default:");
     });
 
+    it("gates UI service behind the 'full' stack profile", () => {
+      writeFileSync(envFile, SAMPLE_ENV_WITH_SYSTEM);
+      writeFileSync(configFile, SAMPLE_SYSTEMS_YAML);
+
+      const content = generateMultiCompose(envFile, configFile);
+      // The `profiles: ["full"]` tag is what makes `ixora --profile api`
+      // skip the UI container when starting/stopping/restarting.
+      expect(content).toMatch(/ui:[\s\S]*?profiles: \["full"\]/);
+      // Backend services have no `profiles:` field — they're always-on.
+      expect(content).toMatch(/agentos-db:[\s\S]*?image:/);
+      expect(content).not.toMatch(/agentos-db:[\s\S]*?profiles:[\s\S]*?image:/);
+    });
+
     it("uses system-specific env vars for credentials", () => {
       writeFileSync(envFile, SAMPLE_ENV_WITH_SYSTEM);
       writeFileSync(configFile, SAMPLE_SYSTEMS_YAML);

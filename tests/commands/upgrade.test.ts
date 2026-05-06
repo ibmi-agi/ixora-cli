@@ -120,16 +120,16 @@ describe("upgrade command", () => {
     expect(content).toContain("IXORA_VERSION='v2.0.0'");
   });
 
-  it("updates profile when specified", async () => {
+  it("persists --profile (stack shape) when specified", async () => {
     const { cmdUpgrade } = await import("../../src/commands/upgrade.js");
     await cmdUpgrade({
       runtime: undefined,
       version: "v0.0.10",
-      profile: "security",
+      profile: "api",
     });
 
     const content = readFileSync(ENV_FILE, "utf-8");
-    expect(content).toContain("IXORA_PROFILE='security'");
+    expect(content).toContain("IXORA_PROFILE='api'");
   });
 
   it("skips pull when --no-pull", async () => {

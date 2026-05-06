@@ -12,9 +12,15 @@ import {
 import { waitForHealthy } from "../lib/health.js";
 import { info, success, die } from "../lib/ui.js";
 import { printRunningBanner } from "../lib/banner.js";
+import {
+  resolveStackProfile,
+  persistStackProfile,
+  wasProfileExplicit,
+} from "../lib/profile.js";
 
 interface RestartOptions {
   runtime?: string;
+  profile?: string;
 }
 
 export async function cmdRestart(
@@ -36,29 +42,31 @@ export async function cmdRestart(
   }
   detectPlatform();
 
+  const profile = resolveStackProfile(opts);
+  if (wasProfileExplicit(opts)) {
+    persistStackProfile(profile);
+  }
+
   // Regenerate compose file for current system count
   writeComposeFile();
 
   if (service) {
     const svc = resolveService(service);
-    info(`Restarting ${svc}...`);
-    await runCompose(composeCmd, [
-      "up",
-      "-d",
-      "--force-recreate",
-      "--no-deps",
-      svc,
-    ]);
+    info(`Restarting ${svc} (profile: ${profile})...`);
+    await runCompose(
+      composeCmd,
+      ["up", "-d", "--force-recreate", "--no-deps", svc],
+      { profile },
+    );
     success(`Restarted ${svc}`);
   } else {
-    info("Restarting all services...");
-    await runCompose(composeCmd, [
-      "up",
-      "-d",
-      "--force-recreate",
-      "--remove-orphans",
-    ]);
+    info(`Restarting all services (profile: ${profile})...`);
+    await runCompose(
+      composeCmd,
+      ["up", "-d", "--force-recreate", "--remove-orphans"],
+      { profile },
+    );
     await waitForHealthy(composeCmd);
-    printRunningBanner();
+    printRunningBanner({ profile });
   }
 }

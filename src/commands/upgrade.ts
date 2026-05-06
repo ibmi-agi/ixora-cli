@@ -13,8 +13,12 @@ import {
 import { waitForHealthy } from "../lib/health.js";
 import { info, warn, error, die, bold } from "../lib/ui.js";
 import { printRunningBanner } from "../lib/banner.js";
-import { VALID_PROFILES, type ProfileName } from "../lib/constants.js";
 import { fetchImageTags, normalizeVersion } from "../lib/registry.js";
+import {
+  resolveStackProfile,
+  persistStackProfile,
+  wasProfileExplicit,
+} from "../lib/profile.js";
 
 interface UpgradeOptions {
   runtime?: string;
@@ -47,6 +51,12 @@ export async function cmdUpgrade(opts: UpgradeOptions): Promise<void> {
   }
   detectPlatform();
 
+  const profile = resolveStackProfile(opts);
+  if (wasProfileExplicit(opts)) {
+    info(`Setting stack profile: ${profile}`);
+    persistStackProfile(profile);
+  }
+
   const previousVersion = envGet("IXORA_VERSION") || "latest";
 
   // Resolve target version: positional arg > --image-version > interactive select
@@ -78,40 +88,35 @@ export async function cmdUpgrade(opts: UpgradeOptions): Promise<void> {
     });
   }
 
-  info(`Upgrading ixora: ${previousVersion} -> ${targetVersion}`);
+  info(`Upgrading ixora: ${previousVersion} -> ${targetVersion} (profile: ${profile})`);
 
   // Persist previous version for rollback support
   updateEnvKey("IXORA_PREVIOUS_VERSION", previousVersion);
 
-  // Stop services -- downtime is acceptable
+  // Stop services -- downtime is acceptable. Profile-scoped so a co-resident
+  // container outside the active profile (e.g. UI when profile=api) is left
+  // alone.
   info("Stopping services...");
-  await runCompose(composeCmd, ["down", "--remove-orphans"]);
+  await runCompose(composeCmd, ["down", "--remove-orphans"], { profile });
 
   // Write new version to .env so compose pull resolves correct image tags
   updateEnvKey("IXORA_VERSION", targetVersion);
   writeComposeFile();
   info("Wrote docker-compose.yml");
 
-  if (opts.profile) {
-    if (!VALID_PROFILES.includes(opts.profile as ProfileName)) {
-      die(
-        `Invalid profile: ${opts.profile} (choose: ${VALID_PROFILES.join(", ")})`,
-      );
-    }
-    info(`Setting profile: ${opts.profile}`);
-    updateEnvKey("IXORA_PROFILE", opts.profile);
-  }
-
   try {
     // Pull images -- if this fails, rollback .env
     if (opts.pull !== false) {
       info("Pulling images...");
-      await runCompose(composeCmd, ["pull"], { throwOnError: true });
+      await runCompose(composeCmd, ["pull"], { throwOnError: true, profile });
     }
 
     // Start services
     info("Starting services...");
-    await runCompose(composeCmd, ["up", "-d"], { throwOnError: true });
+    await runCompose(composeCmd, ["up", "-d"], {
+      throwOnError: true,
+      profile,
+    });
 
     // Health validation -- check return value
     const healthy = await waitForHealthy(composeCmd);
@@ -126,7 +131,7 @@ export async function cmdUpgrade(opts: UpgradeOptions): Promise<void> {
 
     // Stop broken services so user isn't left with unhealthy containers
     try {
-      await runCompose(composeCmd, ["down", "--remove-orphans"]);
+      await runCompose(composeCmd, ["down", "--remove-orphans"], { profile });
     } catch {
       // Best-effort stop -- don't mask the original error
     }
@@ -142,5 +147,6 @@ export async function cmdUpgrade(opts: UpgradeOptions): Promise<void> {
     title: "Upgrade complete!",
     version: targetVersion,
     previousVersion,
+    profile,
   });
 }

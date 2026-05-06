@@ -12,9 +12,9 @@ import { waitForHealthy } from "../lib/health.js";
 import {
   SCRIPT_VERSION,
   IXORA_DIR,
-  PROFILES,
-  type ProfileName,
-  VALID_PROFILES,
+  AGENT_PROFILES,
+  type AgentProfileName,
+  VALID_AGENT_PROFILES,
 } from "../lib/constants.js";
 import { info, success, warn, die, bold, dim } from "../lib/ui.js";
 import { printRunningBanner } from "../lib/banner.js";
@@ -25,6 +25,7 @@ interface InstallOptions {
   runtime?: string;
   imageVersion?: string;
   profile?: string;
+  agentProfile?: string;
   pull?: boolean;
 }
 
@@ -80,19 +81,17 @@ async function promptIbmiConnection(): Promise<{
   };
 }
 
-async function promptProfile(): Promise<ProfileName> {
-  const curProfile = (envGet("IXORA_PROFILE") || "full") as ProfileName;
-
-  const profile = await select<ProfileName>({
+async function promptAgentProfile(): Promise<AgentProfileName> {
+  const profile = await select<AgentProfileName>({
     message: "Select an agent profile",
-    choices: VALID_PROFILES.map((p) => ({
-      name: `${PROFILES[p].name.padEnd(14)} ${dim(PROFILES[p].description)}`,
+    choices: VALID_AGENT_PROFILES.map((p) => ({
+      name: `${AGENT_PROFILES[p].name.padEnd(14)} ${dim(AGENT_PROFILES[p].description)}`,
       value: p,
     })),
-    default: curProfile,
+    default: "full" as AgentProfileName,
   });
 
-  success(`Profile: ${profile}`);
+  success(`Agent profile: ${profile}`);
   return profile;
 }
 
@@ -152,9 +151,17 @@ export async function cmdInstall(opts: InstallOptions): Promise<void> {
   });
   console.log();
 
-  const profile = opts.profile
-    ? (opts.profile as ProfileName)
-    : await promptProfile();
+  let agentProfile: AgentProfileName;
+  if (opts.agentProfile) {
+    if (!VALID_AGENT_PROFILES.includes(opts.agentProfile as AgentProfileName)) {
+      die(
+        `Invalid --agent-profile: ${opts.agentProfile} (choose: ${VALID_AGENT_PROFILES.join(", ")})`,
+      );
+    }
+    agentProfile = opts.agentProfile as AgentProfileName;
+  } else {
+    agentProfile = await promptAgentProfile();
+  }
   console.log();
 
   // Version selection
@@ -184,6 +191,8 @@ export async function cmdInstall(opts: InstallOptions): Promise<void> {
   }
   console.log();
 
+  // Stack profile at install time defaults to "full" (current behavior).
+  // Users can switch later with `ixora start --profile api`.
   const envConfig: EnvConfig = {
     agentModel,
     teamModel,
@@ -192,7 +201,7 @@ export async function cmdInstall(opts: InstallOptions): Promise<void> {
     ollamaHost,
     openaiBaseUrl,
     modelProviderKind: openaiBaseUrl ? "openai-compatible" : undefined,
-    profile,
+    profile: "full",
     version,
   };
 
@@ -208,7 +217,7 @@ export async function cmdInstall(opts: InstallOptions): Promise<void> {
   addSystem({
     id: "default",
     name: displayName,
-    profile,
+    profile: agentProfile,
     agents: [],
     host,
     port,
@@ -222,15 +231,17 @@ export async function cmdInstall(opts: InstallOptions): Promise<void> {
 
   if (opts.pull !== false) {
     info("Pulling images...");
-    await runCompose(composeCmd, ["pull"]);
+    await runCompose(composeCmd, ["pull"], { profile: "full" });
   }
 
   info("Starting services...");
-  await runCompose(composeCmd, ["up", "-d", "--remove-orphans"]);
+  await runCompose(composeCmd, ["up", "-d", "--remove-orphans"], {
+    profile: "full",
+  });
 
   await waitForHealthy(composeCmd);
 
-  printRunningBanner();
+  printRunningBanner({ profile: "full" });
   console.log(
     `  Manage with: ${bold("ixora start|stop|restart|status|upgrade|config|logs")}`,
   );

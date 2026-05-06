@@ -38,7 +38,31 @@ export const COMPOSE_FILE = join(IXORA_DIR, "docker-compose.yml");
 export const SYSTEMS_CONFIG = join(IXORA_DIR, "ixora-systems.yaml");
 export const ENV_FILE = join(IXORA_DIR, ".env");
 
-export const PROFILES = {
+// Stack profiles control which containers boot (deployment shape).
+// `full` boots DB + API + MCP + UI (the historical default).
+// `api`  boots DB + API + MCP — the Carbon UI is excluded.
+export const STACK_PROFILES = {
+  full: {
+    name: "full",
+    label: "Full",
+    description: "DB + API + MCP + Carbon UI (default)",
+  },
+  api: {
+    name: "api",
+    label: "API only",
+    description: "DB + API + MCP (no Carbon UI) — backend-only deployment",
+  },
+} as const;
+
+export type StackProfile = keyof typeof STACK_PROFILES;
+export const VALID_STACK_PROFILES = Object.keys(
+  STACK_PROFILES,
+) as StackProfile[];
+
+// Agent profiles select which agents/teams/workflows the API container
+// loads via IAASSIST_DEPLOYMENT_CONFIG. They live per-system in
+// ixora-systems.yaml (`sys.profile`); the global flag is `--agent-profile`.
+export const AGENT_PROFILES = {
   full: {
     name: "full",
     label: "Full",
@@ -64,8 +88,10 @@ export const PROFILES = {
   },
 } as const;
 
-export type ProfileName = keyof typeof PROFILES;
-export const VALID_PROFILES = Object.keys(PROFILES) as ProfileName[];
+export type AgentProfileName = keyof typeof AGENT_PROFILES;
+export const VALID_AGENT_PROFILES = Object.keys(
+  AGENT_PROFILES,
+) as AgentProfileName[];
 
 export interface ProviderDef {
   name: string;

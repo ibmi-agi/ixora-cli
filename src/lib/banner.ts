@@ -1,5 +1,7 @@
 import { envGet, getApiPortBase } from "./env.js";
 import { readSystems } from "./systems.js";
+import type { StackProfile } from "./constants.js";
+import { VALID_STACK_PROFILES } from "./constants.js";
 import { success, bold, dim } from "./ui.js";
 
 interface BannerOptions {
@@ -7,6 +9,7 @@ interface BannerOptions {
   version?: string;
   previousVersion?: string;
   runningServices?: Set<string>;
+  profile?: StackProfile;
 }
 
 function isA2AEnabled(): boolean {
@@ -14,10 +17,17 @@ function isA2AEnabled(): boolean {
   return raw === "true" || raw === "1" || raw === "yes";
 }
 
+function readStackProfile(): StackProfile {
+  const stored = envGet("IXORA_PROFILE") || "full";
+  return VALID_STACK_PROFILES.includes(stored as StackProfile)
+    ? (stored as StackProfile)
+    : "full";
+}
+
 export function printRunningBanner(opts: BannerOptions = {}): void {
   const allSystems = readSystems();
   const a2aEnabled = isA2AEnabled();
-  const profile = envGet("IXORA_PROFILE") || "full";
+  const stackProfile: StackProfile = opts.profile ?? readStackProfile();
 
   // When runningServices is provided, filter systems to those whose api is up.
   // Preserve original index so port assignments (sequential from base) stay correct.
@@ -31,7 +41,10 @@ export function printRunningBanner(opts: BannerOptions = {}): void {
 
   if (filter && systemsWithPort.length === 0) return;
 
-  const uiRunning = !filter || filter.has("ui");
+  // UI is hidden in `api` stack profile regardless of whether a stale UI
+  // container is in the running set.
+  const uiInProfile = stackProfile === "full";
+  const uiRunning = uiInProfile && (!filter || filter.has("ui"));
   const firstSystemPort = systemsWithPort[0]?.port ?? apiPortBase;
 
   console.log();
@@ -43,6 +56,8 @@ export function printRunningBanner(opts: BannerOptions = {}): void {
       console.log(`  ${dim(`(was ${opts.previousVersion})`)}`);
     }
   }
+
+  console.log(`  ${bold("Stack:")}   ${stackProfile}`);
 
   if (uiRunning) {
     console.log(`  ${bold("UI:")}      http://localhost:3000`);
@@ -89,13 +104,14 @@ export function printRunningBanner(opts: BannerOptions = {}): void {
           `  ${bold("A2A:")}     http://localhost:${sole.port}/a2a`,
         );
       }
-      console.log(`  ${bold("Profile:")} ${sole.sys.profile || profile}`);
+      if (sole.sys.profile) {
+        console.log(`  ${bold("Agent:")}   ${sole.sys.profile}`);
+      }
     } else {
       console.log(`  ${bold("MCP:")}     http://localhost:${apiPortBase}/mcp`);
       if (a2aEnabled) {
         console.log(`  ${bold("A2A:")}     http://localhost:${apiPortBase}/a2a`);
       }
-      console.log(`  ${bold("Profile:")} ${profile}`);
     }
   }
 

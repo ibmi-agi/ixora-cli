@@ -31,7 +31,11 @@ export function createProgram(): Command {
     .version(SCRIPT_VERSION, "-V, --cli-version", "Show CLI version number")
     .option(
       "--profile <name>",
-      "Agent profile (full|sql-services|security|knowledge)",
+      "Stack shape: full (DB + API + MCP + UI) or api (DB + API + MCP, no UI) [default: full]",
+    )
+    .option(
+      "--agent-profile <name>",
+      "Agent profile (full|sql-services|security|knowledge), used at install time",
     )
     .option("--image-version <tag>", "Pin image version (e.g., v1.2.0)")
     .option("--no-pull", "Skip pulling images")

@@ -80,11 +80,13 @@ export function cmdConfigShow(): void {
 
   // Deployment
   section("Deployment");
-  const profile = envGet("IXORA_PROFILE") || "full";
+  const stackProfile = envGet("IXORA_PROFILE") || "full";
   const version = envGet("IXORA_VERSION") || "latest";
   const apiPort = getApiPortBase();
 
-  console.log(`  ${cyan("IXORA_PROFILE")}       ${profile}`);
+  console.log(
+    `  ${cyan("IXORA_PROFILE")}       ${stackProfile}  ${dim("# stack shape (full|api)")}`,
+  );
   console.log(`  ${cyan("IXORA_VERSION")}       ${version}`);
   console.log(`  ${cyan("IXORA_API_PORT")}      ${apiPort}`);
   console.log();

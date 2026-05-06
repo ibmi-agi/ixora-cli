@@ -1,4 +1,3 @@
-import { updateEnvKey } from "../lib/env.js";
 import {
   requireInstalled,
   writeComposeFile,
@@ -13,7 +12,11 @@ import {
 import { waitForHealthy } from "../lib/health.js";
 import { info, success, die } from "../lib/ui.js";
 import { printRunningBanner } from "../lib/banner.js";
-import { VALID_PROFILES, type ProfileName } from "../lib/constants.js";
+import {
+  resolveStackProfile,
+  persistStackProfile,
+  wasProfileExplicit,
+} from "../lib/profile.js";
 
 interface StartOptions {
   runtime?: string;
@@ -40,15 +43,10 @@ export async function cmdStart(
   }
   detectPlatform();
 
-  // Update profile if specified
-  if (opts.profile) {
-    if (!VALID_PROFILES.includes(opts.profile as ProfileName)) {
-      die(
-        `Invalid profile: ${opts.profile} (choose: ${VALID_PROFILES.join(", ")})`,
-      );
-    }
-    info(`Setting profile: ${opts.profile}`);
-    updateEnvKey("IXORA_PROFILE", opts.profile);
+  const profile = resolveStackProfile(opts);
+  if (wasProfileExplicit(opts)) {
+    info(`Setting stack profile: ${profile}`);
+    persistStackProfile(profile);
   }
 
   // Regenerate compose file for current system count
@@ -56,18 +54,18 @@ export async function cmdStart(
 
   if (service) {
     const svc = resolveService(service);
-    info(`Starting ${svc}...`);
-    await runCompose(composeCmd, ["up", "-d", svc]);
+    info(`Starting ${svc} (profile: ${profile})...`);
+    await runCompose(composeCmd, ["up", "-d", svc], { profile });
     await waitForHealthy(composeCmd);
     success(`Started ${svc}`);
     return;
   }
 
   success("Wrote docker-compose.yml");
-  info("Starting ixora services...");
-  await runCompose(composeCmd, ["up", "-d", "--remove-orphans"]);
+  info(`Starting ixora services (profile: ${profile})...`);
+  await runCompose(composeCmd, ["up", "-d", "--remove-orphans"], { profile });
 
   await waitForHealthy(composeCmd);
 
-  printRunningBanner();
+  printRunningBanner({ profile });
 }
