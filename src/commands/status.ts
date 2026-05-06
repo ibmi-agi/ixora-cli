@@ -13,9 +13,11 @@ import {
 import { IXORA_DIR } from "../lib/constants.js";
 import { die, dim } from "../lib/ui.js";
 import { printRunningBanner } from "../lib/banner.js";
+import { resolveStackProfile } from "../lib/profile.js";
 
 interface StatusOptions {
   runtime?: string;
+  profile?: string;
 }
 
 interface ComposeImage {
@@ -46,24 +48,33 @@ export async function cmdStatus(opts: StatusOptions): Promise<void> {
   }
   detectPlatform();
 
-  const profile = envGet("IXORA_PROFILE") || "full";
+  const profile = resolveStackProfile(opts);
   const version = envGet("IXORA_VERSION") || "latest";
 
   let runningServices = new Set<string>();
   try {
-    const psJson = await runComposeCapture(composeCmd, [
-      "ps",
-      "--format",
-      "json",
-    ]);
+    const psJson = await runComposeCapture(
+      composeCmd,
+      ["ps", "--format", "json"],
+      { profile },
+    );
     runningServices = getRunningServices(psJson);
   } catch {
     // Compose ps may fail if runtime is unavailable
   }
 
-  const uiStatus = runningServices.has("ui")
-    ? chalk.green("http://localhost:3000")
-    : chalk.yellow("stopped");
+  // In api scope, the UI is out-of-profile — never report on it even if a
+  // stale UI container from a prior `--profile full` run is still up.
+  if (profile === "api") {
+    runningServices.delete("ui");
+  }
+
+  const uiStatus =
+    profile === "api"
+      ? chalk.dim("(not in profile)")
+      : runningServices.has("ui")
+        ? chalk.green("http://localhost:3000")
+        : chalk.yellow("stopped");
 
   console.log();
   console.log(`  ${chalk.bold("Profile:")}  ${profile}`);
@@ -72,15 +83,15 @@ export async function cmdStatus(opts: StatusOptions): Promise<void> {
   console.log(`  ${chalk.bold("UI:")}       ${uiStatus}`);
   console.log();
 
-  await runCompose(composeCmd, ["ps"]);
+  await runCompose(composeCmd, ["ps"], { profile });
 
   // Show running container images so users can verify actual versions
   try {
-    const output = await runComposeCapture(composeCmd, [
-      "images",
-      "--format",
-      "json",
-    ]);
+    const output = await runComposeCapture(
+      composeCmd,
+      ["images", "--format", "json"],
+      { profile },
+    );
 
     if (output.trim()) {
       const images = parseComposeImages(output);
@@ -101,7 +112,7 @@ export async function cmdStatus(opts: StatusOptions): Promise<void> {
   }
 
   if (runningServices.size > 0) {
-    printRunningBanner({ runningServices });
+    printRunningBanner({ runningServices, profile });
   }
 }
 

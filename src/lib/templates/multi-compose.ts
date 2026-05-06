@@ -128,9 +128,11 @@ services:
     apiPort++;
   }
 
-  // UI points to first system
+  // UI points to first system. `profiles: ["full"]` gates the UI behind the
+  // `full` stack profile — `--profile api` (no profile flag) skips it.
   content += `  ui:
     image: ghcr.io/ibmi-agi/ixora-ui:\${IXORA_VERSION:-latest}
+    profiles: ["full"]
     restart: unless-stopped
     ports:
       - "3000:3000"

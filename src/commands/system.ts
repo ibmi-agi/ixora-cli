@@ -21,9 +21,9 @@ import {
 import { waitForHealthy } from "../lib/health.js";
 import {
   ENV_FILE,
-  PROFILES,
-  VALID_PROFILES,
-  type ProfileName,
+  AGENT_PROFILES,
+  VALID_AGENT_PROFILES,
+  type AgentProfileName,
 } from "../lib/constants.js";
 import { info, success, die, bold, dim, cyan } from "../lib/ui.js";
 
@@ -74,13 +74,13 @@ export async function cmdSystemAdd(): Promise<void> {
     },
   });
 
-  const profile = await select<ProfileName>({
+  const profile = await select<AgentProfileName>({
     message: "Select an agent profile",
-    choices: VALID_PROFILES.map((p) => ({
-      name: `${PROFILES[p].name.padEnd(14)} ${dim(PROFILES[p].description)}`,
+    choices: VALID_AGENT_PROFILES.map((p) => ({
+      name: `${AGENT_PROFILES[p].name.padEnd(14)} ${dim(AGENT_PROFILES[p].description)}`,
       value: p,
     })),
-    default: "full" as ProfileName,
+    default: "full" as AgentProfileName,
   });
 
   addSystem({
