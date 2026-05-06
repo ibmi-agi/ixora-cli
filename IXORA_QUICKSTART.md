@@ -13,7 +13,8 @@ Deploy AI agents for IBM i in minutes. This guide walks you through installing t
 - [5. Open the local UI](#5-open-the-local-ui)
 - [6. Connect to the Agno Control Plane (optional)](#6-connect-to-the-agno-control-plane-optional)
 - [7. Common commands](#7-common-commands)
-- [8. Troubleshooting](#8-troubleshooting)
+- [8. Stack profiles (`--profile full|api`)](#8-stack-profiles---profile-fullapi)
+- [9. Troubleshooting](#9-troubleshooting)
 
 ---
 
@@ -114,6 +115,8 @@ Enter a human-readable name for this system. Defaults to the hostname you entere
 
 Start with `knowledge` if you want the fastest startup and smallest resource footprint.
 
+> **Agent profile vs stack profile.** This prompt selects the **agent profile** — which agents the API loads. It is separate from the **stack profile** (`--profile full|api`), which controls _which containers_ run. See [section 8](#8-stack-profiles---profile-fullapi) for the stack profile. You can skip this prompt by passing `--agent-profile <name>` to `ixora install`.
+
 ### 3.7 Select an image version
 
 The CLI fetches available release tags from the container registry. Pick a specific semver version (e.g., `v0.0.11`) or accept the default. If the registry is unreachable, it falls back to `latest`.
@@ -132,13 +135,17 @@ On success, you see:
 ```
  ixora is running!
 
+  Stack:   full
   UI:      http://localhost:3000
   API:     http://localhost:8000
-  Profile: full
+  MCP:     http://localhost:8000/mcp
+  Agent:   full
 
   Manage with: ixora start|stop|restart|status|upgrade|config|logs
   Config dir:  ~/.ixora
 ```
+
+`Stack` is the deployment shape (`full` includes the UI; `api` excludes it — see [section 8](#8-stack-profiles---profile-fullapi)). `Agent` is the agent profile from `~/.ixora/ixora-systems.yaml`.
 
 ---
 
@@ -291,6 +298,7 @@ Consult the [Agno documentation](https://docs.agno.com) for detailed setup instr
 | `ixora logs [service]` | Tail service logs (e.g., `ixora logs api-default`) |
 | `ixora stop` | Stop all services |
 | `ixora start` | Start all services |
+| `ixora start --profile api` | Start backend only — no Carbon UI (see [section 8](#8-stack-profiles---profile-fullapi)) |
 | `ixora restart [service]` | Restart all or a specific service |
 | `ixora upgrade [version]` | Pull latest images and restart |
 | `ixora config show` | Show current configuration |
@@ -303,7 +311,50 @@ Consult the [Agno documentation](https://docs.agno.com) for detailed setup instr
 
 ---
 
-## 8. Troubleshooting
+## 8. Stack profiles (`--profile full|api`)
+
+The `--profile` flag controls _which containers_ start. It applies to every lifecycle command — `start`, `stop`, `restart`, `status`, `logs`, `upgrade`.
+
+| Profile | Containers | When to use |
+|---|---|---|
+| `full` (default) | DB + API + MCP + Carbon UI | Local development; you want the bundled web UI on `localhost:3000` |
+| `api` | DB + API + MCP | Backend-only — you bring your own UI, embed Ixora as a service, or run headlessly |
+
+```bash
+ixora start --profile api      # 5 containers: DB, api-<sys>, mcp-<sys> (no UI)
+ixora start --profile full     # All containers including UI (current default)
+ixora status --profile api     # Reports on the api scope only
+ixora logs --profile api       # Tails db/api/mcp; never the UI
+```
+
+**Persistence.** The active stack profile is written to `~/.ixora/.env` as `IXORA_PROFILE`. Subsequent commands without `--profile` reuse it:
+
+```bash
+ixora start --profile api      # writes IXORA_PROFILE=api
+ixora restart                  # honors the persisted profile (api)
+ixora stop                     # also honors api scope
+```
+
+**Mixed-state safety.** Switching profiles mid-session is non-destructive. A `stop --profile api` while the UI is running (because you started with `--profile full`) leaves the UI alone:
+
+```bash
+ixora start --profile full     # 6 containers up, UI on :3000
+ixora stop --profile api       # stops db/api/mcp; UI keeps running
+ixora status --profile full    # shows only ui as remaining
+```
+
+**Logs guard.** Asking for the UI logs while in `api` scope errors out instead of silently doing nothing:
+
+```bash
+ixora logs ui --profile api
+# Error: ui is not in the active profile (api). Use --profile full or omit --profile.
+```
+
+**Migration from `--profile <agent>`.** Older versions accepted `--profile sql-services|security|knowledge` for the agent profile. Those values now belong to `--agent-profile` (install-only). Calls passing them to `--profile` produce a clear error pointing at the new flag.
+
+---
+
+## 9. Troubleshooting
 
 **"Neither docker compose nor podman compose found"**
 Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) or [Podman](https://podman.io/). The CLI checks for `docker compose` (v2), `podman compose`, and legacy `docker-compose` (v1).

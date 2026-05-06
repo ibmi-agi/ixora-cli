@@ -25,9 +25,23 @@ npx @ibm/ixora install
 
 ```sh
 ixora install    # Interactive setup (IBM i connection, model provider, profile)
-ixora start      # Start services
+ixora start      # Start services (defaults to --profile full = DB + API + MCP + UI)
 ixora stop       # Stop services
 ```
+
+### Deployment shapes (`--profile`)
+
+| Profile | Containers | Use case |
+|---|---|---|
+| `full` (default) | DB + API + MCP + Carbon UI | Local development, the bundled web UI |
+| `api`            | DB + API + MCP             | Backend-only — bring your own UI, or run as a service |
+
+```sh
+ixora start --profile api   # No Carbon UI; API on :8000, DB on :5432
+ixora start --profile full  # All four services (current behavior)
+```
+
+The chosen profile is persisted to `~/.ixora/.env`, so subsequent `stop`/`status`/`logs`/`restart`/`upgrade` calls without `--profile` keep the same shape. Switching mid-session is safe: `ixora stop --profile api` while in `full` leaves the UI container untouched.
 
 ## Commands
 
@@ -52,12 +66,18 @@ ixora stop       # Stop services
 ## Options
 
 ```
---profile <name>       Agent profile (full|sql-services|security|knowledge)
+--profile <name>       Stack shape: full (DB + API + MCP + UI) or api (DB + API + MCP, no UI) [default: full]
+--agent-profile <name> Agent profile (full|sql-services|security|knowledge), used at install time
 --image-version <tag>  Pin image version (e.g., v1.2.0)
 --no-pull              Skip pulling images
 --purge                Remove volumes too (with uninstall)
 --runtime <name>       Force docker or podman
 ```
+
+`--profile` and `--agent-profile` are independent axes:
+
+- **`--profile`** controls _which containers_ run (stack shape).
+- **`--agent-profile`** controls _which agents_ the API loads inside those containers.
 
 ## Development
 
