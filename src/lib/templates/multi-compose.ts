@@ -1,5 +1,5 @@
 import { readSystems } from "../systems.js";
-import { ENV_FILE, SYSTEMS_CONFIG } from "../constants.js";
+import { DEFAULT_DB_ISOLATION, ENV_FILE, SYSTEMS_CONFIG } from "../constants.js";
 import { envGet, getApiPortBase } from "../env.js";
 
 export function generateMultiCompose(
@@ -22,17 +22,29 @@ export function generateMultiCompose(
     cliModeRaw === "1" ||
     cliModeRaw === "yes";
 
-  // Per-system DB isolation: each api-<id> gets its own `ai_<id>` database
-  // inside the shared agentos-db container, provisioned by a one-shot
-  // `db-init` service. Off by default (one shared `ai` database).
+  // Per-system DB isolation (the default): each api-<id> gets its own
+  // `ai_<id>` database inside the shared agentos-db container, so sessions,
+  // memory, knowledge, and learning are isolated per system. Only the literal
+  // `IXORA_DB_ISOLATION=shared` opts back into one shared `ai` database.
   const perSystemDb =
-    (envGet("IXORA_DB_ISOLATION", envFile) || "shared").trim().toLowerCase() ===
-    "per-system";
+    (envGet("IXORA_DB_ISOLATION", envFile) || DEFAULT_DB_ISOLATION)
+      .trim()
+      .toLowerCase() !== "shared";
   // Postgres database names must be valid identifiers — lowercase the system
   // id, map anything non-alphanumeric to `_`, and keep the `ai_` prefix so
   // the name always starts with a letter.
   const dbName = (id: string): string =>
     `ai_${id.toLowerCase().replace(/[^a-z0-9_]/g, "_")}`;
+  // The db agentos-db creates on first init: the first system's database in
+  // per-system mode (so a single-system deployment needs no db-init at all),
+  // or the plain shared `ai` otherwise.
+  const primaryDb =
+    perSystemDb && systems.length > 0
+      ? dbName(systems[0].id)
+      : "${DB_DATABASE:-ai}";
+  // A db-init container is only needed to create the *extra* databases — i.e.
+  // when there are 2+ systems. One system → agentos-db's POSTGRES_DB covers it.
+  const needsDbInit = perSystemDb && systems.length > 1;
 
   let content = `# Auto-generated compose file
 # Regenerated on every start. Edit ixora-systems.yaml instead.
@@ -45,7 +57,7 @@ services:
     environment:
       POSTGRES_USER: \${DB_USER:-ai}
       POSTGRES_PASSWORD: \${DB_PASS:-ai}
-      POSTGRES_DB: \${DB_DATABASE:-ai}
+      POSTGRES_DB: ${primaryDb}
     volumes:
       - pgdata:/var/lib/postgresql
     healthcheck:
@@ -56,12 +68,13 @@ services:
 
 `;
 
-  if (perSystemDb) {
+  if (needsDbInit) {
     // One-shot, idempotent: create any missing per-system databases (Postgres
     // has no CREATE DATABASE IF NOT EXISTS — hence the SELECT … \gexec dance),
-    // then enable pgvector in each. Re-runs harmlessly on every `up`, so it
-    // picks up newly-added systems. The api-<id> services wait for it via
-    // depends_on: db-init: service_completed_successfully.
+    // then enable pgvector in each. Connects through the always-present
+    // `postgres` maintenance db. Re-runs harmlessly on every `up`, so adding a
+    // system just works. The api-<id> services wait on it via depends_on:
+    // db-init: service_completed_successfully.
     const createLines = systems
       .map((sys) => {
         const db = dbName(sys.id);
@@ -84,7 +97,7 @@ services:
     entrypoint: ["sh", "-c"]
     command:
       - |
-        psql -v ON_ERROR_STOP=1 -d "\${DB_DATABASE:-ai}" <<'SQL'
+        psql -v ON_ERROR_STOP=1 -d postgres <<'SQL'
 ${createLines}
 ${extensionLines}
         SQL
@@ -143,10 +156,11 @@ ${extensionLines}
       mcp-${sys.id}:
         condition: service_healthy`;
 
-    // Per-system DB isolation: own database + own /data volume + wait on db-init.
+    // Per-system DB isolation: own database + own /data volume; wait on db-init
+    // only when it exists (i.e. 2+ systems).
     const apiDbDatabase = perSystemDb ? dbName(sys.id) : "${DB_DATABASE:-ai}";
     const apiDataVolume = perSystemDb ? `agentos-data-${sys.id}` : "agentos-data";
-    const apiDbInitDep = perSystemDb
+    const apiDbInitDep = needsDbInit
       ? `
       db-init:
         condition: service_completed_successfully`

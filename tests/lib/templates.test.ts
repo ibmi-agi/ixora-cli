@@ -206,8 +206,9 @@ describe("templates", () => {
   });
 
   describe("generateMultiCompose (per-system DB isolation)", () => {
-    const PER_SYSTEM_ENV =
-      SAMPLE_ENV_WITH_SYSTEM + "IXORA_DB_ISOLATION='per-system'\n";
+    // per-system is the default; `SAMPLE_ENV_WITH_SYSTEM` doesn't set the flag.
+    const SHARED_ENV =
+      SAMPLE_ENV_WITH_SYSTEM + "IXORA_DB_ISOLATION='shared'\n";
 
     function dependsOnBlock(content: string, id: string): string {
       const block = content.slice(content.indexOf(`  api-${id}:`));
@@ -217,21 +218,41 @@ describe("templates", () => {
       );
     }
 
-    it("emits a one-shot db-init service that creates a database per system", () => {
-      writeFileSync(envFile, PER_SYSTEM_ENV);
+    it("is the default — a single system gets ai_<id> with no db-init container", () => {
+      writeFileSync(envFile, SAMPLE_ENV_WITH_SYSTEM);
+      writeFileSync(configFile, SAMPLE_SYSTEMS_YAML_SINGLE);
+
+      const content = generateMultiCompose(envFile, configFile);
+      expect(content).not.toContain("db-init:");
+      expect(content).toContain("POSTGRES_DB: ai_default");
+      expect(content).toContain("DB_DATABASE: ai_default");
+      expect(content).toContain("- agentos-data-default:/data");
+      expect(content).not.toContain("- agentos-data:/data");
+      expect(content).toMatch(/volumes:\n {2}pgdata:\n {2}agentos-data-default:\n/);
+      // No db-init means the api only waits on agentos-db (+ its mcp).
+      const deps = dependsOnBlock(content, "default");
+      expect(deps).toContain("agentos-db:");
+      expect(deps).not.toContain("db-init:");
+    });
+
+    it("with 2+ systems, adds a one-shot db-init that creates each ai_<id>", () => {
+      writeFileSync(envFile, SAMPLE_ENV_WITH_SYSTEM);
       writeFileSync(configFile, SAMPLE_SYSTEMS_YAML);
 
       const content = generateMultiCompose(envFile, configFile);
       expect(content).toContain("  db-init:");
       expect(content).toContain('restart: "no"');
+      expect(content).toContain("psql -v ON_ERROR_STOP=1 -d postgres");
       expect(content).toContain("CREATE DATABASE ai_default");
       expect(content).toContain("CREATE DATABASE ai_dev");
       expect(content).toContain("CREATE DATABASE ai_prod");
       expect(content).toContain("CREATE EXTENSION IF NOT EXISTS vector");
+      // agentos-db itself creates the first system's db on init.
+      expect(content).toContain("POSTGRES_DB: ai_default");
     });
 
-    it("points each api at its own ai_<id> database", () => {
-      writeFileSync(envFile, PER_SYSTEM_ENV);
+    it("points each api at its own ai_<id> database and data volume", () => {
+      writeFileSync(envFile, SAMPLE_ENV_WITH_SYSTEM);
       writeFileSync(configFile, SAMPLE_SYSTEMS_YAML);
 
       const content = generateMultiCompose(envFile, configFile);
@@ -239,13 +260,6 @@ describe("templates", () => {
       expect(content).toContain("DB_DATABASE: ai_dev");
       expect(content).toContain("DB_DATABASE: ai_prod");
       expect(content).not.toContain("DB_DATABASE: ${DB_DATABASE:-ai}");
-    });
-
-    it("gives each api its own data volume and lists them under volumes:", () => {
-      writeFileSync(envFile, PER_SYSTEM_ENV);
-      writeFileSync(configFile, SAMPLE_SYSTEMS_YAML);
-
-      const content = generateMultiCompose(envFile, configFile);
       expect(content).toContain("- agentos-data-default:/data");
       expect(content).toContain("- agentos-data-dev:/data");
       expect(content).not.toContain("- agentos-data:/data");
@@ -254,8 +268,8 @@ describe("templates", () => {
       );
     });
 
-    it("makes each api wait on db-init completing", () => {
-      writeFileSync(envFile, PER_SYSTEM_ENV);
+    it("makes each api wait on db-init completing (multi-system)", () => {
+      writeFileSync(envFile, SAMPLE_ENV_WITH_SYSTEM);
       writeFileSync(configFile, SAMPLE_SYSTEMS_YAML);
 
       const content = generateMultiCompose(envFile, configFile);
@@ -268,25 +282,28 @@ describe("templates", () => {
     });
 
     it("sanitizes system ids into valid Postgres identifiers", () => {
-      writeFileSync(envFile, PER_SYSTEM_ENV);
+      writeFileSync(envFile, SAMPLE_ENV_WITH_SYSTEM);
       writeFileSync(
         configFile,
-        "systems:\n  - id: my-Prod.01\n    name: 'Weird'\n    profile: full\n    agents: []\n",
+        "systems:\n  - id: default\n    name: 'A'\n    profile: full\n    agents: []\n  - id: my-Prod.01\n    name: 'Weird'\n    profile: full\n    agents: []\n",
       );
 
       const content = generateMultiCompose(envFile, configFile);
       expect(content).toContain("CREATE DATABASE ai_my_prod_01");
       expect(content).toContain("DB_DATABASE: ai_my_prod_01");
+      expect(content).toContain("- agentos-data-my-Prod.01:/data");
     });
 
-    it("leaves the shared-DB layout untouched when unset", () => {
-      writeFileSync(envFile, SAMPLE_ENV_WITH_SYSTEM);
+    it("honours the IXORA_DB_ISOLATION=shared opt-out", () => {
+      writeFileSync(envFile, SHARED_ENV);
       writeFileSync(configFile, SAMPLE_SYSTEMS_YAML);
 
       const content = generateMultiCompose(envFile, configFile);
       expect(content).not.toContain("db-init:");
+      expect(content).toContain("POSTGRES_DB: ${DB_DATABASE:-ai}");
       expect(content).toContain("DB_DATABASE: ${DB_DATABASE:-ai}");
       expect(content).toContain("- agentos-data:/data");
+      expect(content).not.toContain("- agentos-data-default:/data");
       expect(content).toMatch(/volumes:\n {2}pgdata:\n {2}agentos-data:\n/);
     });
   });

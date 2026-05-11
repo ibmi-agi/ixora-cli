@@ -51,7 +51,7 @@ The old `--profile api` is accepted as an alias for `--profile mcp` (with a one-
 
 ### Per-system database isolation
 
-By default all systems in a multi-system deployment share one `ai` database. Set `IXORA_DB_ISOLATION=per-system` (`ixora config set IXORA_DB_ISOLATION per-system && ixora restart`) to give each system its own `ai_<id>` database and `/data` volume — sessions, memory, knowledge, and learnings are then isolated per system. Still one `agentos-db` container; a one-shot `db-init` service provisions the databases. See [IXORA_QUICKSTART.md](IXORA_QUICKSTART.md) → §4 "Advanced: per-system database isolation".
+By default each IBM i system gets its **own** `ai_<id>` Postgres database (and its own `/data` volume) inside the shared `agentos-db` container — so sessions, memory, knowledge, and learnings are isolated per system. A single-system deployment is just `agentos-db` with an `ai_default` database (nothing extra); with 2+ systems a one-shot `db-init` service provisions the additional databases. To put everything back in one shared `ai` database instead: `ixora config set IXORA_DB_ISOLATION shared && ixora restart`. See [IXORA_QUICKSTART.md](IXORA_QUICKSTART.md) → §4 "Advanced: per-system database isolation".
 
 ## Commands
 
