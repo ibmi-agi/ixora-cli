@@ -204,4 +204,90 @@ describe("templates", () => {
       expect(content).toContain('"9002:8000"');
     });
   });
+
+  describe("generateMultiCompose (per-system DB isolation)", () => {
+    const PER_SYSTEM_ENV =
+      SAMPLE_ENV_WITH_SYSTEM + "IXORA_DB_ISOLATION='per-system'\n";
+
+    function dependsOnBlock(content: string, id: string): string {
+      const block = content.slice(content.indexOf(`  api-${id}:`));
+      return block.slice(
+        block.indexOf("depends_on:"),
+        block.indexOf("healthcheck:"),
+      );
+    }
+
+    it("emits a one-shot db-init service that creates a database per system", () => {
+      writeFileSync(envFile, PER_SYSTEM_ENV);
+      writeFileSync(configFile, SAMPLE_SYSTEMS_YAML);
+
+      const content = generateMultiCompose(envFile, configFile);
+      expect(content).toContain("  db-init:");
+      expect(content).toContain('restart: "no"');
+      expect(content).toContain("CREATE DATABASE ai_default");
+      expect(content).toContain("CREATE DATABASE ai_dev");
+      expect(content).toContain("CREATE DATABASE ai_prod");
+      expect(content).toContain("CREATE EXTENSION IF NOT EXISTS vector");
+    });
+
+    it("points each api at its own ai_<id> database", () => {
+      writeFileSync(envFile, PER_SYSTEM_ENV);
+      writeFileSync(configFile, SAMPLE_SYSTEMS_YAML);
+
+      const content = generateMultiCompose(envFile, configFile);
+      expect(content).toContain("DB_DATABASE: ai_default");
+      expect(content).toContain("DB_DATABASE: ai_dev");
+      expect(content).toContain("DB_DATABASE: ai_prod");
+      expect(content).not.toContain("DB_DATABASE: ${DB_DATABASE:-ai}");
+    });
+
+    it("gives each api its own data volume and lists them under volumes:", () => {
+      writeFileSync(envFile, PER_SYSTEM_ENV);
+      writeFileSync(configFile, SAMPLE_SYSTEMS_YAML);
+
+      const content = generateMultiCompose(envFile, configFile);
+      expect(content).toContain("- agentos-data-default:/data");
+      expect(content).toContain("- agentos-data-dev:/data");
+      expect(content).not.toContain("- agentos-data:/data");
+      expect(content).toMatch(
+        /volumes:\n {2}pgdata:\n {2}agentos-data-default:\n {2}agentos-data-dev:\n {2}agentos-data-prod:\n/,
+      );
+    });
+
+    it("makes each api wait on db-init completing", () => {
+      writeFileSync(envFile, PER_SYSTEM_ENV);
+      writeFileSync(configFile, SAMPLE_SYSTEMS_YAML);
+
+      const content = generateMultiCompose(envFile, configFile);
+      const deps = dependsOnBlock(content, "default");
+      expect(deps).toContain("agentos-db:");
+      expect(deps).toContain("db-init:");
+      expect(deps).toContain("service_completed_successfully");
+      // MCP dep is still there in the default (non-CLI) profile.
+      expect(deps).toContain("mcp-default:");
+    });
+
+    it("sanitizes system ids into valid Postgres identifiers", () => {
+      writeFileSync(envFile, PER_SYSTEM_ENV);
+      writeFileSync(
+        configFile,
+        "systems:\n  - id: my-Prod.01\n    name: 'Weird'\n    profile: full\n    agents: []\n",
+      );
+
+      const content = generateMultiCompose(envFile, configFile);
+      expect(content).toContain("CREATE DATABASE ai_my_prod_01");
+      expect(content).toContain("DB_DATABASE: ai_my_prod_01");
+    });
+
+    it("leaves the shared-DB layout untouched when unset", () => {
+      writeFileSync(envFile, SAMPLE_ENV_WITH_SYSTEM);
+      writeFileSync(configFile, SAMPLE_SYSTEMS_YAML);
+
+      const content = generateMultiCompose(envFile, configFile);
+      expect(content).not.toContain("db-init:");
+      expect(content).toContain("DB_DATABASE: ${DB_DATABASE:-ai}");
+      expect(content).toContain("- agentos-data:/data");
+      expect(content).toMatch(/volumes:\n {2}pgdata:\n {2}agentos-data:\n/);
+    });
+  });
 });
