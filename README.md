@@ -34,18 +34,20 @@ ixora stop       # Stop services
 | Profile | Containers | Use case |
 |---|---|---|
 | `full` (default) | DB + API + MCP + Carbon UI | Local development, the bundled web UI |
-| `api`            | DB + API + MCP             | Backend-only — bring your own UI, or run as a service |
+| `mcp`            | DB + API + MCP             | Backend-only — bring your own UI, or run as a service |
+| `cli`            | DB + API (no MCP container) | Agents use the bundled `ibmi` CLI directly — no MCP server in the path |
 
 ```sh
-ixora start --profile api   # No Carbon UI; API on :8000, DB on :5432
-ixora start --profile full  # All four services (current behavior)
+ixora start --profile full  # All four services (default)
+ixora start --profile mcp   # No Carbon UI; API on :8000, DB on :5432
+ixora start --profile cli   # No MCP container; API runs in CLI mode
 ```
 
-The chosen profile is persisted to `~/.ixora/.env`, so subsequent `stop`/`status`/`logs`/`restart`/`upgrade` calls without `--profile` keep the same shape. Switching mid-session is safe: `ixora stop --profile api` while in `full` leaves the UI container untouched.
+The chosen profile is persisted to `~/.ixora/.env`, so subsequent `stop`/`status`/`logs`/`restart`/`upgrade` calls without `--profile` keep the same shape. Switching mid-session is safe: `ixora stop --profile mcp` while in `full` leaves the UI container untouched.
 
-### CLI mode (no MCP server)
+The old `--profile api` is accepted as an alias for `--profile mcp` (with a one-line warning).
 
-Set `IXORA_CLI_MODE=true` (`ixora config set IXORA_CLI_MODE true` then `ixora restart`) to have agents call the local `ibmi` CLI bundled in the API image instead of a per-system MCP server. The `mcp-<system-id>` container(s) are not started; each API connects to its system using the stored `SYSTEM_<ID>_*` credentials. See [IXORA_QUICKSTART.md](IXORA_QUICKSTART.md) → §4 "Advanced: CLI mode".
+`--profile cli` sets `IXORA_CLI_MODE=true` on the API container — each API reaches its IBM i system using the stored `SYSTEM_<ID>_*` credentials. You can also set `IXORA_CLI_MODE=true` manually (`ixora config set IXORA_CLI_MODE true && ixora restart`) to run CLI mode under the `full` profile (keeping the UI). See [IXORA_QUICKSTART.md](IXORA_QUICKSTART.md) → §4 "Advanced: CLI mode" / §8 "Stack profiles". PASE stays unavailable in CLI mode.
 
 ## Commands
 

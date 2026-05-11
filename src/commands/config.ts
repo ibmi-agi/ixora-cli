@@ -84,17 +84,21 @@ export function cmdConfigShow(): void {
   const version = envGet("IXORA_VERSION") || "latest";
   const apiPort = getApiPortBase();
   const cliModeRaw = envGet("IXORA_CLI_MODE").toLowerCase();
-  const cliMode =
+  const cliModeEnv =
     cliModeRaw === "true" || cliModeRaw === "1" || cliModeRaw === "yes";
+  const cliMode = stackProfile === "cli" || cliModeEnv;
+  const cliModeNote = !cliMode
+    ? "false"
+    : cliModeEnv
+      ? `true  ${dim("# ibmi CLI direct — MCP server not started")}`
+      : `true  ${dim("# implied by --profile cli")}`;
 
   console.log(
-    `  ${cyan("IXORA_PROFILE")}       ${stackProfile}  ${dim("# stack shape (full|api)")}`,
+    `  ${cyan("IXORA_PROFILE")}       ${stackProfile}  ${dim("# stack shape (full|mcp|cli)")}`,
   );
   console.log(`  ${cyan("IXORA_VERSION")}       ${version}`);
   console.log(`  ${cyan("IXORA_API_PORT")}      ${apiPort}`);
-  console.log(
-    `  ${cyan("IXORA_CLI_MODE")}      ${cliMode ? `true  ${dim("# ibmi CLI direct — MCP server not started")}` : "false"}`,
-  );
+  console.log(`  ${cyan("IXORA_CLI_MODE")}      ${cliModeNote}`);
   console.log();
 
   // Extra keys — filter out anything already surfaced above, plus the

@@ -31,7 +31,7 @@ export function createProgram(): Command {
     .version(SCRIPT_VERSION, "-V, --cli-version", "Show CLI version number")
     .option(
       "--profile <name>",
-      "Stack shape: full (DB + API + MCP + UI) or api (DB + API + MCP, no UI) [default: full]",
+      "Stack shape: full (DB + API + MCP + UI), mcp (DB + API + MCP, no UI), or cli (DB + API only, no MCP container) [default: full]",
     )
     .option(
       "--agent-profile <name>",

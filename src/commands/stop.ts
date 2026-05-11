@@ -46,9 +46,9 @@ export async function cmdStop(
   }
 
   // For `full`, preserve today's behavior: `compose down --remove-orphans`
-  // tears down containers + networks for the active profile. For `api`, use
-  // `compose stop` so a UI container left over from a prior `--profile full`
-  // run is NOT touched (compose's profile gating skips services with
+  // tears down containers + networks for the active profile. For `mcp`/`cli`,
+  // use `compose stop` so a UI container left over from a prior `--profile
+  // full` run is NOT touched (compose's profile gating skips services with
   // `profiles: ["full"]` when --profile full is not active).
   if (profile === "full") {
     info(`Stopping ixora services (profile: ${profile})...`);

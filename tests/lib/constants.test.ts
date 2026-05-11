@@ -58,8 +58,8 @@ describe("constants", () => {
     }
   });
 
-  it("defines stack profiles full and api", () => {
-    expect(VALID_STACK_PROFILES).toEqual(["full", "api"]);
+  it("defines stack profiles full, mcp and cli", () => {
+    expect(VALID_STACK_PROFILES).toEqual(["full", "mcp", "cli"]);
     for (const p of VALID_STACK_PROFILES) {
       expect(STACK_PROFILES[p]).toBeDefined();
       expect(STACK_PROFILES[p].name).toBe(p);

@@ -34,19 +34,43 @@ describe("profile", () => {
   describe("resolveStackProfile", () => {
     it("returns explicit --profile when valid", async () => {
       const { resolveStackProfile } = await import("../../src/lib/profile.js");
-      expect(resolveStackProfile({ profile: "api" })).toBe("api");
       expect(resolveStackProfile({ profile: "full" })).toBe("full");
+      expect(resolveStackProfile({ profile: "mcp" })).toBe("mcp");
+      expect(resolveStackProfile({ profile: "cli" })).toBe("cli");
     });
 
     it("trims whitespace from explicit --profile", async () => {
       const { resolveStackProfile } = await import("../../src/lib/profile.js");
-      expect(resolveStackProfile({ profile: "  api  " })).toBe("api");
+      expect(resolveStackProfile({ profile: "  cli  " })).toBe("cli");
     });
 
     it("falls back to IXORA_PROFILE when --profile omitted", async () => {
-      writeFileSync(ENV_FILE, SAMPLE_ENV.replace("IXORA_PROFILE='full'", "IXORA_PROFILE='api'"));
+      writeFileSync(
+        ENV_FILE,
+        SAMPLE_ENV.replace("IXORA_PROFILE='full'", "IXORA_PROFILE='cli'"),
+      );
       const { resolveStackProfile } = await import("../../src/lib/profile.js");
-      expect(resolveStackProfile({})).toBe("api");
+      expect(resolveStackProfile({})).toBe("cli");
+    });
+
+    it("coerces the legacy --profile api to 'mcp' with a warning", async () => {
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      const { resolveStackProfile } = await import("../../src/lib/profile.js");
+      expect(resolveStackProfile({ profile: "api" })).toBe("mcp");
+      expect(logSpy.mock.calls.flat().join(" ")).toContain("mcp");
+      logSpy.mockRestore();
+    });
+
+    it("coerces a stored IXORA_PROFILE='api' to 'mcp' with a warning", async () => {
+      writeFileSync(
+        ENV_FILE,
+        SAMPLE_ENV.replace("IXORA_PROFILE='full'", "IXORA_PROFILE='api'"),
+      );
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      const { resolveStackProfile } = await import("../../src/lib/profile.js");
+      expect(resolveStackProfile({})).toBe("mcp");
+      expect(logSpy.mock.calls.flat().join(" ")).toContain("mcp");
+      logSpy.mockRestore();
     });
 
     it("falls back to 'full' when IXORA_PROFILE unset", async () => {
@@ -105,16 +129,16 @@ describe("profile", () => {
   describe("persistStackProfile", () => {
     it("writes IXORA_PROFILE to the env file", async () => {
       const { persistStackProfile } = await import("../../src/lib/profile.js");
-      persistStackProfile("api");
+      persistStackProfile("cli");
       const content = readFileSync(ENV_FILE, "utf-8");
-      expect(content).toContain("IXORA_PROFILE='api'");
+      expect(content).toContain("IXORA_PROFILE='cli'");
     });
   });
 
   describe("wasProfileExplicit", () => {
     it("is true when --profile is set", async () => {
       const { wasProfileExplicit } = await import("../../src/lib/profile.js");
-      expect(wasProfileExplicit({ profile: "api" })).toBe(true);
+      expect(wasProfileExplicit({ profile: "cli" })).toBe(true);
     });
     it("is false when --profile is undefined or whitespace", async () => {
       const { wasProfileExplicit } = await import("../../src/lib/profile.js");

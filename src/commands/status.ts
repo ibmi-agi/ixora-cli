@@ -63,18 +63,19 @@ export async function cmdStatus(opts: StatusOptions): Promise<void> {
     // Compose ps may fail if runtime is unavailable
   }
 
-  // In api scope, the UI is out-of-profile — never report on it even if a
-  // stale UI container from a prior `--profile full` run is still up.
-  if (profile === "api") {
+  // Only the `full` profile includes the UI — never report on it under
+  // `mcp`/`cli` even if a stale UI container from a prior `--profile full`
+  // run is still up.
+  const uiInProfile = profile === "full";
+  if (!uiInProfile) {
     runningServices.delete("ui");
   }
 
-  const uiStatus =
-    profile === "api"
-      ? chalk.dim("(not in profile)")
-      : runningServices.has("ui")
-        ? chalk.green("http://localhost:3000")
-        : chalk.yellow("stopped");
+  const uiStatus = !uiInProfile
+    ? chalk.dim("(not in profile)")
+    : runningServices.has("ui")
+      ? chalk.green("http://localhost:3000")
+      : chalk.yellow("stopped");
 
   console.log();
   console.log(`  ${chalk.bold("Profile:")}  ${profile}`);

@@ -192,7 +192,7 @@ export async function cmdInstall(opts: InstallOptions): Promise<void> {
   console.log();
 
   // Stack profile at install time defaults to "full" (current behavior).
-  // Users can switch later with `ixora start --profile api`.
+  // Users can switch later with `ixora start --profile mcp|cli`.
   const envConfig: EnvConfig = {
     agentModel,
     teamModel,

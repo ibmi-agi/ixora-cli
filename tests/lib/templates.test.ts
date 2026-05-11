@@ -72,7 +72,7 @@ describe("templates", () => {
       writeFileSync(configFile, SAMPLE_SYSTEMS_YAML);
 
       const content = generateMultiCompose(envFile, configFile);
-      // The `profiles: ["full"]` tag is what makes `ixora --profile api`
+      // The `profiles: ["full"]` tag is what makes `ixora --profile mcp|cli`
       // skip the UI container when starting/stopping/restarting.
       expect(content).toMatch(/ui:[\s\S]*?profiles: \["full"\]/);
       // Backend services have no `profiles:` field — they're always-on.

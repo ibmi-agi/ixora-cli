@@ -121,7 +121,6 @@ describe("compose", () => {
       tmpDir = mkdtempSync(join(tmpdir(), "ixora-compose-cli-"));
       envFile = join(tmpDir, ".env");
       configFile = join(tmpDir, "ixora-systems.yaml");
-      writeFileSync(envFile, `${SAMPLE_ENV_WITH_SYSTEM}IXORA_CLI_MODE=true\n`);
       writeFileSync(configFile, SAMPLE_SYSTEMS_YAML_SINGLE);
     });
 
@@ -129,24 +128,18 @@ describe("compose", () => {
       rmSync(tmpDir, { recursive: true, force: true });
     });
 
-    it("omits the per-system mcp service", () => {
-      const content = generateMultiCompose(envFile, configFile);
+    function assertCliCompose(content: string): void {
+      // no MCP container
       expect(content).not.toContain("mcp-default:");
       expect(content).not.toContain("ghcr.io/ibmi-agi/ixora-mcp-server");
       expect(content).not.toContain("http://mcp-default:3010/mcp");
-    });
-
-    it("enables IXORA_CLI_MODE and passes IBMI_* creds to the api service", () => {
-      const content = generateMultiCompose(envFile, configFile);
+      // api runs in CLI mode with the system's creds
       expect(content).toContain('IXORA_CLI_MODE: "true"');
       expect(content).toContain("IBMI_HOST: ${SYSTEM_DEFAULT_HOST}");
       expect(content).toContain("IBMI_USER: ${SYSTEM_DEFAULT_USER}");
       expect(content).toContain("IBMI_PASS: ${SYSTEM_DEFAULT_PASS}");
       expect(content).toContain("IBMI_PORT: ${SYSTEM_DEFAULT_PORT:-8076}");
-    });
-
-    it("drops the mcp dependency from the api service", () => {
-      const content = generateMultiCompose(envFile, configFile);
+      // api no longer depends on the MCP service
       const apiBlock = content.slice(content.indexOf("api-default:"));
       const dependsOn = apiBlock.slice(
         apiBlock.indexOf("depends_on:"),
@@ -154,13 +147,34 @@ describe("compose", () => {
       );
       expect(dependsOn).toContain("agentos-db:");
       expect(dependsOn).not.toContain("mcp-default");
-    });
-
-    it("still emits db, api and ui services", () => {
-      const content = generateMultiCompose(envFile, configFile);
+      // db, api, ui blocks still present (ui is gated by profiles:["full"])
       expect(content).toContain("agentos-db:");
       expect(content).toContain("api-default:");
       expect(content).toContain("ui:");
+    }
+
+    it("triggers on the `cli` stack profile (IXORA_PROFILE=cli)", () => {
+      writeFileSync(
+        envFile,
+        SAMPLE_ENV_WITH_SYSTEM.replace(
+          "IXORA_PROFILE='full'",
+          "IXORA_PROFILE='cli'",
+        ),
+      );
+      assertCliCompose(generateMultiCompose(envFile, configFile));
+    });
+
+    it("triggers on the IXORA_CLI_MODE override (any profile)", () => {
+      writeFileSync(envFile, `${SAMPLE_ENV_WITH_SYSTEM}IXORA_CLI_MODE=true\n`);
+      assertCliCompose(generateMultiCompose(envFile, configFile));
+    });
+
+    it("leaves the MCP path intact for the default profile", () => {
+      writeFileSync(envFile, SAMPLE_ENV_WITH_SYSTEM);
+      const content = generateMultiCompose(envFile, configFile);
+      expect(content).toContain("mcp-default:");
+      expect(content).toContain("http://mcp-default:3010/mcp");
+      expect(content).not.toContain('IXORA_CLI_MODE: "true"');
     });
   });
 
