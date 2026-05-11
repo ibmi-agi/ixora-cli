@@ -10,6 +10,8 @@ import {
   VALID_AGENT_PROFILES,
   STACK_PROFILES,
   VALID_STACK_PROFILES,
+  DB_ISOLATION_MODES,
+  DEFAULT_DB_ISOLATION,
   PROVIDERS,
   ALL_AGENTS,
   OPS_AGENTS,
@@ -65,6 +67,11 @@ describe("constants", () => {
       expect(STACK_PROFILES[p].name).toBe(p);
       expect(STACK_PROFILES[p].description).toBeTruthy();
     }
+  });
+
+  it("defines the db isolation modes, defaulting to per-system", () => {
+    expect(DB_ISOLATION_MODES).toEqual(["per-system", "shared"]);
+    expect(DEFAULT_DB_ISOLATION).toBe("per-system");
   });
 
   it("defines all providers", () => {

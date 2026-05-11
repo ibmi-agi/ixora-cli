@@ -49,6 +49,10 @@ The old `--profile api` is accepted as an alias for `--profile mcp` (with a one-
 
 `--profile cli` sets `IXORA_CLI_MODE=true` on the API container — each API reaches its IBM i system using the stored `SYSTEM_<ID>_*` credentials. You can also set `IXORA_CLI_MODE=true` manually (`ixora config set IXORA_CLI_MODE true && ixora restart`) to run CLI mode under the `full` profile (keeping the UI). See [IXORA_QUICKSTART.md](IXORA_QUICKSTART.md) → §4 "Advanced: CLI mode" / §8 "Stack profiles". PASE stays unavailable in CLI mode.
 
+### Per-system database isolation
+
+By default each IBM i system gets its **own** `ai_<id>` Postgres database (and its own `/data` volume) inside the shared `agentos-db` container — so sessions, memory, knowledge, and learnings are isolated per system. A single-system deployment is just `agentos-db` with an `ai_default` database (nothing extra); with 2+ systems a one-shot `db-init` service provisions the additional databases. To put everything back in one shared `ai` database instead: `ixora config set IXORA_DB_ISOLATION shared && ixora restart`. See [IXORA_QUICKSTART.md](IXORA_QUICKSTART.md) → §4 "Advanced: per-system database isolation".
+
 ## Commands
 
 | Command | Description |

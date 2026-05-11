@@ -193,6 +193,11 @@ SYSTEM_DEFAULT_PASS='mypassword'
 # the MCP server while keeping the current profile (e.g. `full`, so the UI
 # stays). `--profile cli` implies this. When on, mcp-<system-id> isn't started.
 # IXORA_CLI_MODE='true'
+
+# Database layout. Default (unset): per-system — each IBM i system gets its
+# own ai_<id> database and /data volume. Set to 'shared' to put everything in
+# one `ai` database instead. See "Advanced: per-system database isolation".
+# IXORA_DB_ISOLATION='shared'
 ```
 
 Edit with `ixora config edit` or `ixora config set KEY VALUE`. Restart after changes: `ixora restart`.
@@ -237,7 +242,7 @@ systems:
 | `profile` | string | Agent profile: `full`, `sql-services`, `security`, or `knowledge` |
 | `agents` | array | Agent IDs to deploy (empty = profile default) |
 
-Add systems with `ixora system add`. Each system gets its own MCP server and API instance.
+Add systems with `ixora system add`. Each system gets its own MCP server, API instance, and Postgres database (`ai_<id>`).
 
 </details>
 
@@ -249,6 +254,7 @@ The CLI deploys these container services:
 | Service | Image | Port | Role | Profiles |
 |---|---|---|---|---|
 | `agentos-db` | `agnohq/pgvector:18` | 5432 | PostgreSQL with pgvector for agent memory | all |
+| `db-init` | `agnohq/pgvector:18` | — | One-shot: creates the extra per-system `ai_<id>` databases. Only present with 2+ systems (and not under `IXORA_DB_ISOLATION=shared`) | all (when applicable) |
 | `mcp-<system-id>` | `ghcr.io/ibmi-agi/ixora-mcp-server` | internal | MCP server connecting to IBM i via Mapepire | `full`, `mcp` |
 | `api-<system-id>` | `ghcr.io/ibmi-agi/ixora-api` | 8000+ | FastAPI backend serving agent endpoints | all |
 | `ui` | `ghcr.io/ibmi-agi/ixora-ui` | 3000 | Next.js web interface | `full` |
@@ -293,6 +299,35 @@ In CLI mode:
 - The running banner / `ixora status` show `Backend: ibmi CLI` and no MCP endpoints.
 
 To go back: `ixora start --profile mcp` (or `--profile full`), or set `IXORA_CLI_MODE=false` / remove the line, then `ixora restart`.
+
+</details>
+
+<details>
+<summary><strong>Advanced: per-system database isolation</strong></summary>
+
+**This is the default.** Each IBM i system gets its own `ai_<id>` database (and its own `/data` volume) inside the shared `agentos-db` container — so sessions, memory, knowledge, and learnings from one system never mix with another's.
+
+- **One system:** `agentos-db` simply uses `ai_default` as its database — nothing extra runs.
+- **Two or more systems:** a one-shot `db-init` container is added. On every `up` it idempotently creates any missing `ai_<id>` databases (one per system in `ixora-systems.yaml`, via the always-present `postgres` maintenance db) and enables pgvector in each; every `api-<id>` waits for it before starting. So adding a system later "just works" — `ixora restart` regenerates the compose and `db-init` creates the new database on the next `up`.
+- System ids are lowercased and non-alphanumerics become `_` for the database name, e.g. `my-prod` → `ai_my_prod`.
+- It's still one Postgres *container* — low overhead, but a shared connection budget. (Fully separate Postgres instances per system would need a different topology; not currently supported by the CLI.)
+- The curated knowledge base is ingested per database, so it's stored once per system — redundant but harmless.
+
+**Going back to one shared database:**
+
+```bash
+ixora config set IXORA_DB_ISOLATION shared
+ixora restart        # regenerates the compose file
+```
+
+`ixora config` shows the active mode (`per-system` / `shared`) under **Deployment**.
+
+**Switching modes does not move data.** Flipping to `shared` after running per-system leaves your per-system data in the `ai_<id>` databases (the shared `ai` database starts empty); flipping back to per-system is the reverse. To carry data from one layout to the other, copy it inside the DB container after the target database exists and before the apis start, e.g.:
+
+```bash
+docker compose -p ixora -f ~/.ixora/docker-compose.yml --env-file ~/.ixora/.env \
+  exec -T agentos-db sh -c 'pg_dump -U "$POSTGRES_USER" -d ai_default | psql -U "$POSTGRES_USER" -d ai'
+```
 
 </details>
 

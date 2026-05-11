@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { execa } from "execa";
 import chalk from "chalk";
 import { envGet, getApiPortBase, updateEnvKey } from "../lib/env.js";
-import { ENV_FILE } from "../lib/constants.js";
+import { DEFAULT_DB_ISOLATION, ENV_FILE } from "../lib/constants.js";
 import { readSystems } from "../lib/systems.js";
 import {
   die,
@@ -92,13 +92,20 @@ export function cmdConfigShow(): void {
     : cliModeEnv
       ? `true  ${dim("# ibmi CLI direct — MCP server not started")}`
       : `true  ${dim("# implied by --profile cli")}`;
+  const dbIsolationMode =
+    envGet("IXORA_DB_ISOLATION").trim().toLowerCase() || DEFAULT_DB_ISOLATION;
+  const dbIsolationNote =
+    dbIsolationMode === "shared"
+      ? `shared  ${dim("# all systems share the one `ai` database")}`
+      : `per-system  ${dim("# each IBM i system gets its own Postgres database")}`;
 
   console.log(
-    `  ${cyan("IXORA_PROFILE")}       ${stackProfile}  ${dim("# stack shape (full|mcp|cli)")}`,
+    `  ${cyan("IXORA_PROFILE")}        ${stackProfile}  ${dim("# stack shape (full|mcp|cli)")}`,
   );
-  console.log(`  ${cyan("IXORA_VERSION")}       ${version}`);
-  console.log(`  ${cyan("IXORA_API_PORT")}      ${apiPort}`);
-  console.log(`  ${cyan("IXORA_CLI_MODE")}      ${cliModeNote}`);
+  console.log(`  ${cyan("IXORA_VERSION")}        ${version}`);
+  console.log(`  ${cyan("IXORA_API_PORT")}       ${apiPort}`);
+  console.log(`  ${cyan("IXORA_CLI_MODE")}       ${cliModeNote}`);
+  console.log(`  ${cyan("IXORA_DB_ISOLATION")}   ${dbIsolationNote}`);
   console.log();
 
   // Extra keys — filter out anything already surfaced above, plus the
@@ -120,6 +127,7 @@ export function cmdConfigShow(): void {
     "IXORA_TEAM_MODEL",
     "IXORA_API_PORT",
     "IXORA_CLI_MODE",
+    "IXORA_DB_ISOLATION",
   ]);
 
   const content = readFileSync(ENV_FILE, "utf-8");

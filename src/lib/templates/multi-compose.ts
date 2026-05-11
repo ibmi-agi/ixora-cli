@@ -1,5 +1,5 @@
 import { readSystems } from "../systems.js";
-import { ENV_FILE, SYSTEMS_CONFIG } from "../constants.js";
+import { DEFAULT_DB_ISOLATION, ENV_FILE, SYSTEMS_CONFIG } from "../constants.js";
 import { envGet, getApiPortBase } from "../env.js";
 
 export function generateMultiCompose(
@@ -22,6 +22,30 @@ export function generateMultiCompose(
     cliModeRaw === "1" ||
     cliModeRaw === "yes";
 
+  // Per-system DB isolation (the default): each api-<id> gets its own
+  // `ai_<id>` database inside the shared agentos-db container, so sessions,
+  // memory, knowledge, and learning are isolated per system. Only the literal
+  // `IXORA_DB_ISOLATION=shared` opts back into one shared `ai` database.
+  const perSystemDb =
+    (envGet("IXORA_DB_ISOLATION", envFile) || DEFAULT_DB_ISOLATION)
+      .trim()
+      .toLowerCase() !== "shared";
+  // Postgres database names must be valid identifiers — lowercase the system
+  // id, map anything non-alphanumeric to `_`, and keep the `ai_` prefix so
+  // the name always starts with a letter.
+  const dbName = (id: string): string =>
+    `ai_${id.toLowerCase().replace(/[^a-z0-9_]/g, "_")}`;
+  // The db agentos-db creates on first init: the first system's database in
+  // per-system mode (so a single-system deployment needs no db-init at all),
+  // or the plain shared `ai` otherwise.
+  const primaryDb =
+    perSystemDb && systems.length > 0
+      ? dbName(systems[0].id)
+      : "${DB_DATABASE:-ai}";
+  // A db-init container is only needed to create the *extra* databases — i.e.
+  // when there are 2+ systems. One system → agentos-db's POSTGRES_DB covers it.
+  const needsDbInit = perSystemDb && systems.length > 1;
+
   let content = `# Auto-generated compose file
 # Regenerated on every start. Edit ixora-systems.yaml instead.
 services:
@@ -33,7 +57,7 @@ services:
     environment:
       POSTGRES_USER: \${DB_USER:-ai}
       POSTGRES_PASSWORD: \${DB_PASS:-ai}
-      POSTGRES_DB: \${DB_DATABASE:-ai}
+      POSTGRES_DB: ${primaryDb}
     volumes:
       - pgdata:/var/lib/postgresql
     healthcheck:
@@ -43,6 +67,43 @@ services:
       retries: 5
 
 `;
+
+  if (needsDbInit) {
+    // One-shot, idempotent: create any missing per-system databases (Postgres
+    // has no CREATE DATABASE IF NOT EXISTS — hence the SELECT … \gexec dance),
+    // then enable pgvector in each. Connects through the always-present
+    // `postgres` maintenance db. Re-runs harmlessly on every `up`, so adding a
+    // system just works. The api-<id> services wait on it via depends_on:
+    // db-init: service_completed_successfully.
+    const createLines = systems
+      .map((sys) => {
+        const db = dbName(sys.id);
+        return `        SELECT 'CREATE DATABASE ${db}' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '${db}')\\gexec`;
+      })
+      .join("\n");
+    const extensionLines = systems
+      .map((sys) => `        \\c ${dbName(sys.id)}\n        CREATE EXTENSION IF NOT EXISTS vector;`)
+      .join("\n");
+    content += `  db-init:
+    image: \${IXORA_DB_IMAGE:-agnohq/pgvector:18}
+    restart: "no"
+    depends_on:
+      agentos-db:
+        condition: service_healthy
+    environment:
+      PGHOST: agentos-db
+      PGUSER: \${DB_USER:-ai}
+      PGPASSWORD: \${DB_PASS:-ai}
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        psql -v ON_ERROR_STOP=1 -d postgres <<'SQL'
+${createLines}
+${extensionLines}
+        SQL
+
+`;
+  }
 
   let apiPort = getApiPortBase(envFile);
   const apiPortBase = apiPort;
@@ -95,6 +156,16 @@ services:
       mcp-${sys.id}:
         condition: service_healthy`;
 
+    // Per-system DB isolation: own database + own /data volume; wait on db-init
+    // only when it exists (i.e. 2+ systems).
+    const apiDbDatabase = perSystemDb ? dbName(sys.id) : "${DB_DATABASE:-ai}";
+    const apiDataVolume = perSystemDb ? `agentos-data-${sys.id}` : "agentos-data";
+    const apiDbInitDep = needsDbInit
+      ? `
+      db-init:
+        condition: service_completed_successfully`
+      : "";
+
     content += `  api-${sys.id}:
     image: ghcr.io/ibmi-agi/ixora-api:\${IXORA_VERSION:-latest}
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
@@ -114,7 +185,7 @@ services:
       DB_PORT: "5432"
       DB_USER: \${DB_USER:-ai}
       DB_PASS: \${DB_PASS:-ai}
-      DB_DATABASE: \${DB_DATABASE:-ai}
+      DB_DATABASE: ${apiDbDatabase}
 ${apiBackendEnv}
       IXORA_SYSTEM_ID: ${sys.id}
       IXORA_SYSTEM_NAME: ${sys.name}
@@ -135,7 +206,7 @@ ${apiBackendEnv}
       DB2i_PASS: \${SYSTEM_${idUpper}_PASS}
       DB2_PORT: \${SYSTEM_${idUpper}_PORT:-8076}
     volumes:
-      - agentos-data:/data
+      - ${apiDataVolume}:/data
       - type: bind
         source: \${HOME}/.ixora/user_tools
         target: /data/user_tools
@@ -143,7 +214,7 @@ ${apiBackendEnv}
           create_host_path: true
     depends_on:
       agentos-db:
-        condition: service_healthy${apiMcpDep}
+        condition: service_healthy${apiDbInitDep}${apiMcpDep}
     healthcheck:
       test: ["CMD-SHELL", "python -c \\"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).getcode()==200 else 1)\\""]
       interval: 10s
@@ -171,9 +242,16 @@ ${apiBackendEnv}
       ${firstApi}:
         condition: service_healthy
 
-volumes:
+`;
+
+  // In per-system DB mode each api-<id> has its own /data volume; otherwise
+  // one shared agentos-data volume (the historical layout).
+  const dataVolumes = perSystemDb
+    ? systems.map((sys) => `  agentos-data-${sys.id}:`).join("\n")
+    : "  agentos-data:";
+  content += `volumes:
   pgdata:
-  agentos-data:
+${dataVolumes}
 `;
 
   return content;

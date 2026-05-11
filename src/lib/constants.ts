@@ -67,6 +67,17 @@ export const VALID_STACK_PROFILES = Object.keys(
   STACK_PROFILES,
 ) as StackProfile[];
 
+// Database isolation controls how the per-system api containers share the
+// `agentos-db` instance. `per-system` (the default) — each system gets its
+// own `ai_<id>` database, so sessions, memory, knowledge, and learning are
+// isolated per IBM i system; with 2+ systems a one-shot `db-init` service
+// provisions the extra databases. `shared` — every system reads/writes the
+// one `ai` database. Set via the `IXORA_DB_ISOLATION` env var in
+// ~/.ixora/.env (only the literal `shared` opts out).
+export const DB_ISOLATION_MODES = ["per-system", "shared"] as const;
+export type DbIsolationMode = (typeof DB_ISOLATION_MODES)[number];
+export const DEFAULT_DB_ISOLATION: DbIsolationMode = "per-system";
+
 // Agent profiles select which agents/teams/workflows the API container
 // loads via IAASSIST_DEPLOYMENT_CONFIG. They live per-system in
 // ixora-systems.yaml (`sys.profile`); the global flag is `--agent-profile`.
