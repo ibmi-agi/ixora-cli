@@ -39,9 +39,16 @@ export async function cmdLogs(
 
   if (service) {
     const svc = resolveService(service);
-    if (svc === "ui" && profile === "api") {
+    if (svc === "ui" && profile !== "full") {
       die(
-        "ui is not in the active profile (api). Use --profile full or omit --profile.",
+        `ui is not in the active stack profile (${profile}); only 'full' includes the UI. ` +
+          "Use --profile full or omit --profile.",
+      );
+    }
+    if (svc.startsWith("mcp-") && profile === "cli") {
+      die(
+        `${svc} is not started in the 'cli' stack profile (agents use the bundled ibmi CLI). ` +
+          "Use --profile mcp or --profile full.",
       );
     }
     await runCompose(composeCmd, ["logs", "-f", svc], { profile });

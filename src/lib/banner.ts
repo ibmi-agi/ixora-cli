@@ -17,6 +17,12 @@ function isA2AEnabled(): boolean {
   return raw === "true" || raw === "1" || raw === "yes";
 }
 
+function isCliMode(profile: StackProfile): boolean {
+  if (profile === "cli") return true;
+  const raw = envGet("IXORA_CLI_MODE").toLowerCase();
+  return raw === "true" || raw === "1" || raw === "yes";
+}
+
 function readStackProfile(): StackProfile {
   const stored = envGet("IXORA_PROFILE") || "full";
   return VALID_STACK_PROFILES.includes(stored as StackProfile)
@@ -41,10 +47,13 @@ export function printRunningBanner(opts: BannerOptions = {}): void {
 
   if (filter && systemsWithPort.length === 0) return;
 
-  // UI is hidden in `api` stack profile regardless of whether a stale UI
-  // container is in the running set.
+  // UI is shown only in the `full` stack profile, regardless of whether a
+  // stale UI container is in the running set.
   const uiInProfile = stackProfile === "full";
   const uiRunning = uiInProfile && (!filter || filter.has("ui"));
+  // In CLI mode there is no MCP container — agents use the bundled `ibmi`
+  // binary inside the API container, so don't advertise MCP endpoints.
+  const cliMode = isCliMode(stackProfile);
   const firstSystemPort = systemsWithPort[0]?.port ?? apiPortBase;
 
   console.log();
@@ -58,6 +67,9 @@ export function printRunningBanner(opts: BannerOptions = {}): void {
   }
 
   console.log(`  ${bold("Stack:")}   ${stackProfile}`);
+  if (cliMode) {
+    console.log(`  ${bold("Backend:")} ibmi CLI (in-container — no MCP server)`);
+  }
 
   if (uiRunning) {
     console.log(`  ${bold("UI:")}      http://localhost:3000`);
@@ -72,11 +84,13 @@ export function printRunningBanner(opts: BannerOptions = {}): void {
       console.log(`    ${dim(`:${port} → ${sys.id} (${sysHost})`)}`);
     }
 
-    console.log(`  ${bold("MCP:")}`);
-    for (const { sys, port } of systemsWithPort) {
-      console.log(
-        `    ${dim(`http://localhost:${port}/mcp → ${sys.id}`)}`,
-      );
+    if (!cliMode) {
+      console.log(`  ${bold("MCP:")}`);
+      for (const { sys, port } of systemsWithPort) {
+        console.log(
+          `    ${dim(`http://localhost:${port}/mcp → ${sys.id}`)}`,
+        );
+      }
     }
 
     if (a2aEnabled) {
@@ -96,9 +110,11 @@ export function printRunningBanner(opts: BannerOptions = {}): void {
   } else {
     const sole = systemsWithPort[0];
     if (sole) {
-      console.log(
-        `  ${bold("MCP:")}     http://localhost:${sole.port}/mcp`,
-      );
+      if (!cliMode) {
+        console.log(
+          `  ${bold("MCP:")}     http://localhost:${sole.port}/mcp`,
+        );
+      }
       if (a2aEnabled) {
         console.log(
           `  ${bold("A2A:")}     http://localhost:${sole.port}/a2a`,
@@ -108,7 +124,11 @@ export function printRunningBanner(opts: BannerOptions = {}): void {
         console.log(`  ${bold("Agent:")}   ${sole.sys.profile}`);
       }
     } else {
-      console.log(`  ${bold("MCP:")}     http://localhost:${apiPortBase}/mcp`);
+      if (!cliMode) {
+        console.log(
+          `  ${bold("MCP:")}     http://localhost:${apiPortBase}/mcp`,
+        );
+      }
       if (a2aEnabled) {
         console.log(`  ${bold("A2A:")}     http://localhost:${apiPortBase}/a2a`);
       }

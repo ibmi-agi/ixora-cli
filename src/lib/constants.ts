@@ -40,17 +40,25 @@ export const ENV_FILE = join(IXORA_DIR, ".env");
 
 // Stack profiles control which containers boot (deployment shape).
 // `full` boots DB + API + MCP + UI (the historical default).
-// `api`  boots DB + API + MCP — the Carbon UI is excluded.
+// `mcp`  boots DB + API + MCP — the Carbon UI is excluded.
+// `cli`  boots DB + API only — no MCP container; agents use the bundled
+//        `ibmi` CLI directly (sets IXORA_CLI_MODE on the API).
 export const STACK_PROFILES = {
   full: {
     name: "full",
     label: "Full",
     description: "DB + API + MCP + Carbon UI (default)",
   },
-  api: {
-    name: "api",
-    label: "API only",
+  mcp: {
+    name: "mcp",
+    label: "MCP backend",
     description: "DB + API + MCP (no Carbon UI) — backend-only deployment",
+  },
+  cli: {
+    name: "cli",
+    label: "CLI backend",
+    description:
+      "DB + API only — agents use the bundled ibmi CLI; no MCP container",
   },
 } as const;
 

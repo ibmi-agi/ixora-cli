@@ -125,11 +125,11 @@ describe("upgrade command", () => {
     await cmdUpgrade({
       runtime: undefined,
       version: "v0.0.10",
-      profile: "api",
+      profile: "cli",
     });
 
     const content = readFileSync(ENV_FILE, "utf-8");
-    expect(content).toContain("IXORA_PROFILE='api'");
+    expect(content).toContain("IXORA_PROFILE='cli'");
   });
 
   it("skips pull when --no-pull", async () => {

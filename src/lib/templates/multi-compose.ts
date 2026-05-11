@@ -11,10 +11,16 @@ export function generateMultiCompose(
   // CLI mode: agents in the api container talk to the local `ibmi` binary
   // (IBMiCLITools) instead of an ibmi-mcp-server. The MCP container(s) are
   // not spun up at all, and the api gets IBM i creds as IBMI_* env vars.
-  // Mirrors the truthy parsing in src/lib/banner.ts.
+  // Enabled by the `cli` stack profile, or by setting IXORA_CLI_MODE
+  // explicitly (an override usable with the `full`/`mcp` profiles too).
+  // Truthy parsing mirrors src/lib/banner.ts.
+  const profile = (envGet("IXORA_PROFILE", envFile) || "full").trim();
   const cliModeRaw = envGet("IXORA_CLI_MODE", envFile).toLowerCase();
   const cliMode =
-    cliModeRaw === "true" || cliModeRaw === "1" || cliModeRaw === "yes";
+    profile === "cli" ||
+    cliModeRaw === "true" ||
+    cliModeRaw === "1" ||
+    cliModeRaw === "yes";
 
   let content = `# Auto-generated compose file
 # Regenerated on every start. Edit ixora-systems.yaml instead.
@@ -152,7 +158,7 @@ ${apiBackendEnv}
   }
 
   // UI points to first system. `profiles: ["full"]` gates the UI behind the
-  // `full` stack profile — `--profile api` (no profile flag) skips it.
+  // `full` stack profile — the `mcp` and `cli` profiles skip it.
   content += `  ui:
     image: ghcr.io/ibmi-agi/ixora-ui:\${IXORA_VERSION:-latest}
     profiles: ["full"]

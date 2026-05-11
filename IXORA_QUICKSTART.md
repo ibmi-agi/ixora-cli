@@ -13,7 +13,7 @@ Deploy AI agents for IBM i in minutes. This guide walks you through installing t
 - [5. Open the local UI](#5-open-the-local-ui)
 - [6. Connect to the Agno Control Plane (optional)](#6-connect-to-the-agno-control-plane-optional)
 - [7. Common commands](#7-common-commands)
-- [8. Stack profiles (`--profile full|api`)](#8-stack-profiles---profile-fullapi)
+- [8. Stack profiles (`--profile full|mcp|cli`)](#8-stack-profiles---profile-fullmcpcli)
 - [9. Troubleshooting](#9-troubleshooting)
 
 ---
@@ -115,7 +115,7 @@ Enter a human-readable name for this system. Defaults to the hostname you entere
 
 Start with `knowledge` if you want the fastest startup and smallest resource footprint.
 
-> **Agent profile vs stack profile.** This prompt selects the **agent profile** — which agents the API loads. It is separate from the **stack profile** (`--profile full|api`), which controls _which containers_ run. See [section 8](#8-stack-profiles---profile-fullapi) for the stack profile. You can skip this prompt by passing `--agent-profile <name>` to `ixora install`.
+> **Agent profile vs stack profile.** This prompt selects the **agent profile** — which agents the API loads. It is separate from the **stack profile** (`--profile full|mcp|cli`), which controls _which containers_ run. See [section 8](#8-stack-profiles---profile-fullmcpcli) for the stack profile. You can skip this prompt by passing `--agent-profile <name>` to `ixora install`.
 
 ### 3.7 Select an image version
 
@@ -145,7 +145,7 @@ On success, you see:
   Config dir:  ~/.ixora
 ```
 
-`Stack` is the deployment shape (`full` includes the UI; `api` excludes it — see [section 8](#8-stack-profiles---profile-fullapi)). `Agent` is the agent profile from `~/.ixora/ixora-systems.yaml`.
+`Stack` is the deployment shape (`full` includes the UI; `mcp` is backend-only; `cli` drops the MCP container — see [section 8](#8-stack-profiles---profile-fullmcpcli)). `Agent` is the agent profile from `~/.ixora/ixora-systems.yaml`.
 
 ---
 
@@ -177,6 +177,9 @@ DB2i_PASS='mypassword'
 DB2_PORT='8076'
 
 # Deployment
+# Stack shape — full (DB+API+MCP+UI), mcp (DB+API+MCP, no UI), or
+# cli (DB+API only; agents use the bundled ibmi CLI, no MCP container).
+# Usually set via `--profile`; persisted here.
 IXORA_PROFILE='full'
 IXORA_VERSION='v0.1.2'
 
@@ -186,8 +189,9 @@ SYSTEM_DEFAULT_PORT='8076'
 SYSTEM_DEFAULT_USER='MYUSER'
 SYSTEM_DEFAULT_PASS='mypassword'
 
-# Optional: route agents through the local `ibmi` CLI instead of the
-# MCP server. When true, the mcp-<system-id> container(s) are not started.
+# Optional override: route agents through the local `ibmi` CLI instead of
+# the MCP server while keeping the current profile (e.g. `full`, so the UI
+# stays). `--profile cli` implies this. When on, mcp-<system-id> isn't started.
 # IXORA_CLI_MODE='true'
 ```
 
@@ -240,14 +244,16 @@ Add systems with `ixora system add`. Each system gets its own MCP server and API
 <details>
 <summary><strong>Container architecture</strong></summary>
 
-The CLI deploys four container services per system:
+The CLI deploys these container services:
 
-| Service | Image | Port | Role |
-|---|---|---|---|
-| `agentos-db` | `agnohq/pgvector:18` | 5432 | PostgreSQL with pgvector for agent memory |
-| `mcp-<system-id>` | `ghcr.io/ibmi-agi/ixora-mcp-server` | internal | MCP server connecting to IBM i via Mapepire |
-| `api-<system-id>` | `ghcr.io/ibmi-agi/ixora-api` | 8000+ | FastAPI backend serving agent endpoints |
-| `ui` | `ghcr.io/ibmi-agi/ixora-ui` | 3000 | Next.js web interface |
+| Service | Image | Port | Role | Profiles |
+|---|---|---|---|---|
+| `agentos-db` | `agnohq/pgvector:18` | 5432 | PostgreSQL with pgvector for agent memory | all |
+| `mcp-<system-id>` | `ghcr.io/ibmi-agi/ixora-mcp-server` | internal | MCP server connecting to IBM i via Mapepire | `full`, `mcp` |
+| `api-<system-id>` | `ghcr.io/ibmi-agi/ixora-api` | 8000+ | FastAPI backend serving agent endpoints | all |
+| `ui` | `ghcr.io/ibmi-agi/ixora-ui` | 3000 | Next.js web interface | `full` |
+
+Under `--profile cli` the `mcp-<system-id>` services are omitted entirely (agents use the bundled `ibmi` CLI inside the `api-<system-id>` container).
 
 For multi-system deployments, API ports increment automatically:
 
@@ -264,11 +270,18 @@ The UI connects to the first system (port 8000) only. Use the individual API por
 <details>
 <summary><strong>Advanced: CLI mode (skip the MCP server)</strong></summary>
 
-By default, agents in the `api-<system-id>` container reach IBM i through the per-system `mcp-<system-id>` server. Set `IXORA_CLI_MODE=true` in `~/.ixora/.env` to instead have agents call the local `ibmi` CLI (bundled in the API image) directly:
+By default, agents in the `api-<system-id>` container reach IBM i through the per-system `mcp-<system-id>` server. CLI mode instead has agents call the local `ibmi` CLI (bundled in the API image) directly — no MCP server in the path.
+
+**Two ways to enable it:**
 
 ```bash
+# 1. As a stack profile — also drops the UI (DB + API only):
+ixora start --profile cli          # or: ixora restart --profile cli
+
+# 2. As an override, keeping whatever stack profile you're on
+#    (e.g. `full`, so the UI stays):
 ixora config set IXORA_CLI_MODE true
-ixora restart            # regenerates the compose file
+ixora restart                      # regenerates the compose file
 ```
 
 In CLI mode:
@@ -276,9 +289,10 @@ In CLI mode:
 - The `mcp-<system-id>` container(s) are **not started** — fewer moving parts.
 - Each `api-<system-id>` connects to its system using the same stored credentials (`SYSTEM_<ID>_HOST/PORT/USER/PASS`), surfaced to the CLI as `IBMI_HOST`/`IBMI_USER`/`IBMI_PASS`/`IBMI_PORT`.
 - PASE shell execution is not available (it stays opt-in and has no CLI-mode equivalent).
-- `ixora config` shows `IXORA_CLI_MODE  true` under **Deployment**.
+- `ixora config` shows `IXORA_CLI_MODE  true` under **Deployment** (and notes whether it came from `--profile cli` or the env var).
+- The running banner / `ixora status` show `Backend: ibmi CLI` and no MCP endpoints.
 
-Set it back to `false` (or remove the line) and `ixora restart` to return to the MCP-backed setup.
+To go back: `ixora start --profile mcp` (or `--profile full`), or set `IXORA_CLI_MODE=false` / remove the line, then `ixora restart`.
 
 </details>
 
@@ -323,7 +337,8 @@ Consult the [Agno documentation](https://docs.agno.com) for detailed setup instr
 | `ixora logs [service]` | Tail service logs (e.g., `ixora logs api-default`) |
 | `ixora stop` | Stop all services |
 | `ixora start` | Start all services |
-| `ixora start --profile api` | Start backend only — no Carbon UI (see [section 8](#8-stack-profiles---profile-fullapi)) |
+| `ixora start --profile mcp` | Start backend only — no Carbon UI (see [section 8](#8-stack-profiles---profile-fullmcpcli)) |
+| `ixora start --profile cli` | CLI-mode backend — no MCP container (see [section 8](#8-stack-profiles---profile-fullmcpcli)) |
 | `ixora restart [service]` | Restart all or a specific service |
 | `ixora upgrade [version]` | Pull latest images and restart |
 | `ixora config show` | Show current configuration |
@@ -336,46 +351,56 @@ Consult the [Agno documentation](https://docs.agno.com) for detailed setup instr
 
 ---
 
-## 8. Stack profiles (`--profile full|api`)
+## 8. Stack profiles (`--profile full|mcp|cli`)
 
 The `--profile` flag controls _which containers_ start. It applies to every lifecycle command — `start`, `stop`, `restart`, `status`, `logs`, `upgrade`.
 
 | Profile | Containers | When to use |
 |---|---|---|
 | `full` (default) | DB + API + MCP + Carbon UI | Local development; you want the bundled web UI on `localhost:3000` |
-| `api` | DB + API + MCP | Backend-only — you bring your own UI, embed Ixora as a service, or run headlessly |
+| `mcp` | DB + API + MCP | Backend-only — you bring your own UI, embed Ixora as a service, or run headlessly |
+| `cli` | DB + API (no MCP container) | Agents talk to the bundled `ibmi` CLI inside the API container — no MCP server in the path. Sets `IXORA_CLI_MODE=true` on the API. |
 
 ```bash
-ixora start --profile api      # 5 containers: DB, api-<sys>, mcp-<sys> (no UI)
-ixora start --profile full     # All containers including UI (current default)
-ixora status --profile api     # Reports on the api scope only
-ixora logs --profile api       # Tails db/api/mcp; never the UI
+ixora start --profile full     # All containers including UI (default)
+ixora start --profile mcp      # DB + api-<sys> + mcp-<sys> (no UI)
+ixora start --profile cli      # DB + api-<sys> only — CLI mode, no mcp-<sys>
+ixora status --profile mcp     # Reports on the mcp scope only
+ixora logs --profile cli       # Tails db/api; there is no mcp container
 ```
+
+`--profile cli` makes the generated compose omit every `mcp-<sys>` container and set `IXORA_CLI_MODE=true` + `IBMI_HOST/USER/PASS/PORT` (from the system's `SYSTEM_<ID>_*` creds) on each `api-<sys>`. To run CLI mode *with* the UI, use `--profile full` plus `IXORA_CLI_MODE=true` in `~/.ixora/.env` — see §4 "Advanced: CLI mode".
 
 **Persistence.** The active stack profile is written to `~/.ixora/.env` as `IXORA_PROFILE`. Subsequent commands without `--profile` reuse it:
 
 ```bash
-ixora start --profile api      # writes IXORA_PROFILE=api
-ixora restart                  # honors the persisted profile (api)
-ixora stop                     # also honors api scope
+ixora start --profile cli      # writes IXORA_PROFILE=cli
+ixora restart                  # honors the persisted profile (cli) — regenerates the compose
+ixora stop                     # also honors cli scope
 ```
 
-**Mixed-state safety.** Switching profiles mid-session is non-destructive. A `stop --profile api` while the UI is running (because you started with `--profile full`) leaves the UI alone:
+**Mixed-state safety.** Switching profiles mid-session is non-destructive. A `stop --profile mcp` while the UI is running (because you started with `--profile full`) leaves the UI alone:
 
 ```bash
-ixora start --profile full     # 6 containers up, UI on :3000
-ixora stop --profile api       # stops db/api/mcp; UI keeps running
+ixora start --profile full     # all containers up, UI on :3000
+ixora stop --profile mcp       # stops db/api/mcp; UI keeps running
 ixora status --profile full    # shows only ui as remaining
 ```
 
-**Logs guard.** Asking for the UI logs while in `api` scope errors out instead of silently doing nothing:
+Switching to `--profile cli` regenerates the compose without the `mcp-<sys>` services; a subsequent `ixora start` removes the now-orphaned MCP containers (`--remove-orphans`). Switching back to `full`/`mcp` brings them back.
+
+**Logs guard.** Asking for a container that isn't in the active scope errors out instead of silently doing nothing:
 
 ```bash
-ixora logs ui --profile api
-# Error: ui is not in the active profile (api). Use --profile full or omit --profile.
+ixora logs ui --profile mcp
+# Error: ui is not in the active stack profile (mcp); only 'full' includes the UI. Use --profile full or omit --profile.
+ixora logs mcp-default --profile cli
+# Error: mcp-default is not started in the 'cli' stack profile (agents use the bundled ibmi CLI). Use --profile mcp or --profile full.
 ```
 
-**Migration from `--profile <agent>`.** Older versions accepted `--profile sql-services|security|knowledge` for the agent profile. Those values now belong to `--agent-profile` (install-only). Calls passing them to `--profile` produce a clear error pointing at the new flag.
+**Migration.**
+- `--profile api` was renamed to `--profile mcp` — the old value still works (one-line warning) and a stored `IXORA_PROFILE=api` is treated as `mcp`.
+- Older versions also accepted `--profile sql-services|security|knowledge` for the *agent* profile. Those values now belong to `--agent-profile` (install-only); passing them to `--profile` produces a clear error pointing at the new flag.
 
 ---
 
