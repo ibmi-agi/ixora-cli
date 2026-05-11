@@ -43,6 +43,10 @@ ixora start --profile full  # All four services (current behavior)
 
 The chosen profile is persisted to `~/.ixora/.env`, so subsequent `stop`/`status`/`logs`/`restart`/`upgrade` calls without `--profile` keep the same shape. Switching mid-session is safe: `ixora stop --profile api` while in `full` leaves the UI container untouched.
 
+### CLI mode (no MCP server)
+
+Set `IXORA_CLI_MODE=true` (`ixora config set IXORA_CLI_MODE true` then `ixora restart`) to have agents call the local `ibmi` CLI bundled in the API image instead of a per-system MCP server. The `mcp-<system-id>` container(s) are not started; each API connects to its system using the stored `SYSTEM_<ID>_*` credentials. See [IXORA_QUICKSTART.md](IXORA_QUICKSTART.md) → §4 "Advanced: CLI mode".
+
 ## Commands
 
 | Command | Description |
