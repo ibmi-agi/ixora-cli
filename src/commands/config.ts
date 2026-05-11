@@ -83,12 +83,18 @@ export function cmdConfigShow(): void {
   const stackProfile = envGet("IXORA_PROFILE") || "full";
   const version = envGet("IXORA_VERSION") || "latest";
   const apiPort = getApiPortBase();
+  const cliModeRaw = envGet("IXORA_CLI_MODE").toLowerCase();
+  const cliMode =
+    cliModeRaw === "true" || cliModeRaw === "1" || cliModeRaw === "yes";
 
   console.log(
     `  ${cyan("IXORA_PROFILE")}       ${stackProfile}  ${dim("# stack shape (full|api)")}`,
   );
   console.log(`  ${cyan("IXORA_VERSION")}       ${version}`);
   console.log(`  ${cyan("IXORA_API_PORT")}      ${apiPort}`);
+  console.log(
+    `  ${cyan("IXORA_CLI_MODE")}      ${cliMode ? `true  ${dim("# ibmi CLI direct — MCP server not started")}` : "false"}`,
+  );
   console.log();
 
   // Extra keys — filter out anything already surfaced above, plus the
@@ -109,6 +115,7 @@ export function cmdConfigShow(): void {
     "IXORA_AGENT_MODEL",
     "IXORA_TEAM_MODEL",
     "IXORA_API_PORT",
+    "IXORA_CLI_MODE",
   ]);
 
   const content = readFileSync(ENV_FILE, "utf-8");

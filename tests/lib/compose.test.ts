@@ -112,6 +112,58 @@ describe("compose", () => {
     });
   });
 
+  describe("generateMultiCompose (CLI mode)", () => {
+    let tmpDir: string;
+    let envFile: string;
+    let configFile: string;
+
+    beforeEach(() => {
+      tmpDir = mkdtempSync(join(tmpdir(), "ixora-compose-cli-"));
+      envFile = join(tmpDir, ".env");
+      configFile = join(tmpDir, "ixora-systems.yaml");
+      writeFileSync(envFile, `${SAMPLE_ENV_WITH_SYSTEM}IXORA_CLI_MODE=true\n`);
+      writeFileSync(configFile, SAMPLE_SYSTEMS_YAML_SINGLE);
+    });
+
+    afterEach(() => {
+      rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it("omits the per-system mcp service", () => {
+      const content = generateMultiCompose(envFile, configFile);
+      expect(content).not.toContain("mcp-default:");
+      expect(content).not.toContain("ghcr.io/ibmi-agi/ixora-mcp-server");
+      expect(content).not.toContain("http://mcp-default:3010/mcp");
+    });
+
+    it("enables IXORA_CLI_MODE and passes IBMI_* creds to the api service", () => {
+      const content = generateMultiCompose(envFile, configFile);
+      expect(content).toContain('IXORA_CLI_MODE: "true"');
+      expect(content).toContain("IBMI_HOST: ${SYSTEM_DEFAULT_HOST}");
+      expect(content).toContain("IBMI_USER: ${SYSTEM_DEFAULT_USER}");
+      expect(content).toContain("IBMI_PASS: ${SYSTEM_DEFAULT_PASS}");
+      expect(content).toContain("IBMI_PORT: ${SYSTEM_DEFAULT_PORT:-8076}");
+    });
+
+    it("drops the mcp dependency from the api service", () => {
+      const content = generateMultiCompose(envFile, configFile);
+      const apiBlock = content.slice(content.indexOf("api-default:"));
+      const dependsOn = apiBlock.slice(
+        apiBlock.indexOf("depends_on:"),
+        apiBlock.indexOf("healthcheck:"),
+      );
+      expect(dependsOn).toContain("agentos-db:");
+      expect(dependsOn).not.toContain("mcp-default");
+    });
+
+    it("still emits db, api and ui services", () => {
+      const content = generateMultiCompose(envFile, configFile);
+      expect(content).toContain("agentos-db:");
+      expect(content).toContain("api-default:");
+      expect(content).toContain("ui:");
+    });
+  });
+
   describe("runCompose", () => {
     let mockExeca: ReturnType<typeof vi.fn>;
     let exitSpy: ReturnType<typeof vi.spyOn>;

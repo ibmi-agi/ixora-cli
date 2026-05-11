@@ -185,6 +185,10 @@ SYSTEM_DEFAULT_HOST='myibmi.example.com'
 SYSTEM_DEFAULT_PORT='8076'
 SYSTEM_DEFAULT_USER='MYUSER'
 SYSTEM_DEFAULT_PASS='mypassword'
+
+# Optional: route agents through the local `ibmi` CLI instead of the
+# MCP server. When true, the mcp-<system-id> container(s) are not started.
+# IXORA_CLI_MODE='true'
 ```
 
 Edit with `ixora config edit` or `ixora config set KEY VALUE`. Restart after changes: `ixora restart`.
@@ -254,6 +258,27 @@ api-staging  → localhost:8002
 ```
 
 The UI connects to the first system (port 8000) only. Use the individual API ports for other systems.
+
+</details>
+
+<details>
+<summary><strong>Advanced: CLI mode (skip the MCP server)</strong></summary>
+
+By default, agents in the `api-<system-id>` container reach IBM i through the per-system `mcp-<system-id>` server. Set `IXORA_CLI_MODE=true` in `~/.ixora/.env` to instead have agents call the local `ibmi` CLI (bundled in the API image) directly:
+
+```bash
+ixora config set IXORA_CLI_MODE true
+ixora restart            # regenerates the compose file
+```
+
+In CLI mode:
+
+- The `mcp-<system-id>` container(s) are **not started** — fewer moving parts.
+- Each `api-<system-id>` connects to its system using the same stored credentials (`SYSTEM_<ID>_HOST/PORT/USER/PASS`), surfaced to the CLI as `IBMI_HOST`/`IBMI_USER`/`IBMI_PASS`/`IBMI_PORT`.
+- PASE shell execution is not available (it stays opt-in and has no CLI-mode equivalent).
+- `ixora config` shows `IXORA_CLI_MODE  true` under **Deployment**.
+
+Set it back to `false` (or remove the line) and `ixora restart` to return to the MCP-backed setup.
 
 </details>
 

@@ -1,12 +1,20 @@
 import { readSystems } from "../systems.js";
 import { ENV_FILE, SYSTEMS_CONFIG } from "../constants.js";
-import { getApiPortBase } from "../env.js";
+import { envGet, getApiPortBase } from "../env.js";
 
 export function generateMultiCompose(
   envFile: string = ENV_FILE,
   configFile: string = SYSTEMS_CONFIG,
 ): string {
   const systems = readSystems(configFile);
+
+  // CLI mode: agents in the api container talk to the local `ibmi` binary
+  // (IBMiCLITools) instead of an ibmi-mcp-server. The MCP container(s) are
+  // not spun up at all, and the api gets IBM i creds as IBMI_* env vars.
+  // Mirrors the truthy parsing in src/lib/banner.ts.
+  const cliModeRaw = envGet("IXORA_CLI_MODE", envFile).toLowerCase();
+  const cliMode =
+    cliModeRaw === "true" || cliModeRaw === "1" || cliModeRaw === "yes";
 
   let content = `# Auto-generated compose file
 # Regenerated on every start. Edit ixora-systems.yaml instead.
@@ -37,7 +45,8 @@ services:
   for (const sys of systems) {
     const idUpper = sys.id.toUpperCase().replace(/-/g, "_");
 
-    content += `  mcp-${sys.id}:
+    if (!cliMode) {
+      content += `  mcp-${sys.id}:
     image: ghcr.io/ibmi-agi/ixora-mcp-server:\${IXORA_VERSION:-latest}
     restart: unless-stopped
     environment:
@@ -63,6 +72,22 @@ services:
       start_period: 3s
 
 `;
+    }
+
+    // In CLI mode the api reaches IBM i directly via the `ibmi` binary using
+    // each system's stored creds; otherwise it points at the per-system MCP.
+    const apiBackendEnv = cliMode
+      ? `      IXORA_CLI_MODE: "true"
+      IBMI_HOST: \${SYSTEM_${idUpper}_HOST}
+      IBMI_USER: \${SYSTEM_${idUpper}_USER}
+      IBMI_PASS: \${SYSTEM_${idUpper}_PASS}
+      IBMI_PORT: \${SYSTEM_${idUpper}_PORT:-8076}`
+      : `      MCP_URL: http://mcp-${sys.id}:3010/mcp`;
+    const apiMcpDep = cliMode
+      ? ""
+      : `
+      mcp-${sys.id}:
+        condition: service_healthy`;
 
     content += `  api-${sys.id}:
     image: ghcr.io/ibmi-agi/ixora-api:\${IXORA_VERSION:-latest}
@@ -84,7 +109,7 @@ services:
       DB_USER: \${DB_USER:-ai}
       DB_PASS: \${DB_PASS:-ai}
       DB_DATABASE: \${DB_DATABASE:-ai}
-      MCP_URL: http://mcp-${sys.id}:3010/mcp
+${apiBackendEnv}
       IXORA_SYSTEM_ID: ${sys.id}
       IXORA_SYSTEM_NAME: ${sys.name}
       IAASSIST_DEPLOYMENT_CONFIG: app/config/deployments/${sys.profile || "full"}.yaml
@@ -112,9 +137,7 @@ services:
           create_host_path: true
     depends_on:
       agentos-db:
-        condition: service_healthy
-      mcp-${sys.id}:
-        condition: service_healthy
+        condition: service_healthy${apiMcpDep}
     healthcheck:
       test: ["CMD-SHELL", "python -c \\"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).getcode()==200 else 1)\\""]
       interval: 10s
