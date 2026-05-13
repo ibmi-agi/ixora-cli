@@ -105,7 +105,14 @@ async function promptDeploymentMode(): Promise<DeploymentMode> {
 }
 
 export async function cmdInstall(opts: InstallOptions): Promise<void> {
-  info(`Installing ixora (v${SCRIPT_VERSION})`);
+  // Detect existing install first so the banner accurately announces
+  // "Installing" vs "Reconfiguring" — previously the banner said
+  // "Installing" even in reconfigure flows, which contradicted the
+  // next prompt the user saw.
+  const isReconfigure = existsSync(IXORA_DIR);
+  info(
+    `${isReconfigure ? "Reconfiguring" : "Installing"} ixora (CLI v${SCRIPT_VERSION})`,
+  );
   console.log();
 
   let composeCmd;
@@ -119,8 +126,7 @@ export async function cmdInstall(opts: InstallOptions): Promise<void> {
   info(`Using: ${composeCmd}`);
   console.log();
 
-  // Check for existing installation
-  if (existsSync(IXORA_DIR)) {
+  if (isReconfigure) {
     warn(`Existing installation found at ${IXORA_DIR}`);
     const action = await select({
       message: "What would you like to do?",
@@ -138,7 +144,6 @@ export async function cmdInstall(opts: InstallOptions): Promise<void> {
       info("Cancelled");
       return;
     }
-    info("Reconfiguring...");
     console.log();
   }
 
