@@ -1,9 +1,25 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
 import { execa } from "execa";
+import { select } from "@inquirer/prompts";
 import chalk from "chalk";
 import { envGet, getApiPortBase, updateEnvKey } from "../lib/env.js";
-import { DEFAULT_DB_ISOLATION, ENV_FILE } from "../lib/constants.js";
+import {
+  DEFAULT_DB_ISOLATION,
+  ENV_FILE,
+  SYSTEMS_CONFIG,
+  type DeploymentMode,
+} from "../lib/constants.js";
 import { readSystems } from "../lib/systems.js";
+import { ensureManifest } from "../lib/manifest.js";
+import { promptComponentPicker } from "../lib/picker.js";
+import {
+  deleteUserProfile,
+  profileFromManifest,
+  readUserProfile,
+  userProfilePath,
+  validateProfileAgainstManifest,
+  writeUserProfile,
+} from "../lib/profiles.js";
 import {
   die,
   success,
@@ -14,6 +30,7 @@ import {
   dim,
   cyan,
   section,
+  warn,
 } from "../lib/ui.js";
 
 export function cmdConfigShow(): void {
@@ -73,7 +90,7 @@ export function cmdConfigShow(): void {
       console.log(`    ${cyan("user")}      ${user || dim("(not set)")}`);
       console.log(`    ${cyan("password")}  ${maskValue(pass)}`);
       console.log(`    ${cyan("port")}      ${port}`);
-      console.log(`    ${cyan("profile")}   ${sys.profile}`);
+      console.log(`    ${cyan("mode")}      ${sys.mode}`);
       console.log();
     }
   }
@@ -201,4 +218,186 @@ export async function cmdConfigEdit(): Promise<void> {
   console.log();
   success("Config saved");
   console.log(`  Restart to apply: ${bold("ixora restart")}`);
+}
+
+// ---------------------------------------------------------------------------
+// System-scoped config (mode + custom component picker)
+// ---------------------------------------------------------------------------
+
+function findSystem(systemId: string): {
+  id: string;
+  name: string;
+  mode: DeploymentMode;
+} {
+  const sys = readSystems().find((s) => s.id === systemId);
+  if (!sys) die(`System '${systemId}' not found`);
+  // die() throws — narrowing helper so TS knows we've got a SystemConfig here.
+  return sys as { id: string; name: string; mode: DeploymentMode };
+}
+
+/**
+ * `ixora config show <system>` — print mode + resolved component list.
+ * For Custom mode we also validate the YAML against the cached manifest
+ * so typos surface here instead of at the next container restart.
+ */
+export async function cmdSystemConfigShow(systemId: string): Promise<void> {
+  const sys = findSystem(systemId);
+  console.log();
+  console.log(`  ${bold(sys.id)}  ${dim(sys.name)}`);
+  console.log(`    ${cyan("mode")}      ${sys.mode}`);
+
+  if (sys.mode === "full") {
+    console.log(
+      `    ${cyan("source")}    ${dim("app/config/deployments/full.yaml (in image)")}`,
+    );
+    console.log();
+    return;
+  }
+
+  const path = userProfilePath(systemId);
+  const profile = readUserProfile(systemId);
+  console.log(`    ${cyan("source")}    ${dim(path)}`);
+  if (!profile) {
+    warn(
+      `Mode is 'custom' but no profile YAML found. Run: ixora config edit ${systemId}`,
+    );
+    return;
+  }
+
+  for (const kind of ["agents", "teams", "workflows", "knowledge"] as const) {
+    const ids = profile[kind];
+    if (ids.length === 0) continue;
+    console.log(`    ${cyan(kind)}`);
+    for (const id of ids) console.log(`      - ${id}`);
+  }
+
+  // Client-side mirror of app/deployment.py's validation.
+  const version = envGet("IXORA_VERSION") || "latest";
+  try {
+    const manifest = await ensureManifest(
+      `ghcr.io/ibmi-agi/ixora-api:${version}`,
+    );
+    const problems = validateProfileAgainstManifest(profile, manifest);
+    if (problems.length > 0) {
+      console.log();
+      for (const p of problems) {
+        warn(
+          `Unknown ${p.kind} in profile: ${p.missing.join(", ")} — ` +
+            `removed in this image. Edit with: ixora config edit ${systemId}`,
+        );
+      }
+    }
+  } catch {
+    // Cache miss + offline image — just skip validation rather than die.
+  }
+  console.log();
+}
+
+/**
+ * `ixora config edit <system>` — interactive: switch mode, or re-open
+ * the Custom picker (pre-checked from the existing YAML).
+ */
+export async function cmdSystemConfigEdit(systemId: string): Promise<void> {
+  const sys = findSystem(systemId);
+
+  const choices: { name: string; value: string }[] = [
+    {
+      name:
+        sys.mode === "full"
+          ? `Stay on Full   ${dim("(no change)")}`
+          : `Switch to Full ${dim("(load every component the image declares)")}`,
+      value: "full",
+    },
+    {
+      name:
+        sys.mode === "custom"
+          ? `Edit Custom    ${dim("(re-open the component picker)")}`
+          : `Switch to Custom ${dim("(pick which components to enable)")}`,
+      value: "custom",
+    },
+  ];
+
+  const choice = await select({
+    message: `Configure system '${systemId}' (currently: ${sys.mode})`,
+    choices,
+    default: sys.mode,
+  });
+
+  if (choice === "full") {
+    if (sys.mode === "custom") deleteUserProfile(systemId);
+    setSystemMode(systemId, "full");
+    success(
+      `System '${systemId}' set to Full mode. Restart to apply: ${bold("ixora restart")}`,
+    );
+    return;
+  }
+
+  // Custom — fetch manifest, pre-check from existing profile (or all-on).
+  const version = envGet("IXORA_VERSION") || "latest";
+  info("Fetching component manifest from image...");
+  const manifest = await ensureManifest(
+    `ghcr.io/ibmi-agi/ixora-api:${version}`,
+  );
+  const seed = readUserProfile(systemId) ?? profileFromManifest(manifest);
+  const picker = await promptComponentPicker(manifest, seed);
+  if (!picker.selected) {
+    warn("No components selected — leaving mode unchanged.");
+    return;
+  }
+  writeUserProfile(systemId, picker.profile);
+  setSystemMode(systemId, "custom");
+  success(
+    `System '${systemId}' set to Custom mode. Restart to apply: ${bold("ixora restart")}`,
+  );
+}
+
+/**
+ * `ixora config reset <system>` — drop the custom YAML (kept as .bak),
+ * revert mode to full. Cheap regret insurance.
+ */
+export function cmdSystemConfigReset(systemId: string): void {
+  const sys = findSystem(systemId);
+  if (sys.mode === "custom") {
+    deleteUserProfile(systemId);
+    success(
+      `Backed up custom profile to ${userProfilePath(systemId)}.bak`,
+    );
+  }
+  setSystemMode(systemId, "full");
+  success(
+    `System '${systemId}' reset to Full mode. Restart to apply: ${bold("ixora restart")}`,
+  );
+}
+
+/**
+ * Mutate the `mode:` line for a system in ixora-systems.yaml without
+ * a YAML library. Mirrors the line-oriented approach used elsewhere in
+ * this CLI (see systems.ts).
+ */
+function setSystemMode(systemId: string, mode: DeploymentMode): void {
+  if (!existsSync(SYSTEMS_CONFIG)) die(`No systems config at ${SYSTEMS_CONFIG}`);
+  const lines = readFileSync(SYSTEMS_CONFIG, "utf-8").split("\n");
+  const out: string[] = [];
+  let inTarget = false;
+  let wroteMode = false;
+  for (const line of lines) {
+    const idMatch = line.match(/^ {2}- id: (.+)$/);
+    if (idMatch) {
+      // Leaving a system block without a mode line: synthesize one.
+      if (inTarget && !wroteMode) out.push(`    mode: ${mode}`);
+      inTarget = idMatch[1] === systemId;
+      wroteMode = false;
+      out.push(line);
+      continue;
+    }
+    if (inTarget && /^ {4}mode: /.test(line)) {
+      out.push(`    mode: ${mode}`);
+      wroteMode = true;
+      continue;
+    }
+    out.push(line);
+  }
+  if (inTarget && !wroteMode) out.push(`    mode: ${mode}`);
+  writeFileSync(SYSTEMS_CONFIG, out.join("\n"), "utf-8");
+  chmodSync(SYSTEMS_CONFIG, 0o600);
 }

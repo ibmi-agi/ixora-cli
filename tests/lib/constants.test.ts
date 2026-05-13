@@ -6,16 +6,12 @@ import {
   COMPOSE_FILE,
   SYSTEMS_CONFIG,
   ENV_FILE,
-  AGENT_PROFILES,
-  VALID_AGENT_PROFILES,
+  DEPLOYMENT_MODES,
   STACK_PROFILES,
   VALID_STACK_PROFILES,
   DB_ISOLATION_MODES,
   DEFAULT_DB_ISOLATION,
   PROVIDERS,
-  ALL_AGENTS,
-  OPS_AGENTS,
-  AGENT_PRESETS,
 } from "../../src/lib/constants.js";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -46,18 +42,8 @@ describe("constants", () => {
     expect(ENV_FILE).toBe(join(expected, ".env"));
   });
 
-  it("defines all four agent profiles", () => {
-    expect(VALID_AGENT_PROFILES).toEqual([
-      "full",
-      "sql-services",
-      "security",
-      "knowledge",
-    ]);
-    for (const p of VALID_AGENT_PROFILES) {
-      expect(AGENT_PROFILES[p]).toBeDefined();
-      expect(AGENT_PROFILES[p].name).toBe(p);
-      expect(AGENT_PROFILES[p].description).toBeTruthy();
-    }
+  it("defines the two deployment modes (full, custom)", () => {
+    expect(DEPLOYMENT_MODES).toEqual(["full", "custom"]);
   });
 
   it("defines stack profiles full, mcp and cli", () => {
@@ -93,23 +79,4 @@ describe("constants", () => {
     expect(PROVIDERS["ollama"].apiKeyVar).toBe("");
   });
 
-  it("defines all 8 agents", () => {
-    expect(ALL_AGENTS).toHaveLength(8);
-    expect(ALL_AGENTS).toContain("ibmi-security-assistant");
-    expect(ALL_AGENTS).toContain("ibmi-knowledge-agent");
-  });
-
-  it("operations agents exclude security and knowledge", () => {
-    expect(OPS_AGENTS).toHaveLength(6);
-    expect(OPS_AGENTS).not.toContain("ibmi-security-assistant");
-    expect(OPS_AGENTS).not.toContain("ibmi-knowledge-agent");
-  });
-
-  it("agent presets cover all combinations", () => {
-    expect(AGENT_PRESETS.all).toHaveLength(8);
-    expect(AGENT_PRESETS["security-ops"]).toContain("ibmi-security-assistant");
-    expect(AGENT_PRESETS.security).toEqual(["ibmi-security-assistant"]);
-    expect(AGENT_PRESETS.knowledge).toEqual(["ibmi-knowledge-agent"]);
-    expect(AGENT_PRESETS.operations).toHaveLength(6);
-  });
 });

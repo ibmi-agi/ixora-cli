@@ -6,15 +6,15 @@ import {
   chmodSync,
 } from "node:fs";
 import { dirname } from "node:path";
-import { SYSTEMS_CONFIG } from "./constants.js";
+import { SYSTEMS_CONFIG, type DeploymentMode } from "./constants.js";
 import { updateEnvKey } from "./env.js";
 import { ENV_FILE } from "./constants.js";
 
 export interface SystemConfig {
   id: string;
   name: string;
-  profile: string;
-  agents: string[];
+  /** "full" loads every component; "custom" reads ~/.ixora/profiles/<id>.yaml. */
+  mode: DeploymentMode;
 }
 
 export function readSystems(
@@ -33,8 +33,7 @@ export function readSystems(
         systems.push({
           id: current.id,
           name: current.name ?? current.id,
-          profile: current.profile ?? "full",
-          agents: current.agents ?? [],
+          mode: current.mode ?? "full",
         });
       }
       current = { id: idMatch[1] };
@@ -49,18 +48,11 @@ export function readSystems(
       continue;
     }
 
-    const profileMatch = line.match(/profile: *'?([^']*)'?/);
-    if (profileMatch) {
-      current.profile = profileMatch[1];
+    const modeMatch = line.match(/mode: *'?([^']*)'?/);
+    if (modeMatch) {
+      const value = modeMatch[1];
+      current.mode = value === "custom" ? "custom" : "full";
       continue;
-    }
-
-    const agentsMatch = line.match(/agents: *\[([^\]]*)\]/);
-    if (agentsMatch) {
-      current.agents = agentsMatch[1]
-        .split(",")
-        .map((a) => a.trim())
-        .filter(Boolean);
     }
   }
 
@@ -69,8 +61,7 @@ export function readSystems(
     systems.push({
       id: current.id,
       name: current.name ?? current.id,
-      profile: current.profile ?? "full",
-      agents: current.agents ?? [],
+      mode: current.mode ?? "full",
     });
   }
 
@@ -114,9 +105,8 @@ export function addSystem(
   updateEnvKey(`SYSTEM_${idUpper}_PASS`, system.pass, envFile);
 
   const escapedName = system.name.replace(/'/g, "'\\''");
-  const profile = system.profile || "full";
-  const agentsList = system.agents.join(", ");
-  const entry = `  - id: ${system.id}\n    name: '${escapedName}'\n    profile: ${profile}\n    agents: [${agentsList}]\n`;
+  const mode = system.mode === "custom" ? "custom" : "full";
+  const entry = `  - id: ${system.id}\n    name: '${escapedName}'\n    mode: ${mode}\n`;
 
   mkdirSync(dirname(configFile), { recursive: true });
 

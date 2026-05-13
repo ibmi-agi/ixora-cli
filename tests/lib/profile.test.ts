@@ -79,24 +79,6 @@ describe("profile", () => {
       expect(resolveStackProfile({})).toBe("full");
     });
 
-    it("dies with migration hint when --profile is an old agent-profile value", async () => {
-      const exitSpy = vi
-        .spyOn(process, "exit")
-        .mockImplementation((() => {
-          throw new Error("EXIT");
-        }) as never);
-      const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-      const { resolveStackProfile } = await import("../../src/lib/profile.js");
-      expect(() => resolveStackProfile({ profile: "sql-services" })).toThrow(
-        "EXIT",
-      );
-      expect(errSpy.mock.calls.flat().join(" ")).toContain("--agent-profile");
-
-      exitSpy.mockRestore();
-      errSpy.mockRestore();
-    });
-
     it("dies on a wholly bogus --profile value", async () => {
       const exitSpy = vi
         .spyOn(process, "exit")

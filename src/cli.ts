@@ -13,7 +13,11 @@ import {
   cmdConfigShow,
   cmdConfigSet,
   cmdConfigEdit,
+  cmdSystemConfigShow,
+  cmdSystemConfigEdit,
+  cmdSystemConfigReset,
 } from "./commands/config.js";
+import { cmdComponentsList } from "./commands/components.js";
 import {
   cmdSystemAdd,
   cmdSystemRemove,
@@ -34,8 +38,8 @@ export function createProgram(): Command {
       "Stack shape: full (DB + API + MCP + UI), mcp (DB + API + MCP, no UI), or cli (DB + API only, no MCP container) [default: full]",
     )
     .option(
-      "--agent-profile <name>",
-      "Agent profile (full|sql-services|security|knowledge), used at install time",
+      "--mode <name>",
+      "Deployment mode for this system: full (every component) or custom (interactive picker writing ~/.ixora/profiles/<id>.yaml). Used at install time.",
     )
     .option("--image-version <tag>", "Pin image version (e.g., v1.2.0)")
     .option("--no-pull", "Skip pulling images")
@@ -142,9 +146,52 @@ export function createProgram(): Command {
 
   configCmd
     .command("edit")
-    .description("Open configuration in your editor")
-    .action(async () => {
-      await cmdConfigEdit();
+    .argument("[system]", "System ID — open Full/Custom picker for that system; omit to edit .env")
+    .description("Open configuration in your editor, or switch a system between Full and Custom")
+    .action(async (system?: string) => {
+      if (system) {
+        await cmdSystemConfigEdit(system);
+      } else {
+        await cmdConfigEdit();
+      }
+    });
+
+  configCmd
+    .command("reset")
+    .argument("<system>", "System ID — drop custom profile and revert to Full")
+    .description("Reset a system to Full mode (custom profile YAML is backed up to .bak)")
+    .action((system: string) => {
+      cmdSystemConfigReset(system);
+    });
+
+  // Override the default `show` action to accept an optional system arg.
+  // commander lets us add a second variant of "show" that takes the system
+  // ID and prints its mode + resolved component list.
+  configCmd
+    .command("show-system")
+    .alias("show-sys")
+    .argument("<system>", "System ID")
+    .description("Show a system's mode and resolved component list")
+    .action(async (system: string) => {
+      await cmdSystemConfigShow(system);
+    });
+
+  // `ixora components list` — pretty-print the component manifest from the
+  // installed image so users authoring custom profiles can discover IDs.
+  const componentsCmd = program
+    .command("components")
+    .description("Inspect the components the installed image declares");
+
+  componentsCmd
+    .command("list", { isDefault: true })
+    .option("--refresh", "Re-fetch the manifest from the image (ignore cache)")
+    .option(
+      "--image <ref>",
+      "Override the image reference used to fetch the manifest",
+    )
+    .description("List every component (agents, teams, workflows, knowledge)")
+    .action(async (opts: { refresh?: boolean; image?: string }) => {
+      await cmdComponentsList(opts);
     });
 
   // System subcommands

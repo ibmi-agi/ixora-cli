@@ -12,20 +12,26 @@ import { waitForHealthy } from "../lib/health.js";
 import {
   SCRIPT_VERSION,
   IXORA_DIR,
-  AGENT_PROFILES,
-  type AgentProfileName,
-  VALID_AGENT_PROFILES,
+  DEPLOYMENT_MODES,
+  type DeploymentMode,
 } from "../lib/constants.js";
 import { info, success, warn, die, bold, dim } from "../lib/ui.js";
 import { printRunningBanner } from "../lib/banner.js";
 import { fetchImageTags, normalizeVersion } from "../lib/registry.js";
 import { promptModelProvider } from "../lib/models.js";
+import { ensureManifest } from "../lib/manifest.js";
+import {
+  promptComponentPicker,
+  type ComponentPickerResult,
+} from "../lib/picker.js";
+import { profileFromManifest, writeUserProfile } from "../lib/profiles.js";
 
 interface InstallOptions {
   runtime?: string;
   imageVersion?: string;
   profile?: string;
-  agentProfile?: string;
+  /** "full" | "custom" — written into ixora-systems.yaml as `mode`. */
+  mode?: string;
   pull?: boolean;
 }
 
@@ -81,18 +87,21 @@ async function promptIbmiConnection(): Promise<{
   };
 }
 
-async function promptAgentProfile(): Promise<AgentProfileName> {
-  const profile = await select<AgentProfileName>({
-    message: "Select an agent profile",
-    choices: VALID_AGENT_PROFILES.map((p) => ({
-      name: `${AGENT_PROFILES[p].name.padEnd(14)} ${dim(AGENT_PROFILES[p].description)}`,
-      value: p,
-    })),
-    default: "full" as AgentProfileName,
+async function promptDeploymentMode(): Promise<DeploymentMode> {
+  return await select<DeploymentMode>({
+    message: "How should this system be deployed?",
+    choices: [
+      {
+        name: `Full           ${dim("Every agent, team, and workflow the image declares")}`,
+        value: "full",
+      },
+      {
+        name: `Custom         ${dim("Pick which components to enable (writes ~/.ixora/profiles/<id>.yaml)")}`,
+        value: "custom",
+      },
+    ],
+    default: "full",
   });
-
-  success(`Agent profile: ${profile}`);
-  return profile;
 }
 
 export async function cmdInstall(opts: InstallOptions): Promise<void> {
@@ -151,16 +160,16 @@ export async function cmdInstall(opts: InstallOptions): Promise<void> {
   });
   console.log();
 
-  let agentProfile: AgentProfileName;
-  if (opts.agentProfile) {
-    if (!VALID_AGENT_PROFILES.includes(opts.agentProfile as AgentProfileName)) {
+  let deploymentMode: DeploymentMode;
+  if (opts.mode) {
+    if (!DEPLOYMENT_MODES.includes(opts.mode as DeploymentMode)) {
       die(
-        `Invalid --agent-profile: ${opts.agentProfile} (choose: ${VALID_AGENT_PROFILES.join(", ")})`,
+        `Invalid --mode: ${opts.mode} (choose: ${DEPLOYMENT_MODES.join(", ")})`,
       );
     }
-    agentProfile = opts.agentProfile as AgentProfileName;
+    deploymentMode = opts.mode as DeploymentMode;
   } else {
-    agentProfile = await promptAgentProfile();
+    deploymentMode = await promptDeploymentMode();
   }
   console.log();
 
@@ -208,6 +217,28 @@ export async function cmdInstall(opts: InstallOptions): Promise<void> {
   writeEnvFile(envConfig);
   success("Wrote .env");
 
+  // Custom mode: pull the manifest from the (just-resolved) image, let the
+  // user pick components, and write the YAML the API container will
+  // bind-mount on the next `docker compose up`. We do this *before* pull/up
+  // so the bind source exists when compose validates the mount.
+  if (deploymentMode === "custom") {
+    info("Fetching component manifest from image...");
+    const imageRef = `ghcr.io/ibmi-agi/ixora-api:${version}`;
+    const manifest = await ensureManifest(imageRef, { force: true });
+    const picker: ComponentPickerResult = await promptComponentPicker(
+      manifest,
+      profileFromManifest(manifest),
+    );
+    if (!picker.selected) {
+      warn("No components selected — falling back to Full mode.");
+      deploymentMode = "full";
+    } else {
+      writeUserProfile("default", picker.profile);
+      success("Wrote ~/.ixora/profiles/default.yaml");
+    }
+    console.log();
+  }
+
   // Register default system in YAML (create or overwrite)
   if (systemIdExists("default")) {
     // Reconfigure: remove old default entry before re-adding
@@ -217,8 +248,7 @@ export async function cmdInstall(opts: InstallOptions): Promise<void> {
   addSystem({
     id: "default",
     name: displayName,
-    profile: agentProfile,
-    agents: [],
+    mode: deploymentMode,
     host,
     port,
     user: user,

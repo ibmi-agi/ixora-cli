@@ -51,16 +51,13 @@ export const SAMPLE_SYSTEMS_YAML = `# yaml-language-server: $schema=
 systems:
   - id: default
     name: 'myibmi.example.com'
-    profile: full
-    agents: []
+    mode: full
   - id: dev
     name: 'Development'
-    profile: security
-    agents: [ibmi-security-assistant, ibmi-system-health]
+    mode: custom
   - id: prod
     name: 'Production'
-    profile: full
-    agents: [ibmi-security-assistant, ibmi-system-health, ibmi-db-explorer]
+    mode: full
 `;
 
 export const SAMPLE_SYSTEMS_YAML_SINGLE = `# yaml-language-server: $schema=
@@ -68,6 +65,5 @@ export const SAMPLE_SYSTEMS_YAML_SINGLE = `# yaml-language-server: $schema=
 systems:
   - id: default
     name: 'myibmi.example.com'
-    profile: full
-    agents: []
+    mode: full
 `;

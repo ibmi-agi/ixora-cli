@@ -120,9 +120,7 @@ export function printRunningBanner(opts: BannerOptions = {}): void {
           `  ${bold("A2A:")}     http://localhost:${sole.port}/a2a`,
         );
       }
-      if (sole.sys.profile) {
-        console.log(`  ${bold("Agent:")}   ${sole.sys.profile}`);
-      }
+      console.log(`  ${bold("Mode:")}    ${sole.sys.mode}`);
     } else {
       if (!cliMode) {
         console.log(

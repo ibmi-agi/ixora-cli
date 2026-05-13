@@ -19,6 +19,10 @@ import {
   persistStackProfile,
   wasProfileExplicit,
 } from "../lib/profile.js";
+import { readSystems } from "../lib/systems.js";
+import { ensureManifest, manifestComponentIds } from "../lib/manifest.js";
+import type { Manifest } from "../lib/manifest.js";
+import { readUserProfile, writeUserProfile } from "../lib/profiles.js";
 
 interface UpgradeOptions {
   runtime?: string;
@@ -111,6 +115,21 @@ export async function cmdUpgrade(opts: UpgradeOptions): Promise<void> {
       await runCompose(composeCmd, ["pull"], { throwOnError: true, profile });
     }
 
+    // Refresh manifest from the freshly-pulled image and reconcile each
+    // system's custom profile with what the new image actually exposes.
+    // Failures here are non-fatal — the API container will reject any
+    // truly-missing IDs at boot, surfacing the same error loudly.
+    try {
+      const imageRef = `ghcr.io/ibmi-agi/ixora-api:${targetVersion}`;
+      const manifest = await ensureManifest(imageRef, { force: true });
+      await reconcileCustomProfiles(manifest);
+    } catch (e) {
+      warn(
+        `Could not refresh component manifest: ${(e as Error).message}. ` +
+          "Custom profiles will be validated by the API container instead.",
+      );
+    }
+
     // Start services
     info("Starting services...");
     await runCompose(composeCmd, ["up", "-d"], {
@@ -149,4 +168,38 @@ export async function cmdUpgrade(opts: UpgradeOptions): Promise<void> {
     previousVersion,
     profile,
   });
+}
+
+/**
+ * For each Custom-mode system, drop any component IDs the new image no
+ * longer ships. We don't add new ones — Custom is opt-in, so a user
+ * who wanted "only security" doesn't want a refresh to silently grow
+ * their selection. New agents in the manifest still surface in
+ * `ixora components list` and `ixora config edit`.
+ */
+async function reconcileCustomProfiles(manifest: Manifest): Promise<void> {
+  const systems = readSystems().filter((s) => s.mode === "custom");
+  if (systems.length === 0) return;
+
+  const known = manifestComponentIds(manifest);
+  for (const sys of systems) {
+    const profile = readUserProfile(sys.id);
+    if (!profile) continue;
+
+    let changed = false;
+    for (const kind of ["agents", "teams", "workflows", "knowledge"] as const) {
+      const filtered = profile[kind].filter((id) => known.has(`${kind}:${id}`));
+      if (filtered.length !== profile[kind].length) {
+        const removed = profile[kind].filter(
+          (id) => !known.has(`${kind}:${id}`),
+        );
+        warn(
+          `System '${sys.id}': removed ${kind} no longer in this image — ${removed.join(", ")}`,
+        );
+        profile[kind] = filtered;
+        changed = true;
+      }
+    }
+    if (changed) writeUserProfile(sys.id, profile);
+  }
 }

@@ -78,39 +78,18 @@ export const DB_ISOLATION_MODES = ["per-system", "shared"] as const;
 export type DbIsolationMode = (typeof DB_ISOLATION_MODES)[number];
 export const DEFAULT_DB_ISOLATION: DbIsolationMode = "per-system";
 
-// Agent profiles select which agents/teams/workflows the API container
-// loads via IAASSIST_DEPLOYMENT_CONFIG. They live per-system in
-// ixora-systems.yaml (`sys.profile`); the global flag is `--agent-profile`.
-export const AGENT_PROFILES = {
-  full: {
-    name: "full",
-    label: "Full",
-    description:
-      "All agents, teams, and workflows (3 agents, 2 teams, 1 workflow)",
-  },
-  "sql-services": {
-    name: "sql-services",
-    label: "SQL Services",
-    description:
-      "SQL Services agent for database queries and performance monitoring",
-  },
-  security: {
-    name: "security",
-    label: "Security",
-    description:
-      "Security agent, multi-system security team, and assessment workflow",
-  },
-  knowledge: {
-    name: "knowledge",
-    label: "Knowledge",
-    description: "Knowledge agent only — documentation retrieval (lightest)",
-  },
-} as const;
-
-export type AgentProfileName = keyof typeof AGENT_PROFILES;
-export const VALID_AGENT_PROFILES = Object.keys(
-  AGENT_PROFILES,
-) as AgentProfileName[];
+// Deployment mode per system: "full" loads every component the image
+// declares, "custom" loads only what's listed in
+// ~/.ixora/profiles/<system-id>.yaml. The full vs custom decision lives
+// per-system in ixora-systems.yaml (`sys.mode`); the bind-mounted YAML
+// is what the API container reads as IAASSIST_DEPLOYMENT_CONFIG.
+//
+// `manifest.json` (baked into the image at build time) is the source of
+// truth for what components exist — the CLI fetches it via
+// `docker run --rm --entrypoint cat`, so adding a new agent on the
+// API side doesn't require any CLI change beyond an `ixora upgrade`.
+export const DEPLOYMENT_MODES = ["full", "custom"] as const;
+export type DeploymentMode = (typeof DEPLOYMENT_MODES)[number];
 
 export interface ProviderDef {
   name: string;
@@ -173,31 +152,3 @@ export const PROVIDERS: Record<string, ProviderDef> = {
 };
 
 export type ProviderName = keyof typeof PROVIDERS;
-
-export const ALL_AGENTS = [
-  "ibmi-security-assistant",
-  "ibmi-system-health",
-  "ibmi-db-explorer",
-  "ibmi-db-performance",
-  "ibmi-work-management",
-  "ibmi-system-config",
-  "ibmi-sql-service-guide",
-  "ibmi-knowledge-agent",
-] as const;
-
-export const OPS_AGENTS = [
-  "ibmi-system-health",
-  "ibmi-db-explorer",
-  "ibmi-db-performance",
-  "ibmi-work-management",
-  "ibmi-system-config",
-  "ibmi-sql-service-guide",
-] as const;
-
-export const AGENT_PRESETS = {
-  all: [...ALL_AGENTS],
-  "security-ops": ["ibmi-security-assistant", ...OPS_AGENTS],
-  security: ["ibmi-security-assistant"],
-  operations: [...OPS_AGENTS],
-  knowledge: ["ibmi-knowledge-agent"],
-} as const;
