@@ -18,6 +18,7 @@ import {
   cmdSystemConfigReset,
 } from "./commands/config.js";
 import { cmdComponentsList } from "./commands/components.js";
+import { cmdAgentsEdit } from "./commands/agents.js";
 import {
   cmdSystemAdd,
   cmdSystemRemove,
@@ -174,6 +175,18 @@ export function createProgram(): Command {
     .description("Show a system's mode and resolved component list")
     .action(async (system: string) => {
       await cmdSystemConfigShow(system);
+    });
+
+  // `ixora agents [system]` — focused entry point for editing the agents
+  // enabled on a system. Identical plumbing to `config edit <system>` but
+  // skips the Full/Custom prompt (picking implies Custom). Falls back to
+  // a system picker when no system arg is supplied.
+  program
+    .command("agents")
+    .argument("[system]", "System ID — omit to pick interactively")
+    .description("Edit the agents enabled on a system (opens the component picker)")
+    .action(async (system?: string) => {
+      await cmdAgentsEdit(system);
     });
 
   // `ixora components list` — pretty-print the component manifest from the

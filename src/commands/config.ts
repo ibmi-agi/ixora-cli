@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { execa } from "execa";
 import { select } from "@inquirer/prompts";
 import chalk from "chalk";
@@ -6,10 +6,9 @@ import { envGet, getApiPortBase, updateEnvKey } from "../lib/env.js";
 import {
   DEFAULT_DB_ISOLATION,
   ENV_FILE,
-  SYSTEMS_CONFIG,
   type DeploymentMode,
 } from "../lib/constants.js";
-import { readSystems } from "../lib/systems.js";
+import { readSystems, setSystemMode } from "../lib/systems.js";
 import { ensureManifest } from "../lib/manifest.js";
 import { promptComponentPicker } from "../lib/picker.js";
 import {
@@ -369,35 +368,3 @@ export function cmdSystemConfigReset(systemId: string): void {
   );
 }
 
-/**
- * Mutate the `mode:` line for a system in ixora-systems.yaml without
- * a YAML library. Mirrors the line-oriented approach used elsewhere in
- * this CLI (see systems.ts).
- */
-function setSystemMode(systemId: string, mode: DeploymentMode): void {
-  if (!existsSync(SYSTEMS_CONFIG)) die(`No systems config at ${SYSTEMS_CONFIG}`);
-  const lines = readFileSync(SYSTEMS_CONFIG, "utf-8").split("\n");
-  const out: string[] = [];
-  let inTarget = false;
-  let wroteMode = false;
-  for (const line of lines) {
-    const idMatch = line.match(/^ {2}- id: (.+)$/);
-    if (idMatch) {
-      // Leaving a system block without a mode line: synthesize one.
-      if (inTarget && !wroteMode) out.push(`    mode: ${mode}`);
-      inTarget = idMatch[1] === systemId;
-      wroteMode = false;
-      out.push(line);
-      continue;
-    }
-    if (inTarget && /^ {4}mode: /.test(line)) {
-      out.push(`    mode: ${mode}`);
-      wroteMode = true;
-      continue;
-    }
-    out.push(line);
-  }
-  if (inTarget && !wroteMode) out.push(`    mode: ${mode}`);
-  writeFileSync(SYSTEMS_CONFIG, out.join("\n"), "utf-8");
-  chmodSync(SYSTEMS_CONFIG, 0o600);
-}

@@ -172,3 +172,43 @@ export function removeSystem(
     chmodSync(envFile, 0o600);
   }
 }
+
+/**
+ * Update the `mode:` line for a single system in ixora-systems.yaml without
+ * pulling in a YAML library. Mirrors the line-oriented approach used by
+ * the rest of this file. Synthesises a missing `mode:` line for older
+ * configs that don't yet carry one.
+ */
+export function setSystemMode(
+  systemId: string,
+  mode: DeploymentMode,
+  configFile: string = SYSTEMS_CONFIG,
+): void {
+  if (!existsSync(configFile)) {
+    throw new Error(`No systems config at ${configFile}`);
+  }
+  const lines = readFileSync(configFile, "utf-8").split("\n");
+  const out: string[] = [];
+  let inTarget = false;
+  let wroteMode = false;
+  for (const line of lines) {
+    const idMatch = line.match(/^ {2}- id: (.+)$/);
+    if (idMatch) {
+      // Leaving a system block without writing a mode line — synthesise one.
+      if (inTarget && !wroteMode) out.push(`    mode: ${mode}`);
+      inTarget = idMatch[1] === systemId;
+      wroteMode = false;
+      out.push(line);
+      continue;
+    }
+    if (inTarget && /^ {4}mode: /.test(line)) {
+      out.push(`    mode: ${mode}`);
+      wroteMode = true;
+      continue;
+    }
+    out.push(line);
+  }
+  if (inTarget && !wroteMode) out.push(`    mode: ${mode}`);
+  writeFileSync(configFile, out.join("\n"), "utf-8");
+  chmodSync(configFile, 0o600);
+}
