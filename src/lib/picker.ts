@@ -35,9 +35,20 @@ export async function promptComponentPicker(
   manifest: Manifest,
   preselected: UserProfile,
 ): Promise<ComponentPickerResult> {
+  // `name` is the fully-rendered row shown in the picker UI; `short` is
+  // what inquirer joins into the post-selection echo line. Without it,
+  // confirming a multi-select with rich `name` strings produces a wall
+  // of comma-joined render output — `short: c.id` keeps the answer
+  // summary compact and grep-friendly ("ibmi-system-health, ibmi-team, …").
   const choices: (
     | Separator
-    | { name: string; value: string; checked: boolean; disabled?: string }
+    | {
+        name: string;
+        short: string;
+        value: string;
+        checked: boolean;
+        disabled?: string;
+      }
   )[] = [];
 
   const preselectedIds = new Set<string>();
@@ -55,6 +66,7 @@ export async function promptComponentPicker(
       if (c.gated_by) {
         choices.push({
           name: label,
+          short: c.id,
           value,
           checked: false,
           disabled: dim(`(requires ${c.gated_by})`),
@@ -62,6 +74,7 @@ export async function promptComponentPicker(
       } else {
         choices.push({
           name: label,
+          short: c.id,
           value,
           checked: preselectedIds.has(value),
         });
