@@ -1,3 +1,4 @@
+import readline from "node:readline";
 import { checkbox, Separator } from "@inquirer/prompts";
 import type { ComponentKind, Manifest, ManifestComponent } from "./manifest.js";
 import type { UserProfile } from "./profiles.js";
@@ -68,26 +69,62 @@ export async function promptComponentPicker(
     }
   }
 
-  const picked = await checkbox<string>({
-    message: "Select components to enable for this system",
-    choices,
-    pageSize: 18,
-    loop: false,
-  });
-
-  const profile: UserProfile = {
-    include_dependencies: true,
-    agents: [],
-    teams: [],
-    workflows: [],
-    knowledge: [],
+  // Esc-to-cancel: piggy-back on inquirer's raw-mode stdin so a keypress
+  // listener can spot the escape key and abort the prompt's controller.
+  // emitKeypressEvents is idempotent — calling it before inquirer wires
+  // its own reader is safe and ensures the listener fires even if our
+  // call lands first.
+  if (process.stdin.isTTY) readline.emitKeypressEvents(process.stdin);
+  const ac = new AbortController();
+  const onKey = (
+    _ch: string | undefined,
+    key: { name?: string } | undefined,
+  ): void => {
+    if (key?.name === "escape") ac.abort();
   };
+  process.stdin.on("keypress", onKey);
+
+  let picked: string[];
+  try {
+    picked = await checkbox<string>(
+      {
+        message:
+          "Select components to enable for this system (Esc to cancel)",
+        choices,
+        pageSize: 18,
+        loop: false,
+      },
+      { signal: ac.signal },
+    );
+  } catch (e) {
+    // AbortPromptError (Esc) is the user bailing — return a "no selection"
+    // result so call sites can warn and skip writes. Other errors propagate
+    // unchanged so genuine failures still surface.
+    if ((e as Error)?.name === "AbortPromptError") {
+      return { selected: false, profile: emptyProfile() };
+    }
+    throw e;
+  } finally {
+    process.stdin.off("keypress", onKey);
+  }
+
+  const profile = emptyProfile();
   for (const id of picked) {
     const [kind, key] = id.split(":") as [ComponentKind, string];
     profile[kind].push(key);
   }
 
   return { selected: picked.length > 0, profile };
+}
+
+function emptyProfile(): UserProfile {
+  return {
+    include_dependencies: true,
+    agents: [],
+    teams: [],
+    workflows: [],
+    knowledge: [],
+  };
 }
 
 function renderRow(c: ManifestComponent): string {
