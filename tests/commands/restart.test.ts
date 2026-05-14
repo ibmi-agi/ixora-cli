@@ -60,7 +60,7 @@ describe("restart command", () => {
 
     const output = consoleSpy.mock.calls.map((c) => String(c[0])).join("\n");
     expect(output).toContain("ixora is running!");
-    expect(output).toContain("http://localhost:8000/mcp");
+    expect(output).toContain("http://localhost:18000/mcp");
   });
 
   it("restarts a specific service", async () => {

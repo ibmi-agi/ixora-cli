@@ -74,7 +74,7 @@ export async function cmdStatus(opts: StatusOptions): Promise<void> {
   const uiStatus = !uiInProfile
     ? chalk.dim("(not in profile)")
     : runningServices.has("ui")
-      ? chalk.green("http://localhost:3000")
+      ? chalk.green("http://localhost:13000")
       : chalk.yellow("stopped");
 
   console.log();

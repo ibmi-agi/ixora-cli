@@ -72,7 +72,7 @@ export function printRunningBanner(opts: BannerOptions = {}): void {
   }
 
   if (uiRunning) {
-    console.log(`  ${bold("UI:")}      http://localhost:3000`);
+    console.log(`  ${bold("UI:")}      http://localhost:13000`);
   }
   console.log(`  ${bold("API:")}     http://localhost:${firstSystemPort}`);
 

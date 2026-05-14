@@ -39,15 +39,15 @@ describe("templates", () => {
       expect(content).toContain("api-prod:");
     });
 
-    it("assigns sequential ports starting at 8000", () => {
+    it("assigns sequential ports starting at the default API port", () => {
       writeFileSync(envFile, SAMPLE_ENV_WITH_SYSTEM);
       writeFileSync(configFile, SAMPLE_SYSTEMS_YAML);
 
       const content = generateMultiCompose(envFile, configFile);
 
-      expect(content).toContain('"8000:8000"');
-      expect(content).toContain('"8001:8000"');
-      expect(content).toContain('"8002:8000"');
+      expect(content).toContain('"18000:8000"');
+      expect(content).toContain('"18001:8000"');
+      expect(content).toContain('"18002:8000"');
     });
 
     it("includes shared DB service", () => {
@@ -166,17 +166,17 @@ describe("templates", () => {
       expect(content).toContain("mcp-default:");
       expect(content).toContain("api-default:");
       expect(content).toContain("ui:");
-      expect(content).toContain('"8000:8000"');
-      expect(content).not.toContain('"8001:8000"');
+      expect(content).toContain('"18000:8000"');
+      expect(content).not.toContain('"18001:8000"');
     });
 
-    it("uses NEXT_PUBLIC_BACKEND_URL pointing at the API base port (default 8000)", () => {
+    it("uses NEXT_PUBLIC_BACKEND_URL pointing at the API base port (default 18000)", () => {
       writeFileSync(envFile, SAMPLE_ENV_WITH_SYSTEM);
       writeFileSync(configFile, SAMPLE_SYSTEMS_YAML_SINGLE);
 
       const content = generateMultiCompose(envFile, configFile);
       expect(content).toContain(
-        "NEXT_PUBLIC_BACKEND_URL: http://localhost:8000",
+        "NEXT_PUBLIC_BACKEND_URL: http://localhost:18000",
       );
       expect(content).not.toContain("NEXT_PUBLIC_API_URL");
     });
@@ -190,7 +190,7 @@ describe("templates", () => {
 
       const content = generateMultiCompose(envFile, configFile);
       expect(content).toContain('"9000:8000"');
-      expect(content).not.toContain('"8000:8000"');
+      expect(content).not.toContain('"18000:8000"');
       expect(content).toContain(
         "NEXT_PUBLIC_BACKEND_URL: http://localhost:9000",
       );
@@ -207,6 +207,17 @@ describe("templates", () => {
       expect(content).toContain('"9000:8000"');
       expect(content).toContain('"9001:8000"');
       expect(content).toContain('"9002:8000"');
+    });
+
+    it("defaults DB host port to 15432 and UI host port to 13000", () => {
+      writeFileSync(envFile, SAMPLE_ENV_WITH_SYSTEM);
+      writeFileSync(configFile, SAMPLE_SYSTEMS_YAML_SINGLE);
+
+      const content = generateMultiCompose(envFile, configFile);
+      // DB host port stays compose-overridable via DB_PORT; default is 15432
+      expect(content).toContain('"${DB_PORT:-15432}:5432"');
+      // UI host port is fixed in the template
+      expect(content).toContain('"13000:3000"');
     });
   });
 

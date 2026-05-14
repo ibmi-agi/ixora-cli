@@ -88,8 +88,8 @@ describe("compose", () => {
       writeFileSync(configFile, SAMPLE_SYSTEMS_YAML_SINGLE);
 
       const content = generateMultiCompose(envFile, configFile);
-      expect(content).toContain("8000:8000");
-      expect(content).toContain("3000:3000");
+      expect(content).toContain("18000:8000");
+      expect(content).toContain("13000:3000");
     });
 
     it("includes health checks", () => {

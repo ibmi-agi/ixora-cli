@@ -86,8 +86,8 @@ describe("start command", () => {
 
     const output = consoleSpy.mock.calls.map((c) => String(c[0])).join("\n");
     expect(output).toContain("ixora is running");
-    expect(output).toContain("http://localhost:3000");
-    expect(output).toContain("http://localhost:8000");
+    expect(output).toContain("http://localhost:13000");
+    expect(output).toContain("http://localhost:18000");
   });
 
   it("shows multi-system info when multiple systems configured", async () => {
