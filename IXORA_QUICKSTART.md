@@ -136,9 +136,9 @@ On success, you see:
  ixora is running!
 
   Stack:   full
-  UI:      http://localhost:3000
-  API:     http://localhost:8000
-  MCP:     http://localhost:8000/mcp
+  UI:      http://localhost:13000
+  API:     http://localhost:18000
+  MCP:     http://localhost:18000/mcp
   Agent:   full
 
   Manage with: ixora start|stop|restart|status|upgrade|config|logs
@@ -253,23 +253,23 @@ The CLI deploys these container services:
 
 | Service | Image | Port | Role | Profiles |
 |---|---|---|---|---|
-| `agentos-db` | `agnohq/pgvector:18` | 5432 | PostgreSQL with pgvector for agent memory | all |
+| `agentos-db` | `agnohq/pgvector:18` | 15432 | PostgreSQL with pgvector for agent memory | all |
 | `db-init` | `agnohq/pgvector:18` | — | One-shot: creates the extra per-system `ai_<id>` databases. Only present with 2+ systems (and not under `IXORA_DB_ISOLATION=shared`) | all (when applicable) |
 | `mcp-<system-id>` | `ghcr.io/ibmi-agi/ixora-mcp-server` | internal | MCP server connecting to IBM i via Mapepire | `full`, `mcp` |
-| `api-<system-id>` | `ghcr.io/ibmi-agi/ixora-api` | 8000+ | FastAPI backend serving agent endpoints | all |
-| `ui` | `ghcr.io/ibmi-agi/ixora-ui` | 3000 | Next.js web interface | `full` |
+| `api-<system-id>` | `ghcr.io/ibmi-agi/ixora-api` | 18000+ | FastAPI backend serving agent endpoints | all |
+| `ui` | `ghcr.io/ibmi-agi/ixora-ui` | 13000 | Next.js web interface | `full` |
 
 Under `--profile cli` the `mcp-<system-id>` services are omitted entirely (agents use the bundled `ibmi` CLI inside the `api-<system-id>` container).
 
 For multi-system deployments, API ports increment automatically:
 
 ```
-api-default  → localhost:8000
-api-prod     → localhost:8001
-api-staging  → localhost:8002
+api-default  → localhost:18000
+api-prod     → localhost:18001
+api-staging  → localhost:18002
 ```
 
-The UI connects to the first system (port 8000) only. Use the individual API ports for other systems.
+The UI connects to the first system (port 18000) only. Use the individual API ports for other systems.
 
 </details>
 
@@ -335,9 +335,9 @@ docker compose -p ixora -f ~/.ixora/docker-compose.yml --env-file ~/.ixora/.env 
 
 ## 5. Open the local UI
 
-Navigate to [http://localhost:3000](http://localhost:3000) in your browser.
+Navigate to [http://localhost:13000](http://localhost:13000) in your browser.
 
-The UI connects to the API at `http://localhost:8000` and provides:
+The UI connects to the API at `http://localhost:18000` and provides:
 
 - **Agent interaction** — chat with IBM i agents to run queries, inspect configurations, and analyze system health
 - **SQL Services** — run SQL queries against Db2 for i through the SQL Services agent
@@ -357,7 +357,7 @@ The available features depend on your selected agent profile.
 To connect:
 
 1. Create a free account at [os.agno.com](https://os.agno.com)
-2. Add your local ixora API endpoint (`http://localhost:8000`) as a new environment
+2. Add your local ixora API endpoint (`http://localhost:18000`) as a new environment
 3. The control plane discovers your running agents and surfaces them in the dashboard
 
 Consult the [Agno documentation](https://docs.agno.com) for detailed setup instructions.
@@ -392,7 +392,7 @@ The `--profile` flag controls _which containers_ start. It applies to every life
 
 | Profile | Containers | When to use |
 |---|---|---|
-| `full` (default) | DB + API + MCP + Carbon UI | Local development; you want the bundled web UI on `localhost:3000` |
+| `full` (default) | DB + API + MCP + Carbon UI | Local development; you want the bundled web UI on `localhost:13000` |
 | `mcp` | DB + API + MCP | Backend-only — you bring your own UI, embed Ixora as a service, or run headlessly |
 | `cli` | DB + API (no MCP container) | Agents talk to the bundled `ibmi` CLI inside the API container — no MCP server in the path. Sets `IXORA_CLI_MODE=true` on the API. |
 
@@ -417,7 +417,7 @@ ixora stop                     # also honors cli scope
 **Mixed-state safety.** Switching profiles mid-session is non-destructive. A `stop --profile mcp` while the UI is running (because you started with `--profile full`) leaves the UI alone:
 
 ```bash
-ixora start --profile full     # all containers up, UI on :3000
+ixora start --profile full     # all containers up, UI on :13000
 ixora stop --profile mcp       # stops db/api/mcp; UI keeps running
 ixora status --profile full    # shows only ui as remaining
 ```
@@ -457,7 +457,7 @@ Services have a 30-second startup timeout. Run `ixora logs api-default` to inves
 Linux users must use their host IP (e.g., `http://172.17.0.1:11434`), not `localhost`, because containers cannot reach the host via `localhost`. Ensure Ollama is running with `ollama serve`.
 
 **Port conflicts**
-Default ports: 3000 (UI), 8000 (API), 5432 (PostgreSQL). If these are in use, stop the conflicting services before starting ixora.
+Default host ports: 13000 (UI), 18000 (API), 15432 (PostgreSQL). They're shifted into the `1xxxx` range to avoid colliding with dev stacks that already use 3000/8000/5432. If these are in use, stop the conflicting services or override via `IXORA_API_PORT` / `DB_PORT` in `~/.ixora/.env` (the UI port is fixed in the template).
 
 **Reconfiguring**
 Run `ixora install` again. The CLI detects the existing `~/.ixora/` directory and offers to reconfigure.

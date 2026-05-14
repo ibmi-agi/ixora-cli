@@ -56,7 +56,7 @@ describe("config commands", () => {
       expect(output).toContain("IXORA_PROFILE");
       // IXORA_API_PORT is always shown (even at default) so users discover it
       expect(output).toContain("IXORA_API_PORT");
-      expect(output).toContain("8000");
+      expect(output).toContain("18000");
       // Legacy DB2i_* block is gone from the canonical display
       expect(output).not.toContain("DB2i_HOST");
     });

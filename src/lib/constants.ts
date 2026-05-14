@@ -31,7 +31,12 @@ function readCliVersion(): string {
 
 export const SCRIPT_VERSION = readCliVersion();
 export const HEALTH_TIMEOUT = 30;
-export const DEFAULT_API_PORT = 8000;
+// Host-side defaults sit in the 1xxxx range so the official deployment
+// doesn't collide with dev stacks running ixora on the historical
+// 8000/5432/3000 ports.
+export const DEFAULT_API_PORT = 18000;
+export const DEFAULT_DB_PORT = 15432;
+export const DEFAULT_UI_PORT = 13000;
 
 export const IXORA_DIR = join(homedir(), ".ixora");
 export const COMPOSE_FILE = join(IXORA_DIR, "docker-compose.yml");

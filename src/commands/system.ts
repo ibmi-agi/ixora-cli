@@ -238,7 +238,7 @@ export function cmdSystemList(): void {
 
   if (systems.length > 1) {
     console.log(
-      `  ${dim("Multi-system mode: each system runs on its own port (8000, 8001, ...)")}`,
+      `  ${dim("Multi-system mode: each system runs on its own port (18000, 18001, ...)")}`,
     );
   }
   console.log(

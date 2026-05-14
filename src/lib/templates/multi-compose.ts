@@ -53,7 +53,7 @@ services:
     image: \${IXORA_DB_IMAGE:-agnohq/pgvector:18}
     restart: unless-stopped
     ports:
-      - "\${DB_PORT:-5432}:5432"
+      - "\${DB_PORT:-15432}:5432"
     environment:
       POSTGRES_USER: \${DB_USER:-ai}
       POSTGRES_PASSWORD: \${DB_PASS:-ai}
@@ -235,7 +235,7 @@ ${apiBackendEnv}
     profiles: ["full"]
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "13000:3000"
     environment:
       NEXT_PUBLIC_BACKEND_URL: http://localhost:${apiPortBase}
     depends_on:

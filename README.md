@@ -39,7 +39,7 @@ ixora stop       # Stop services
 
 ```sh
 ixora start --profile full  # All four services (default)
-ixora start --profile mcp   # No Carbon UI; API on :8000, DB on :5432
+ixora start --profile mcp   # No Carbon UI; API on :18000, DB on :15432
 ixora start --profile cli   # No MCP container; API runs in CLI mode
 ```
 
