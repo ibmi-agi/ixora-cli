@@ -147,10 +147,9 @@ describe("compose", () => {
       );
       expect(dependsOn).toContain("agentos-db:");
       expect(dependsOn).not.toContain("mcp-default");
-      // db, api, ui blocks still present (ui is gated by profiles:["full"])
+      // db + api blocks still present.
       expect(content).toContain("agentos-db:");
       expect(content).toContain("api-default:");
-      expect(content).toContain("ui:");
     }
 
     it("triggers on the `cli` stack profile (IXORA_PROFILE=cli)", () => {
@@ -161,12 +160,22 @@ describe("compose", () => {
           "IXORA_PROFILE='cli'",
         ),
       );
-      assertCliCompose(generateMultiCompose(envFile, configFile));
+      const content = generateMultiCompose(envFile, configFile);
+      assertCliCompose(content);
+      // UI is dropped when the stack profile is `cli` so that
+      // `up --remove-orphans` cleans up a stale UI container from a prior
+      // `--profile full` run.
+      expect(content).not.toContain("ui:");
+      expect(content).not.toContain("ghcr.io/ibmi-agi/ixora-ui");
     });
 
     it("triggers on the IXORA_CLI_MODE override (any profile)", () => {
       writeFileSync(envFile, `${SAMPLE_ENV_WITH_SYSTEM}IXORA_CLI_MODE=true\n`);
-      assertCliCompose(generateMultiCompose(envFile, configFile));
+      const content = generateMultiCompose(envFile, configFile);
+      assertCliCompose(content);
+      // IXORA_CLI_MODE is an MCP-only override — the stack profile stays
+      // `full`, so UI remains in the file.
+      expect(content).toContain("ui:");
     });
 
     it("leaves the MCP path intact for the default profile", () => {

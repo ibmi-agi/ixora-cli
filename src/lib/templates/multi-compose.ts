@@ -244,11 +244,14 @@ ${apiBackendEnv}
     apiPort++;
   }
 
-  // UI points to first system. `profiles: ["full"]` gates the UI behind the
-  // `full` stack profile — the `mcp` and `cli` profiles skip it.
-  content += `  ui:
+  // UI points to first system. Only emitted under the `full` stack profile —
+  // `mcp` and `cli` skip it. Omitting the service from the file (rather than
+  // gating it behind a compose `profiles:` tag) lets `up --remove-orphans`
+  // tear down a UI container left over from a previous `--profile full` run
+  // when the user switches profiles. Same pattern used for mcp-<id> above.
+  if (profile === "full") {
+    content += `  ui:
     image: ghcr.io/ibmi-agi/ixora-ui:\${IXORA_VERSION:-latest}
-    profiles: ["full"]
     restart: unless-stopped
     ports:
       - "13000:3000"
@@ -259,6 +262,7 @@ ${apiBackendEnv}
         condition: service_healthy
 
 `;
+  }
 
   // In per-system DB mode each api-<id> has its own /data volume; otherwise
   // one shared agentos-data volume (the historical layout).

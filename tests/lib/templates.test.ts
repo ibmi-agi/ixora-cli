@@ -67,17 +67,31 @@ describe("templates", () => {
       expect(content).toContain("api-default:");
     });
 
-    it("gates UI service behind the 'full' stack profile", () => {
+    it("emits UI under the 'full' stack profile and omits it otherwise", () => {
+      // Default fixture profile is `full` — UI is in the file, and we don't
+      // gate it with a compose `profiles:` tag (the conditional emit is
+      // what lets `up --remove-orphans` clean up a stale UI container).
       writeFileSync(envFile, SAMPLE_ENV_WITH_SYSTEM);
       writeFileSync(configFile, SAMPLE_SYSTEMS_YAML);
+      const full = generateMultiCompose(envFile, configFile);
+      expect(full).toContain("ui:");
+      expect(full).not.toMatch(/ui:[\s\S]*?profiles:/);
 
-      const content = generateMultiCompose(envFile, configFile);
-      // The `profiles: ["full"]` tag is what makes `ixora --profile mcp|cli`
-      // skip the UI container when starting/stopping/restarting.
-      expect(content).toMatch(/ui:[\s\S]*?profiles: \["full"\]/);
-      // Backend services have no `profiles:` field — they're always-on.
-      expect(content).toMatch(/agentos-db:[\s\S]*?image:/);
-      expect(content).not.toMatch(/agentos-db:[\s\S]*?profiles:[\s\S]*?image:/);
+      // Switching the stored profile to `mcp` or `cli` drops the `ui:` block
+      // entirely so `up --remove-orphans` tears down a leftover container.
+      for (const profile of ["mcp", "cli"] as const) {
+        writeFileSync(
+          envFile,
+          SAMPLE_ENV_WITH_SYSTEM.replace(
+            "IXORA_PROFILE='full'",
+            `IXORA_PROFILE='${profile}'`,
+          ),
+        );
+        const content = generateMultiCompose(envFile, configFile);
+        expect(content).not.toContain("ui:");
+        expect(content).not.toContain("ghcr.io/ibmi-agi/ixora-ui");
+        expect(content).not.toContain('"13000:3000"');
+      }
     });
 
     it("uses system-specific env vars for credentials", () => {
