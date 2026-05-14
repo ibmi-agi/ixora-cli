@@ -1,6 +1,6 @@
 {
   "name": "@ibm/ixora",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "description": "CLI for managing ixora AI agent deployments on IBM i",
   "type": "module",
   "bin": {
