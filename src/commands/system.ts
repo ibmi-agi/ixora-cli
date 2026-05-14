@@ -19,13 +19,11 @@ import {
   detectPlatform,
 } from "../lib/platform.js";
 import { waitForHealthy } from "../lib/health.js";
-import {
-  ENV_FILE,
-  AGENT_PROFILES,
-  VALID_AGENT_PROFILES,
-  type AgentProfileName,
-} from "../lib/constants.js";
-import { info, success, die, bold, dim, cyan } from "../lib/ui.js";
+import { ENV_FILE, type DeploymentMode } from "../lib/constants.js";
+import { info, success, die, bold, dim, cyan, warn } from "../lib/ui.js";
+import { ensureManifest } from "../lib/manifest.js";
+import { promptComponentPicker } from "../lib/picker.js";
+import { profileFromManifest, writeUserProfile } from "../lib/profiles.js";
 
 export async function cmdSystemAdd(): Promise<void> {
   info("Add an IBM i system");
@@ -74,20 +72,44 @@ export async function cmdSystemAdd(): Promise<void> {
     },
   });
 
-  const profile = await select<AgentProfileName>({
-    message: "Select an agent profile",
-    choices: VALID_AGENT_PROFILES.map((p) => ({
-      name: `${AGENT_PROFILES[p].name.padEnd(14)} ${dim(AGENT_PROFILES[p].description)}`,
-      value: p,
-    })),
-    default: "full" as AgentProfileName,
+  let mode = await select<DeploymentMode>({
+    message: "How should this system be deployed?",
+    choices: [
+      {
+        name: `Full           ${dim("Every component the image declares")}`,
+        value: "full",
+      },
+      {
+        name: `Custom         ${dim("Pick which components to enable")}`,
+        value: "custom",
+      },
+    ],
+    default: "full",
   });
+
+  if (mode === "custom") {
+    const version = envGet("IXORA_VERSION") || "latest";
+    info("Fetching component manifest from image...");
+    const manifest = await ensureManifest(
+      `ghcr.io/ibmi-agi/ixora-api:${version}`,
+    );
+    const picker = await promptComponentPicker(
+      manifest,
+      profileFromManifest(manifest),
+    );
+    if (!picker.selected) {
+      warn("No components selected — falling back to Full mode.");
+      mode = "full";
+    } else {
+      writeUserProfile(cleanId, picker.profile);
+      success(`Wrote ~/.ixora/profiles/${cleanId}.yaml`);
+    }
+  }
 
   addSystem({
     id: cleanId,
     name,
-    profile,
-    agents: [],
+    mode,
     host: host.trim(),
     port: port.trim(),
     user: user.trim(),
@@ -228,9 +250,8 @@ export function cmdSystemList(): void {
     const idUpper = sys.id.toUpperCase().replace(/-/g, "_");
     const sysHost = envGet(`SYSTEM_${idUpper}_HOST`) || dim("(no host)");
     const marker = sys.id === "default" ? cyan("*") : cyan(" ");
-    const profile = sys.profile || "full";
     console.log(
-      `  ${marker}  ${sys.id.padEnd(12)}  ${String(sysHost).padEnd(30)}  ${dim(profile)}`,
+      `  ${marker}  ${sys.id.padEnd(12)}  ${String(sysHost).padEnd(30)}  ${dim(sys.mode)}`,
     );
   }
 

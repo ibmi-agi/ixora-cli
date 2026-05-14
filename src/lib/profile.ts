@@ -1,9 +1,5 @@
 import { envGet, updateEnvKey } from "./env.js";
-import {
-  VALID_STACK_PROFILES,
-  VALID_AGENT_PROFILES,
-  type StackProfile,
-} from "./constants.js";
+import { VALID_STACK_PROFILES, type StackProfile } from "./constants.js";
 import { die, warn } from "./ui.js";
 
 const DEFAULT_STACK_PROFILE: StackProfile = "full";
@@ -35,12 +31,6 @@ export function resolveStackProfile(opts: StackProfileOpts): StackProfile {
     if (explicit === "api") {
       warn("--profile api has been renamed to --profile mcp; using 'mcp'.");
       return "mcp";
-    }
-    if (VALID_AGENT_PROFILES.includes(explicit as never)) {
-      die(
-        `--profile values are now ${VALID_STACK_PROFILES.join("|")}. ` +
-          `For agent profiles, use --agent-profile (e.g., --agent-profile ${explicit}).`,
-      );
     }
     die(
       `Invalid --profile: ${explicit} (choose: ${VALID_STACK_PROFILES.join(", ")})`,

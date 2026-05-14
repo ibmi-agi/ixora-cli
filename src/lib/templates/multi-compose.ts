@@ -166,6 +166,22 @@ ${extensionLines}
         condition: service_completed_successfully`
       : "";
 
+    // Full mode: API loads the in-image full.yaml (every component).
+    // Custom mode: bind-mount the user-authored ~/.ixora/profiles/<id>.yaml
+    // into the well-known _user/ subdirectory. app/deployment.py reads it
+    // unchanged — same schema as full.yaml, but with explicit selections.
+    const customMode = (sys.mode || "full") === "custom";
+    const deploymentConfigPath = customMode
+      ? `app/config/deployments/_user/${sys.id}.yaml`
+      : "app/config/deployments/full.yaml";
+    const customProfileMount = customMode
+      ? `
+      - type: bind
+        source: \${HOME}/.ixora/profiles/${sys.id}.yaml
+        target: /app/app/config/deployments/_user/${sys.id}.yaml
+        read_only: true`
+      : "";
+
     content += `  api-${sys.id}:
     image: ghcr.io/ibmi-agi/ixora-api:\${IXORA_VERSION:-latest}
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
@@ -189,7 +205,7 @@ ${extensionLines}
 ${apiBackendEnv}
       IXORA_SYSTEM_ID: ${sys.id}
       IXORA_SYSTEM_NAME: ${sys.name}
-      IAASSIST_DEPLOYMENT_CONFIG: app/config/deployments/${sys.profile || "full"}.yaml
+      IAASSIST_DEPLOYMENT_CONFIG: ${deploymentConfigPath}
       DATA_DIR: /data
       RUNTIME_ENV: docker
       WAIT_FOR_DB: "True"
@@ -211,7 +227,7 @@ ${apiBackendEnv}
         source: \${HOME}/.ixora/user_tools
         target: /data/user_tools
         bind:
-          create_host_path: true
+          create_host_path: true${customProfileMount}
     depends_on:
       agentos-db:
         condition: service_healthy${apiDbInitDep}${apiMcpDep}

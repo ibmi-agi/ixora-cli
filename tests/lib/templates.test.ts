@@ -144,13 +144,18 @@ describe("templates", () => {
       expect(content).toContain("IXORA_SYSTEM_NAME: Development");
     });
 
-    it("uses per-system profile for deployment config", () => {
+    it("uses per-system mode for deployment config + bind mount for custom", () => {
       writeFileSync(envFile, SAMPLE_ENV_WITH_SYSTEM);
       writeFileSync(configFile, SAMPLE_SYSTEMS_YAML);
 
       const content = generateMultiCompose(envFile, configFile);
+      // Full-mode systems load the in-image full.yaml directly.
       expect(content).toContain("app/config/deployments/full.yaml");
-      expect(content).toContain("app/config/deployments/security.yaml");
+      // The Custom-mode system (id=dev in the fixture) gets the _user/
+      // path AND a read-only bind mount pointing at ~/.ixora/profiles/dev.yaml.
+      expect(content).toContain("app/config/deployments/_user/dev.yaml");
+      expect(content).toContain("${HOME}/.ixora/profiles/dev.yaml");
+      expect(content).toContain("read_only: true");
     });
 
     it("works with a single system in YAML", () => {
@@ -285,7 +290,7 @@ describe("templates", () => {
       writeFileSync(envFile, SAMPLE_ENV_WITH_SYSTEM);
       writeFileSync(
         configFile,
-        "systems:\n  - id: default\n    name: 'A'\n    profile: full\n    agents: []\n  - id: my-Prod.01\n    name: 'Weird'\n    profile: full\n    agents: []\n",
+        "systems:\n  - id: default\n    name: 'A'\n    mode: full\n  - id: my-Prod.01\n    name: 'Weird'\n    mode: full\n",
       );
 
       const content = generateMultiCompose(envFile, configFile);
