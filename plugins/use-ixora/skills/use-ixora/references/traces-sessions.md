@@ -57,7 +57,7 @@ ixora traces stats --team-id ibmi-dash-toystore
 ixora traces stats --team-id ibmi-dash-toystore --start-time 2026-05-01 --end-time 2026-05-15
 ixora traces stats --user-id <user> --start-time 2026-05-01
 
-# Project specific stats fields (v0.3.3+)
+# Project specific stats fields
 ixora traces stats --team-id ibmi-dash-toystore --json total_traces,total_duration,total_tokens
 ```
 
@@ -71,7 +71,7 @@ ixora traces search --group-by run --limit 50                                  #
 ixora traces search --filter '{"team_id":"ibmi-dash-toystore"}' --limit 20     # per-trace listing for a team
 ixora traces search --filter '{"agent_id":"toystore-analytics-analyst"}'
 
-# Projection works on search results (v0.3.3+)
+# Project specific fields on search results
 ixora traces search --filter '{"team_id":"ibmi-dash-toystore"}' --json trace_id,session_id,duration
 ```
 
@@ -87,7 +87,7 @@ ixora sessions list --user-id <user> --sort-by created_at --sort-order desc
 
 ixora sessions get  <session_id>                                    # full state incl. messages
 ixora sessions runs <session_id>                                    # every run in the session
-ixora sessions runs <session_id> --json run_id,status,created_at    # project specific fields (v0.3.3+)
+ixora sessions runs <session_id> --json run_id,status,created_at    # project specific fields
 
 ixora sessions create --type team --component-id ibmi-team --name "Debug" --user-id <user>
 ixora sessions update <id> --name "new name" --state '{"foo":"bar"}' --metadata '{"tag":"dev"}'

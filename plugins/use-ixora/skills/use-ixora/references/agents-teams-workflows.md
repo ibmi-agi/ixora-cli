@@ -66,7 +66,7 @@ ixora workflows continue <workflow_id> <run_id> "<message>"
 
 `--confirm` and `--reject` are agent-only. They reconstruct the paused tool-call payload from a local cache so you don't have to hand-build `tool_results` JSON. Pair with `ixora approvals resolve` if the pause originated from an approvals workflow.
 
-The non-stream `continue` result honors `--json fields` projection as of v0.3.3 — `ixora agents continue <id> <run> --confirm --json run_id,session_id` returns just those fields, same as `get`/`list`. (With `--stream`, the SSE event stream is unaffected.)
+The non-stream `continue` result honors `--json fields` projection — `ixora agents continue <id> <run> --confirm --json run_id,session_id` returns just those fields, same as `get`/`list`. (With `--stream`, the SSE event stream is unaffected.)
 
 ### `--confirm` / `--reject` cache prerequisite
 

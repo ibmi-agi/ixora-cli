@@ -67,7 +67,7 @@ ixora knowledge config --knowledge-id $KB                    # embedder, chunk s
 `search` has `--search-type vector | keyword | hybrid` (default `vector`). Hybrid blends vector + BM25; keyword is exact-token only.
 
 ```bash
-# Project specific fields on search results (v0.3.3+)
+# Project specific fields on search results
 ixora knowledge search "revenue" --knowledge-id $KB --json content,name,meta_data
 ```
 
