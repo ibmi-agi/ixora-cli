@@ -1,12 +1,21 @@
-// Resolve which local AgentOS endpoint an agno-mounted command should target.
+// Resolve which AgentOS endpoint a runtime command should target.
+//
+// Systems come in two kinds (see lib/systems.ts):
+//   - managed:  an ixora-provisioned docker compose stack on localhost
+//   - external: any AgentOS-compatible URL ixora does NOT lifecycle-manage
+//
+// Available set = (running managed) ∪ (all external).
 //
 // Flow:
 //   1. --url override → bypass system resolution entirely (escape hatch)
 //   2. Read configured systems from ixora-systems.yaml
 //   3. Discover running api-<id> containers via `docker compose ps`
-//   4. Apply --system flag, or pick the single running system implicitly
-//   5. Compute port = IXORA_API_PORT base + index-in-systems.yaml
-//   6. Read SYSTEM_<ID>_AGENTOS_KEY from .env (empty/absent → unauthenticated)
+//   4. Compute the available set; apply --system, IXORA_DEFAULT_SYSTEM, or
+//      implicit single-pick against it
+//   5. Compute baseUrl:
+//        - managed:  http://localhost:<IXORA_API_PORT base + indexAmongManaged>
+//        - external: sys.url verbatim
+//   6. Read SYSTEM_<ID>_AGENTOS_KEY from .env (works for both kinds)
 
 import chalk from "chalk";
 import { existsSync } from "node:fs";
@@ -14,7 +23,11 @@ import { runComposeCapture } from "./compose.js";
 import { COMPOSE_FILE } from "./constants.js";
 import { envGet, getApiPortBase } from "./env.js";
 import { detectComposeCmd } from "./platform.js";
-import { readSystems } from "./systems.js";
+import {
+  indexAmongManaged,
+  readSystems,
+  type SystemConfig,
+} from "./systems.js";
 import type { ResolvedAgentOSContext } from "./agentos-context.js";
 
 export interface ResolverFlags {
@@ -87,13 +100,26 @@ function parseComposePs(output: string): ComposePsEntry[] {
 }
 
 /**
+ * Whether `sys` is targetable right now. Managed systems must have a running
+ * container; external systems are always considered available (the actual
+ * HTTP request is what discovers if the URL is reachable).
+ */
+function isAvailable(sys: SystemConfig, running: Set<string>): boolean {
+  return sys.kind === "external" || running.has(sys.id);
+}
+
+/**
  * Resolve the AgentOS target for a single CLI invocation.
  *
  * Exits the process with a clear error message when no valid target can be
  * determined. Returns the resolved context on success.
+ *
+ * `opts.discoverRunning` is injected for testability; production callers
+ * omit it and the live docker-compose discovery is used.
  */
 export async function resolveAgentOSTarget(
   flags: ResolverFlags,
+  opts: { discoverRunning?: () => Promise<Set<string>> } = {},
 ): Promise<ResolvedAgentOSContext> {
   const timeout = flags.timeout ?? DEFAULT_TIMEOUT_SECONDS;
 
@@ -115,68 +141,71 @@ export async function resolveAgentOSTarget(
     );
   }
 
-  // 3. Running set
-  const running = await discoverRunningSystems();
+  // 3. Running set (managed only; external entries are always available)
+  const discover = opts.discoverRunning ?? discoverRunningSystems;
+  const running = await discover();
 
   // 4. Pick a target
-  let targetIndex: number;
+  let target: SystemConfig;
   if (flags.system) {
-    const idx = systems.findIndex((s) => s.id === flags.system);
-    if (idx === -1) {
+    const sys = systems.find((s) => s.id === flags.system);
+    if (!sys) {
       fail(
-        `No such system '${flags.system}'. Configured: ${systems.map((s) => s.id).join(", ")}`,
+        `No such system '${flags.system}'. Configured: ${describeSystems(systems)}`,
       );
     }
-    if (!running.has(flags.system)) {
+    if (sys.kind === "managed" && !running.has(sys.id)) {
       fail(
-        `System '${flags.system}' is not running. Start it with: ixora stack system start ${flags.system}`,
+        `System '${sys.id}' is not running. Start it with: ixora stack system start ${sys.id}`,
       );
     }
-    targetIndex = idx;
+    target = sys;
   } else {
-    if (running.size === 0) {
+    const available = systems.filter((s) => isAvailable(s, running));
+    if (available.length === 0) {
       fail(
-        `No systems are running. Start one with: ixora stack system start <id>\nConfigured: ${systems.map((s) => s.id).join(", ")}`,
+        `No systems are available. Start a managed system with \`ixora stack system start <id>\` or register an external one with \`ixora stack system add\`.\nConfigured: ${describeSystems(systems)}`,
       );
-    }
-
-    let chosenId: string;
-    if (running.size === 1) {
-      chosenId = Array.from(running)[0]!;
+    } else if (available.length === 1) {
+      target = available[0]!;
     } else {
-      // 2+ running — fall back to the configured default system if it's
-      // set and the named system is currently running. Otherwise require
-      // the user to disambiguate with --system.
+      // 2+ available — fall back to the configured default if it's set and
+      // currently available. Otherwise require the user to disambiguate.
       const defaultId = envGet("IXORA_DEFAULT_SYSTEM");
-      if (defaultId && defaultId.length > 0 && running.has(defaultId)) {
-        chosenId = defaultId;
+      const def = available.find((s) => s.id === defaultId);
+      if (defaultId && defaultId.length > 0 && def) {
+        target = def;
       } else {
-        const runningList = Array.from(running).sort().join(", ");
+        const list = available
+          .map((s) =>
+            s.kind === "external" ? `${s.id} (external)` : s.id,
+          )
+          .sort()
+          .join(", ");
         const hint =
           defaultId && defaultId.length > 0
-            ? `\nDefault system '${defaultId}' is configured but not in the running set.`
+            ? `\nDefault system '${defaultId}' is configured but not currently available.`
             : `\nTip: configure a default with \`ixora stack system default <id>\`.`;
         fail(
-          `Multiple systems are running. Specify --system <name>.${hint}\nRunning: ${runningList}`,
+          `Multiple systems are available. Specify --system <name>.${hint}\nAvailable: ${list}`,
         );
       }
     }
+  }
 
-    targetIndex = systems.findIndex((s) => s.id === chosenId);
-    if (targetIndex === -1) {
+  // 5. Compute baseUrl
+  let baseUrl: string;
+  if (target.kind === "external") {
+    baseUrl = target.url;
+  } else {
+    const idx = indexAmongManaged(systems, target);
+    if (idx === -1) {
       fail(
-        `Running container references system '${chosenId}' which is not in ixora-systems.yaml. Re-run \`ixora stack install\`.`,
+        `Internal error: managed system '${target.id}' not found in managed subset.`,
       );
     }
+    baseUrl = `http://localhost:${getApiPortBase() + idx}`;
   }
-
-  const target = systems[targetIndex];
-  if (!target) {
-    fail("Internal error: target system index out of range.");
-  }
-
-  // 5. Compute port from index, mirroring lib/templates/multi-compose.ts
-  const baseUrl = `http://localhost:${getApiPortBase() + targetIndex}`;
 
   // 6. Per-system auth key (empty string → undefined)
   const idUpper = target.id.toUpperCase().replace(/-/g, "_");
@@ -195,6 +224,12 @@ export async function resolveAgentOSTarget(
     timeout,
     systemId: target.id,
   };
+}
+
+function describeSystems(systems: SystemConfig[]): string {
+  return systems
+    .map((s) => (s.kind === "external" ? `${s.id} (external)` : s.id))
+    .join(", ");
 }
 
 function fail(msg: string): never {

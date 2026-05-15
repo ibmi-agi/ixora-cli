@@ -39,7 +39,7 @@ ixora sessions list    # Browse sessions
 ixora knowledge search "..."
 ```
 
-If only one system is running, those commands target it implicitly. With 2+ systems running you have two options:
+If only one system is available, those commands target it implicitly. With 2+ systems available you have two options:
 
 ```sh
 ixora --system prod agents list           # one-off override
@@ -48,6 +48,22 @@ ixora agents list                         # now uses 'prod' implicitly
 ixora --system dev agents list            # flag still wins over the default
 ixora stack system default --clear        # back to "must specify --system"
 ```
+
+### External AgentOS endpoints
+
+Beyond the IBM i stacks ixora provisions ("managed" systems), you can register **any AgentOS-compatible URL** as a target — typically another locally-running AgentOS instance you spun up from a different template, but the URL can be remote too. ixora doesn't lifecycle-manage these ("external" systems); it just routes runtime commands at them.
+
+```sh
+ixora stack system add                                     # interactive — pick "External"
+ixora stack system add --kind external --id personal \
+  --url http://localhost:8080 [--key sk-xxx]               # non-interactive
+
+ixora stack system list                                    # shows KIND + URL columns
+ixora --system personal agents list                        # target the external by name
+ixora stack start personal                                 # ERRORS — externals have no local lifecycle
+```
+
+Externals always count as "available" (no docker container check), so the implicit-pick rule extends naturally: 1 available → pick it; 2+ → require `--system` (or `IXORA_DEFAULT_SYSTEM`). The optional `--key` is stored as `SYSTEM_<ID>_AGENTOS_KEY` in `~/.ixora/.env`.
 
 ## Two command surfaces
 
@@ -100,11 +116,11 @@ By default each IBM i system gets its **own** `ai_<id>` Postgres database (and i
 | `stack config show` | Show current configuration |
 | `stack config set <key> <value>` | Update a config value |
 | `stack config edit` | Open config in your editor |
-| `stack system add` | Add an IBM i system (prompts for connection + optional AgentOS API key) |
-| `stack system remove <id>` | Remove a system |
-| `stack system list` | List configured systems (default marked with `*`) |
-| `stack system start\|stop\|restart <id>` | Manage one system's containers |
-| `stack system default [id] [--clear]` | Show, set, or clear the default system used when 2+ are running and `--system` is omitted |
+| `stack system add` | Add a system: **managed** (provision a new ixora IBM i stack) or **external** (register an existing AgentOS URL — local or remote). Flags: `--kind managed\|external --id ... --name ... --url ... --key ...` |
+| `stack system remove <id>` | Remove a system (works for both kinds; cleans up env keys) |
+| `stack system list` | List configured systems with KIND + URL columns (default marked with `*`) |
+| `stack system start\|stop\|restart <id>` | Manage one managed system's containers (errors with a hint if `<id>` is external) |
+| `stack system default [id] [--clear]` | Show, set, or clear the default system used when 2+ are available and `--system` is omitted |
 | `stack components list` | Inspect components in the deployed image |
 | `stack models show\|set` | View / switch model provider |
 | `stack agents [system]` | Edit which agents are enabled on a system (component picker) |

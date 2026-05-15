@@ -78,18 +78,26 @@ export function cmdConfigShow(): void {
     );
   } else {
     for (const sys of systems) {
-      const idUpper = sys.id.toUpperCase().replace(/-/g, "_");
-      const host = envGet(`SYSTEM_${idUpper}_HOST`);
-      const user = envGet(`SYSTEM_${idUpper}_USER`);
-      const pass = envGet(`SYSTEM_${idUpper}_PASS`);
-      const port = envGet(`SYSTEM_${idUpper}_PORT`) || "8076";
-
       console.log(`  ${bold(sys.id)}  ${dim(sys.name)}`);
-      console.log(`    ${cyan("host")}      ${host || dim("(not set)")}`);
-      console.log(`    ${cyan("user")}      ${user || dim("(not set)")}`);
-      console.log(`    ${cyan("password")}  ${maskValue(pass)}`);
-      console.log(`    ${cyan("port")}      ${port}`);
-      console.log(`    ${cyan("mode")}      ${sys.mode}`);
+      if (sys.kind === "external") {
+        const idUpper = sys.id.toUpperCase().replace(/-/g, "_");
+        const key = envGet(`SYSTEM_${idUpper}_AGENTOS_KEY`);
+        console.log(`    ${cyan("kind")}      external`);
+        console.log(`    ${cyan("url")}       ${sys.url}`);
+        console.log(`    ${cyan("key")}       ${maskValue(key)}`);
+      } else {
+        const idUpper = sys.id.toUpperCase().replace(/-/g, "_");
+        const host = envGet(`SYSTEM_${idUpper}_HOST`);
+        const user = envGet(`SYSTEM_${idUpper}_USER`);
+        const pass = envGet(`SYSTEM_${idUpper}_PASS`);
+        const port = envGet(`SYSTEM_${idUpper}_PORT`) || "8076";
+        console.log(`    ${cyan("kind")}      managed`);
+        console.log(`    ${cyan("host")}      ${host || dim("(not set)")}`);
+        console.log(`    ${cyan("user")}      ${user || dim("(not set)")}`);
+        console.log(`    ${cyan("password")}  ${maskValue(pass)}`);
+        console.log(`    ${cyan("port")}      ${port}`);
+        console.log(`    ${cyan("mode")}      ${sys.mode}`);
+      }
       console.log();
     }
   }

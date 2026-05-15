@@ -285,10 +285,50 @@ export function createProgram(): Command {
 
   systemCmd
     .command("add")
-    .description("Add an IBM i system")
-    .action(async () => {
-      await cmdSystemAdd();
-    });
+    .description(
+      "Add a system: managed (provision a new ixora stack) or external (register an AgentOS URL)",
+    )
+    .option(
+      "--kind <kind>",
+      "Skip the kind prompt: 'managed' or 'external'",
+    )
+    .option("--id <id>", "Pre-fill the system ID")
+    .option("--name <name>", "Pre-fill the display name")
+    .option(
+      "--url <url>",
+      "External only: pre-fill the AgentOS URL (e.g. http://localhost:8080)",
+    )
+    .option(
+      "--key <key>",
+      "External only: pre-fill the AgentOS API key (optional)",
+    )
+    .action(
+      async (opts: {
+        kind?: string;
+        id?: string;
+        name?: string;
+        url?: string;
+        key?: string;
+      }) => {
+        const kind =
+          opts.kind === "managed" || opts.kind === "external"
+            ? opts.kind
+            : undefined;
+        if (opts.kind && !kind) {
+          console.error(
+            `Invalid --kind '${opts.kind}'. Use 'managed' or 'external'.`,
+          );
+          process.exit(1);
+        }
+        await cmdSystemAdd({
+          kind,
+          id: opts.id,
+          name: opts.name,
+          url: opts.url,
+          key: opts.key,
+        });
+      },
+    );
 
   systemCmd
     .command("remove")

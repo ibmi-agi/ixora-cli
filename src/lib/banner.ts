@@ -1,5 +1,5 @@
 import { envGet, getApiPortBase } from "./env.js";
-import { readSystems } from "./systems.js";
+import { getManagedSystems, readSystems } from "./systems.js";
 import type { StackProfile } from "./constants.js";
 import { VALID_STACK_PROFILES } from "./constants.js";
 import { success, bold, dim } from "./ui.js";
@@ -31,15 +31,16 @@ function readStackProfile(): StackProfile {
 }
 
 export function printRunningBanner(opts: BannerOptions = {}): void {
-  const allSystems = readSystems();
+  // Banner only describes locally-running compose services, so external
+  // systems are excluded — they have no MCP/A2A endpoint here. Index over
+  // the managed-only subset so port assignments match multi-compose.ts.
+  const managed = getManagedSystems(readSystems());
   const a2aEnabled = isA2AEnabled();
   const stackProfile: StackProfile = opts.profile ?? readStackProfile();
 
-  // When runningServices is provided, filter systems to those whose api is up.
-  // Preserve original index so port assignments (sequential from base) stay correct.
   const apiPortBase = getApiPortBase();
   const filter = opts.runningServices;
-  const systemsWithPort = allSystems
+  const systemsWithPort = managed
     .map((sys, idx) => ({ sys, port: apiPortBase + idx }))
     .filter(
       ({ sys }) => !filter || filter.has(`api-${sys.id}`),

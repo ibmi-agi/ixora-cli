@@ -382,9 +382,9 @@ Consult the [Agno documentation](https://docs.agno.com) for detailed setup instr
 | `ixora stack config show` | Show current configuration |
 | `ixora stack config set KEY VALUE` | Update a config value |
 | `ixora stack config edit` | Open config in your editor |
-| `ixora stack system list` | List configured IBM i systems (default marked with `*`) |
-| `ixora stack system add` | Add another IBM i system (interactive) |
-| `ixora stack system remove <id>` | Remove a system by ID |
+| `ixora stack system list` | List configured systems with KIND + URL columns (default marked with `*`) |
+| `ixora stack system add` | Add a system: managed (provision an IBM i stack) or external (register an AgentOS URL). Flags: `--kind external --id ID --url URL [--key KEY]` |
+| `ixora stack system remove <id>` | Remove a system by ID (managed or external) |
 | `ixora stack system default [id]` | Show / set / `--clear` the default system used in multi-system mode |
 | `ixora stack uninstall` | Stop services and remove images |
 

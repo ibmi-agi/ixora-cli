@@ -1,4 +1,4 @@
-import { readSystems } from "../systems.js";
+import { getManagedSystems, readSystems } from "../systems.js";
 import { DEFAULT_DB_ISOLATION, ENV_FILE, SYSTEMS_CONFIG } from "../constants.js";
 import { envGet, getApiPortBase } from "../env.js";
 
@@ -6,7 +6,11 @@ export function generateMultiCompose(
   envFile: string = ENV_FILE,
   configFile: string = SYSTEMS_CONFIG,
 ): string {
-  const systems = readSystems(configFile);
+  // External systems (kind: "external") have no docker compose footprint —
+  // ixora targets their URL but doesn't lifecycle-manage them. They also
+  // don't consume port slots so they can be added/removed without shifting
+  // managed port assignments.
+  const systems = getManagedSystems(readSystems(configFile));
 
   // CLI mode: agents in the api container talk to the local `ibmi` binary
   // (IBMiCLITools) instead of an ibmi-mcp-server. The MCP container(s) are

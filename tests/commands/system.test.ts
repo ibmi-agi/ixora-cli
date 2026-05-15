@@ -52,8 +52,33 @@ describe("system commands", () => {
       cmdSystemList();
 
       const output = consoleSpy.mock.calls.map((c) => c[0]).join("\n");
-      expect(output).toContain("IBM i Systems");
+      expect(output).toContain("Systems");
       expect(output).toContain("default");
+      // Heading row plus a managed row with computed local URL.
+      expect(output).toContain("KIND");
+      expect(output).toContain("managed");
+      expect(output).toContain("http://localhost:18000");
+    });
+
+    it("shows external entries with their URL and kind", async () => {
+      writeFileSync(ENV_FILE, "IXORA_PROFILE='full'\n");
+      writeFileSync(
+        SYSTEMS_CONFIG,
+        `systems:
+  - id: cloud
+    name: 'Cloud AgentOS'
+    kind: external
+    url: 'https://agentos.example.com'
+`,
+      );
+
+      const { cmdSystemList } = await import("../../src/commands/system.js");
+      cmdSystemList();
+
+      const output = consoleSpy.mock.calls.map((c) => c[0]).join("\n");
+      expect(output).toContain("cloud");
+      expect(output).toContain("external");
+      expect(output).toContain("https://agentos.example.com");
     });
 
     it("shows multiple systems", async () => {
@@ -91,6 +116,59 @@ describe("system commands", () => {
 
       const output = consoleSpy.mock.calls.map((c) => c[0]).join("\n");
       expect(output).toContain("Removed system");
+    });
+  });
+
+  describe("assertManaged (lifecycle guard)", () => {
+    it("exits non-zero with hint when run against an external system", async () => {
+      writeFileSync(ENV_FILE, "IXORA_PROFILE='full'\n");
+      writeFileSync(
+        SYSTEMS_CONFIG,
+        `systems:
+  - id: cloud
+    name: 'Cloud'
+    kind: external
+    url: 'https://agentos.example.com'
+`,
+      );
+
+      const { assertManaged } = await import("../../src/commands/system.js");
+      const sys = {
+        id: "cloud",
+        name: "Cloud",
+        kind: "external" as const,
+        url: "https://agentos.example.com",
+      };
+
+      const exitSpy = vi
+        .spyOn(process, "exit")
+        .mockImplementation(((_code?: number) => {
+          throw new Error("__exit__");
+        }) as never);
+      const stderrSpy = vi
+        .spyOn(process.stderr, "write")
+        .mockImplementation(() => true);
+
+      expect(() => assertManaged(sys)).toThrow("__exit__");
+      const errMsg = stderrSpy.mock.calls.map((c) => c[0]).join("");
+      expect(errMsg).toMatch(/external AgentOS endpoint/);
+      expect(errMsg).toMatch(/https:\/\/agentos.example.com/);
+      expect(errMsg).toMatch(/ixora --system cloud agents list/);
+
+      exitSpy.mockRestore();
+      stderrSpy.mockRestore();
+    });
+
+    it("passes through for a managed system", async () => {
+      const { assertManaged } = await import("../../src/commands/system.js");
+      const sys = {
+        id: "prod1",
+        name: "Prod",
+        kind: "managed" as const,
+        mode: "full" as const,
+      };
+
+      expect(() => assertManaged(sys)).not.toThrow();
     });
   });
 });

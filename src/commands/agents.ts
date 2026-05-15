@@ -7,7 +7,7 @@ import {
   readUserProfile,
   writeUserProfile,
 } from "../lib/profiles.js";
-import { readSystems, setSystemMode } from "../lib/systems.js";
+import { getManagedSystems, readSystems, setSystemMode } from "../lib/systems.js";
 import { bold, die, dim, info, success, warn } from "../lib/ui.js";
 
 /**
@@ -20,10 +20,13 @@ import { bold, die, dim, info, success, warn } from "../lib/ui.js";
  * single-system users don't have to know their default system ID.
  */
 export async function cmdAgentsEdit(systemId?: string): Promise<void> {
-  const systems = readSystems();
+  // Component pickers only apply to managed systems — external endpoints
+  // are configured at the AgentOS source and ixora doesn't author profiles
+  // for them.
+  const systems = getManagedSystems(readSystems());
   if (systems.length === 0) {
     die(
-      "No systems configured. Run `ixora install` first, or `ixora system add` to register one.",
+      "No managed systems configured. Run `ixora stack install` first, or `ixora stack system add` to register one.",
     );
   }
 

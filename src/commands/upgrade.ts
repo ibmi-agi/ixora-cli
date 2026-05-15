@@ -19,7 +19,7 @@ import {
   persistStackProfile,
   wasProfileExplicit,
 } from "../lib/profile.js";
-import { readSystems } from "../lib/systems.js";
+import { getManagedSystems, readSystems } from "../lib/systems.js";
 import { ensureManifest, manifestComponentIds } from "../lib/manifest.js";
 import type { Manifest } from "../lib/manifest.js";
 import { readUserProfile, writeUserProfile } from "../lib/profiles.js";
@@ -178,7 +178,10 @@ export async function cmdUpgrade(opts: UpgradeOptions): Promise<void> {
  * `ixora components list` and `ixora config edit`.
  */
 async function reconcileCustomProfiles(manifest: Manifest): Promise<void> {
-  const systems = readSystems().filter((s) => s.mode === "custom");
+  // Custom profiles only exist for managed systems — skip externals.
+  const systems = getManagedSystems(readSystems()).filter(
+    (s) => s.mode === "custom",
+  );
   if (systems.length === 0) return;
 
   const known = manifestComponentIds(manifest);

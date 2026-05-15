@@ -9,11 +9,12 @@ import {
   totalSystemCount,
   addSystem,
   removeSystem,
+  getManagedSystems,
+  indexAmongManaged,
 } from "../../src/lib/systems.js";
 import {
   SAMPLE_SYSTEMS_YAML,
   SAMPLE_SYSTEMS_YAML_SINGLE,
-  SAMPLE_ENV,
 } from "../helpers/fixtures.js";
 
 describe("systems", () => {
@@ -36,7 +37,7 @@ describe("systems", () => {
       expect(readSystems(configFile)).toEqual([]);
     });
 
-    it("parses multiple systems with mode", () => {
+    it("parses pre-kind YAMLs as managed (back-compat)", () => {
       writeFileSync(configFile, SAMPLE_SYSTEMS_YAML);
       const systems = readSystems(configFile);
 
@@ -44,16 +45,19 @@ describe("systems", () => {
       expect(systems[0]).toEqual({
         id: "default",
         name: "myibmi.example.com",
+        kind: "managed",
         mode: "full",
       });
       expect(systems[1]).toEqual({
         id: "dev",
         name: "Development",
+        kind: "managed",
         mode: "custom",
       });
       expect(systems[2]).toEqual({
         id: "prod",
         name: "Production",
+        kind: "managed",
         mode: "full",
       });
     });
@@ -65,7 +69,66 @@ describe("systems", () => {
       expect(systems).toHaveLength(1);
       expect(systems[0].id).toBe("default");
       expect(systems[0].name).toBe("myibmi.example.com");
-      expect(systems[0].mode).toBe("full");
+      expect(systems[0].kind).toBe("managed");
+      if (systems[0].kind === "managed") {
+        expect(systems[0].mode).toBe("full");
+      }
+    });
+
+    it("parses external entries with url", () => {
+      writeFileSync(
+        configFile,
+        `systems:
+  - id: prod1
+    name: 'Production'
+    kind: managed
+    mode: full
+  - id: personal
+    name: 'Personal AgentOS'
+    kind: external
+    url: 'http://localhost:8080'
+  - id: cloud
+    name: 'Cloud AgentOS'
+    kind: external
+    url: 'https://agentos.example.com'
+`,
+      );
+      const systems = readSystems(configFile);
+
+      expect(systems).toHaveLength(3);
+      expect(systems[1]).toEqual({
+        id: "personal",
+        name: "Personal AgentOS",
+        kind: "external",
+        url: "http://localhost:8080",
+      });
+      expect(systems[2]).toEqual({
+        id: "cloud",
+        name: "Cloud AgentOS",
+        kind: "external",
+        url: "https://agentos.example.com",
+      });
+    });
+
+    it("skips malformed external entries (no url)", () => {
+      writeFileSync(
+        configFile,
+        `systems:
+  - id: prod1
+    name: 'Production'
+    kind: managed
+    mode: full
+  - id: broken
+    name: 'External Without URL'
+    kind: external
+  - id: ok
+    name: 'OK'
+    kind: managed
+    mode: full
+`,
+      );
+      const systems = readSystems(configFile);
+      expect(systems.map((s) => s.id)).toEqual(["prod1", "ok"]);
     });
   });
 
@@ -114,8 +177,42 @@ describe("systems", () => {
     });
   });
 
-  describe("addSystem", () => {
-    it("creates new config file with first system", () => {
+  describe("getManagedSystems / indexAmongManaged", () => {
+    it("filters to managed and indexes managed-only", () => {
+      writeFileSync(
+        configFile,
+        `systems:
+  - id: prod1
+    name: 'P'
+    kind: managed
+    mode: full
+  - id: personal
+    name: 'X'
+    kind: external
+    url: 'http://localhost:8080'
+  - id: sandbox
+    name: 'S'
+    kind: managed
+    mode: custom
+  - id: cloud
+    name: 'C'
+    kind: external
+    url: 'https://x'
+`,
+      );
+      const systems = readSystems(configFile);
+      const managed = getManagedSystems(systems);
+
+      expect(managed.map((s) => s.id)).toEqual(["prod1", "sandbox"]);
+      // External entries do not consume port slots — sandbox is still index 1.
+      expect(indexAmongManaged(systems, systems[2])).toBe(1);
+      // External entries return -1 (no port slot).
+      expect(indexAmongManaged(systems, systems[1])).toBe(-1);
+    });
+  });
+
+  describe("addSystem (managed)", () => {
+    it("creates new config file with first system and writes kind: managed", () => {
       writeFileSync(envFile, "");
       addSystem(
         {
@@ -134,34 +231,18 @@ describe("systems", () => {
       const systems = readSystems(configFile);
       expect(systems).toHaveLength(1);
       expect(systems[0].id).toBe("test");
-      expect(systems[0].mode).toBe("custom");
+      expect(systems[0].kind).toBe("managed");
+      if (systems[0].kind === "managed") {
+        expect(systems[0].mode).toBe("custom");
+      }
 
-      // Check credentials in env
+      const yaml = readFileSync(configFile, "utf-8");
+      expect(yaml).toContain("kind: managed");
+      expect(yaml).toContain("mode: custom");
+
       const envContent = readFileSync(envFile, "utf-8");
       expect(envContent).toContain("SYSTEM_TEST_HOST='test.ibmi.com'");
       expect(envContent).toContain("SYSTEM_TEST_USER='TESTUSER'");
-    });
-
-    it("writes mode to YAML", () => {
-      writeFileSync(envFile, "");
-      addSystem(
-        {
-          id: "test",
-          name: "Test",
-          mode: "custom",
-          host: "h",
-          port: "8076",
-          user: "u",
-          pass: "p",
-        },
-        envFile,
-        configFile,
-      );
-
-      const content = readFileSync(configFile, "utf-8");
-      expect(content).toContain("mode: custom");
-      expect(content).not.toContain("profile:");
-      expect(content).not.toContain("agents:");
     });
 
     it("appends to existing config", () => {
@@ -206,8 +287,60 @@ describe("systems", () => {
     });
   });
 
+  describe("addSystem (external)", () => {
+    it("writes kind: external + url, no IBM i creds", () => {
+      writeFileSync(envFile, "");
+      addSystem(
+        {
+          id: "personal",
+          name: "Personal AgentOS",
+          kind: "external",
+          url: "http://localhost:8080",
+        },
+        envFile,
+        configFile,
+      );
+
+      const systems = readSystems(configFile);
+      expect(systems).toHaveLength(1);
+      expect(systems[0]).toEqual({
+        id: "personal",
+        name: "Personal AgentOS",
+        kind: "external",
+        url: "http://localhost:8080",
+      });
+
+      const yaml = readFileSync(configFile, "utf-8");
+      expect(yaml).toContain("kind: external");
+      expect(yaml).toContain("url: 'http://localhost:8080'");
+      expect(yaml).not.toContain("mode:");
+
+      const envContent = readFileSync(envFile, "utf-8");
+      expect(envContent).not.toContain("SYSTEM_PERSONAL_HOST");
+      expect(envContent).not.toContain("SYSTEM_PERSONAL_USER");
+    });
+
+    it("stores optional API key in .env when provided", () => {
+      writeFileSync(envFile, "");
+      addSystem(
+        {
+          id: "cloud",
+          name: "Cloud",
+          kind: "external",
+          url: "https://agentos.example.com",
+          key: "sk-secret-123",
+        },
+        envFile,
+        configFile,
+      );
+
+      const envContent = readFileSync(envFile, "utf-8");
+      expect(envContent).toContain("SYSTEM_CLOUD_AGENTOS_KEY='sk-secret-123'");
+    });
+  });
+
   describe("removeSystem", () => {
-    it("removes a system from config", () => {
+    it("removes a managed system from config", () => {
       writeFileSync(
         envFile,
         "SYSTEM_DEV_HOST='dev.ibmi.com'\nSYSTEM_DEV_USER='user'\n",
@@ -219,6 +352,26 @@ describe("systems", () => {
       const systems = readSystems(configFile);
       expect(systems).toHaveLength(2);
       expect(systems.map((s) => s.id)).toEqual(["default", "prod"]);
+    });
+
+    it("removes an external system and its AGENTOS_KEY", () => {
+      writeFileSync(envFile, "SYSTEM_CLOUD_AGENTOS_KEY='sk-x'\nOTHER='keep'\n");
+      writeFileSync(
+        configFile,
+        `systems:
+  - id: cloud
+    name: 'Cloud'
+    kind: external
+    url: 'https://x'
+`,
+      );
+
+      removeSystem("cloud", envFile, configFile);
+
+      expect(readSystems(configFile)).toHaveLength(0);
+      const envContent = readFileSync(envFile, "utf-8");
+      expect(envContent).not.toContain("SYSTEM_CLOUD_");
+      expect(envContent).toContain("OTHER='keep'");
     });
 
     it("removes credentials from env", () => {
