@@ -170,6 +170,25 @@ By default each IBM i system gets its **own** `ai_<id>` Postgres database (and i
 -o, --output <format>  Output format: json or table (auto-detects from TTY)
 ```
 
+## Use with Claude Code (skill)
+
+This repo doubles as a [Claude Code plugin marketplace](https://docs.anthropic.com/en/docs/claude-code/plugins) exposing the `use-ixora` skill, which teaches Claude how to drive the Ixora platform with this CLI — installing the stack, managing multiple systems (managed and external), running agents, inspecting traces, browsing knowledge, and more.
+
+**Via the Claude Code marketplace:**
+
+```sh
+claude plugin marketplace add ibmi-agi/ixora-cli
+claude plugin install use-ixora@ixora-cli
+```
+
+**Via `npx skills`:**
+
+```sh
+npx skills add ibmi-agi/ixora-cli
+```
+
+Once installed, Claude activates the skill automatically based on context — e.g. "install ixora", "add a new ixora system", "run an agent on prod", "inspect that trace" — or you can invoke it explicitly as `/ixora-cli:use-ixora`.
+
 ## Development
 
 ```sh

@@ -7,7 +7,9 @@
     "ixora": "./dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "plugins",
+    ".claude-plugin"
   ],
   "scripts": {
     "build": "tsup",

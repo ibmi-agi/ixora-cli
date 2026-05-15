@@ -1,0 +1,8 @@
+{
+  "name": "use-ixora",
+  "description": "Operate the Ixora platform (local stack + AgentOS runtime) from the command line with the ixora CLI — stack lifecycle, multi-system management, agents, teams, workflows, traces, sessions, memories, knowledge.",
+  "version": "0.1.0",
+  "author": { "name": "ibmi-agi" },
+  "license": "MIT",
+  "keywords": ["ixora", "ibm-i", "agentos", "cli", "agent", "trace", "session", "knowledge"]
+}
