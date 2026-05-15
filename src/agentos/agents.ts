@@ -3,9 +3,12 @@ import { Command } from "commander";
 import { getBaseUrl, getClient } from "../lib/agentos-client.js";
 import { handleError } from "../lib/agentos-errors.js";
 import {
+  getJsonFields,
   getOutputFormat,
   outputDetail,
   outputList,
+  printJson,
+  selectFields,
   writeError,
   writeSuccess,
 } from "../lib/agentos-output.js";
@@ -233,7 +236,12 @@ agentsCommand
           });
           const format = getOutputFormat(cmd);
           if (format === "json") {
-            process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+            const fields = getJsonFields(cmd);
+            printJson(
+              fields
+                ? selectFields(result as Record<string, unknown>, fields)
+                : result,
+            );
           } else {
             const content = (result as Record<string, unknown>).content;
             if (content) {
