@@ -3,12 +3,9 @@ import { Command } from "commander";
 import { getBaseUrl, getClient } from "../lib/agentos-client.js";
 import { handleError } from "../lib/agentos-errors.js";
 import {
-  getJsonFields,
   getOutputFormat,
   outputDetail,
   outputList,
-  printJson,
-  selectFields,
   writeSuccess,
 } from "../lib/agentos-output.js";
 import { handleNonStreamRun, handleStreamRun } from "../lib/agentos-stream.js";
@@ -162,22 +159,11 @@ teamsCommand
             userId: options.userId,
             stream: false,
           });
-          const format = getOutputFormat(cmd);
-          if (format === "json") {
-            const fields = getJsonFields(cmd);
-            printJson(
-              fields
-                ? selectFields(result as Record<string, unknown>, fields)
-                : result,
-            );
-          } else {
-            const content = (result as Record<string, unknown>).content;
-            if (content) {
-              process.stdout.write(
-                `${typeof content === "string" ? content : JSON.stringify(content, null, 2)}\n`,
-              );
-            }
-          }
+          await handleNonStreamRun(
+            cmd,
+            { result },
+            { resourceType: "team", resourceId: teamId },
+          );
         }
       } catch (err) {
         handleError(err, { resource: "Team", url: getBaseUrl(cmd) });

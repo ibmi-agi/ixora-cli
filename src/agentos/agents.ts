@@ -3,12 +3,9 @@ import { Command } from "commander";
 import { getBaseUrl, getClient } from "../lib/agentos-client.js";
 import { handleError } from "../lib/agentos-errors.js";
 import {
-  getJsonFields,
   getOutputFormat,
   outputDetail,
   outputList,
-  printJson,
-  selectFields,
   writeError,
   writeSuccess,
 } from "../lib/agentos-output.js";
@@ -183,7 +180,7 @@ agentsCommand
           const cached = readPausedRun(runId);
           if (!cached) {
             writeError(
-              `No cached paused state for run ${runId}. Provide tool results JSON directly or re-run the agent with --stream to capture the paused state.`,
+              `No cached paused state for run ${runId}. The cache may have expired (>24h) or this run was never paused.`,
             );
             process.exitCode = 1;
             return;
@@ -196,7 +193,7 @@ agentsCommand
           const cached = readPausedRun(runId);
           if (!cached) {
             writeError(
-              `No cached paused state for run ${runId}. Provide tool results JSON directly or re-run the agent with --stream to capture the paused state.`,
+              `No cached paused state for run ${runId}. The cache may have expired (>24h) or this run was never paused.`,
             );
             process.exitCode = 1;
             return;
@@ -217,6 +214,7 @@ agentsCommand
           return;
         }
 
+        let rePaused = false;
         if (options.stream) {
           const stream = await client.agents.continue(agentId, runId, {
             tools,
@@ -224,9 +222,13 @@ agentsCommand
             userId: options.userId,
             stream: true,
           });
-          await handleStreamRun(cmd, stream as AgentStream, "agent", {
-            resourceId: agentId,
-          });
+          const streamResult = await handleStreamRun(
+            cmd,
+            stream as AgentStream,
+            "agent",
+            { resourceId: agentId },
+          );
+          rePaused = streamResult.paused;
         } else {
           const result = await client.agents.continue(agentId, runId, {
             tools,
@@ -234,25 +236,22 @@ agentsCommand
             userId: options.userId,
             stream: false,
           });
-          const format = getOutputFormat(cmd);
-          if (format === "json") {
-            const fields = getJsonFields(cmd);
-            printJson(
-              fields
-                ? selectFields(result as Record<string, unknown>, fields)
-                : result,
-            );
-          } else {
-            const content = (result as Record<string, unknown>).content;
-            if (content) {
-              process.stdout.write(
-                `${typeof content === "string" ? content : JSON.stringify(content, null, 2)}\n`,
-              );
-            }
-          }
+          const status =
+            typeof (result as Record<string, unknown>)?.status === "string"
+              ? ((result as Record<string, unknown>).status as string).toLowerCase()
+              : "";
+          rePaused = status === "paused";
+          await handleNonStreamRun(
+            cmd,
+            { result },
+            { resourceType: "agent", resourceId: agentId },
+          );
         }
 
-        if (options.confirm || options.reject !== undefined) {
+        // Only delete the original cache once we're sure the continue resolved
+        // the pause (didn't re-pause). For stream, we play it safe and let the
+        // 24h TTL clean up stale entries.
+        if ((options.confirm || options.reject !== undefined) && !rePaused) {
           deletePausedRun(runId);
         }
       } catch (err) {
