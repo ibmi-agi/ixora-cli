@@ -1,6 +1,6 @@
 # ixora
 
-CLI for managing ixora AI agent deployments on IBM i.
+CLI for managing ixora AI agent deployments on IBM i — and for talking to the running AgentOS.
 
 ## Install
 
@@ -11,12 +11,12 @@ npm install -g @ibm/ixora
 Or run directly with npx:
 
 ```sh
-npx @ibm/ixora install
+npx @ibm/ixora stack install
 ```
 
 ### Requirements
 
-- Node.js >= 18
+- Node.js >= 20
 - Docker Desktop (or Podman)
 - An IBM i system with Db2 for i
 - An API key for your chosen model provider (Anthropic, OpenAI, Google, or Ollama for local)
@@ -24,10 +24,41 @@ npx @ibm/ixora install
 ## Quick Start
 
 ```sh
-ixora install    # Interactive setup (IBM i connection, model provider, profile)
-ixora start      # Start services (defaults to --profile full = DB + API + MCP + UI)
-ixora stop       # Stop services
+ixora stack install    # Interactive setup (IBM i connection, model provider, profile)
+ixora stack start      # Start services (defaults to --profile full = DB + API + MCP + UI)
+ixora stack stop       # Stop services
 ```
+
+Once a system is up, talk to AgentOS directly:
+
+```sh
+ixora agents list      # List registered agents
+ixora agents run <id> "what's running on QSYS?"
+ixora traces list      # See recent runs
+ixora sessions list    # Browse sessions
+ixora knowledge search "..."
+```
+
+If only one system is running, those commands target it implicitly. With 2+ systems running you have two options:
+
+```sh
+ixora --system prod agents list           # one-off override
+ixora stack system default prod           # set a persistent default
+ixora agents list                         # now uses 'prod' implicitly
+ixora --system dev agents list            # flag still wins over the default
+ixora stack system default --clear        # back to "must specify --system"
+```
+
+## Two command surfaces
+
+The `ixora` binary exposes two trees:
+
+| Tree | Purpose | Examples |
+|---|---|---|
+| `ixora stack ...` | Manage the local stack: install, start/stop, configure, add IBM i systems | `ixora stack install`, `ixora stack system add`, `ixora stack config set ...` |
+| `ixora <runtime> ...` | Talk to the running AgentOS (ported from the standalone `agno-cli`) | `ixora agents`, `ixora teams`, `ixora workflows`, `ixora traces`, `ixora sessions`, `ixora knowledge`, `ixora memories`, `ixora evals`, `ixora approvals`, `ixora schedules`, `ixora metrics`, `ixora databases`, `ixora registries`, `ixora components`, `ixora models`, `ixora status` |
+
+`ixora <runtime>` commands always pick a target system (the only running one by default; `--system <name>` to choose). `ixora stack` commands are unaffected by `--system` — they have their own targeting (`ixora stack system start <id>`, etc.).
 
 ### Deployment shapes (`--profile`)
 
@@ -38,56 +69,89 @@ ixora stop       # Stop services
 | `cli`            | DB + API (no MCP container) | Agents use the bundled `ibmi` CLI directly — no MCP server in the path |
 
 ```sh
-ixora start --profile full  # All four services (default)
-ixora start --profile mcp   # No Carbon UI; API on :18000, DB on :15432
-ixora start --profile cli   # No MCP container; API runs in CLI mode
+ixora stack start --profile full  # All four services (default)
+ixora stack start --profile mcp   # No Carbon UI; API on :18000, DB on :15432
+ixora stack start --profile cli   # No MCP container; API runs in CLI mode
 ```
 
-The chosen profile is persisted to `~/.ixora/.env`, so subsequent `stop`/`status`/`logs`/`restart`/`upgrade` calls without `--profile` keep the same shape. Switching mid-session is safe: `ixora stop --profile mcp` while in `full` leaves the UI container untouched.
+The chosen profile is persisted to `~/.ixora/.env`, so subsequent `stop`/`status`/`logs`/`restart`/`upgrade` calls without `--profile` keep the same shape. Switching mid-session is safe: `ixora stack stop --profile mcp` while in `full` leaves the UI container untouched.
 
 The old `--profile api` is accepted as an alias for `--profile mcp` (with a one-line warning).
 
-`--profile cli` sets `IXORA_CLI_MODE=true` on the API container — each API reaches its IBM i system using the stored `SYSTEM_<ID>_*` credentials. You can also set `IXORA_CLI_MODE=true` manually (`ixora config set IXORA_CLI_MODE true && ixora restart`) to run CLI mode under the `full` profile (keeping the UI). See [IXORA_QUICKSTART.md](IXORA_QUICKSTART.md) → §4 "Advanced: CLI mode" / §8 "Stack profiles". PASE stays unavailable in CLI mode.
+`--profile cli` sets `IXORA_CLI_MODE=true` on the API container — each API reaches its IBM i system using the stored `SYSTEM_<ID>_*` credentials. You can also set `IXORA_CLI_MODE=true` manually (`ixora stack config set IXORA_CLI_MODE true && ixora stack restart`) to run CLI mode under the `full` profile (keeping the UI). See [IXORA_QUICKSTART.md](IXORA_QUICKSTART.md) → §4 "Advanced: CLI mode" / §8 "Stack profiles". PASE stays unavailable in CLI mode.
 
 ### Per-system database isolation
 
-By default each IBM i system gets its **own** `ai_<id>` Postgres database (and its own `/data` volume) inside the shared `agentos-db` container — so sessions, memory, knowledge, and learnings are isolated per system. A single-system deployment is just `agentos-db` with an `ai_default` database (nothing extra); with 2+ systems a one-shot `db-init` service provisions the additional databases. To put everything back in one shared `ai` database instead: `ixora config set IXORA_DB_ISOLATION shared && ixora restart`. See [IXORA_QUICKSTART.md](IXORA_QUICKSTART.md) → §4 "Advanced: per-system database isolation".
+By default each IBM i system gets its **own** `ai_<id>` Postgres database (and its own `/data` volume) inside the shared `agentos-db` container — so sessions, memory, knowledge, and learnings are isolated per system. A single-system deployment is just `agentos-db` with an `ai_default` database (nothing extra); with 2+ systems a one-shot `db-init` service provisions the additional databases. To put everything back in one shared `ai` database instead: `ixora stack config set IXORA_DB_ISOLATION shared && ixora stack restart`. See [IXORA_QUICKSTART.md](IXORA_QUICKSTART.md) → §4 "Advanced: per-system database isolation".
 
-## Commands
+## Stack commands
 
 | Command | Description |
 |---------|-------------|
-| `install` | First-time setup (interactive) |
-| `start` | Start services |
-| `stop` | Stop services |
-| `restart [service]` | Restart all or a specific service |
-| `status` | Show service status and deployed profile |
-| `upgrade` | Pull latest images and restart |
-| `uninstall` | Stop services and remove images |
-| `logs [service]` | Tail service logs |
-| `version` | Show CLI and image versions |
-| `config show` | Show current configuration |
-| `config set <key> <value>` | Update a config value |
-| `config edit` | Open config in your editor |
-| `system add` | Add an IBM i system |
-| `system remove` | Remove a system |
-| `system list` | List configured systems |
+| `stack install` | First-time setup (interactive) |
+| `stack start` | Start services |
+| `stack stop` | Stop services |
+| `stack restart [service]` | Restart all or a specific service |
+| `stack status` | Show service status and deployed profile |
+| `stack upgrade` | Pull latest images and restart |
+| `stack uninstall` | Stop services and remove images |
+| `stack logs [service]` | Tail service logs |
+| `stack version` | Show CLI and image versions |
+| `stack config show` | Show current configuration |
+| `stack config set <key> <value>` | Update a config value |
+| `stack config edit` | Open config in your editor |
+| `stack system add` | Add an IBM i system (prompts for connection + optional AgentOS API key) |
+| `stack system remove <id>` | Remove a system |
+| `stack system list` | List configured systems (default marked with `*`) |
+| `stack system start\|stop\|restart <id>` | Manage one system's containers |
+| `stack system default [id] [--clear]` | Show, set, or clear the default system used when 2+ are running and `--system` is omitted |
+| `stack components list` | Inspect components in the deployed image |
+| `stack models show\|set` | View / switch model provider |
+| `stack agents [system]` | Edit which agents are enabled on a system (component picker) |
 
-## Options
+## AgentOS runtime commands
+
+| Command | Description |
+|---------|-------------|
+| `agents list\|get\|run\|continue\|cancel` | Manage agents |
+| `teams list\|get\|run\|continue\|cancel` | Manage teams |
+| `workflows list\|get\|run\|continue\|cancel` | Manage workflows |
+| `traces list\|get\|stats\|search` | Inspect traces |
+| `sessions list\|get\|create\|update\|delete\|delete-all\|runs` | Manage sessions |
+| `memories list\|get\|create\|update\|delete\|delete-all\|topics\|stats\|optimize` | Manage memories |
+| `knowledge upload\|list\|get\|search\|status\|delete\|delete-all\|config` | Manage knowledge base |
+| `evals list\|get\|delete` | Manage eval runs |
+| `approvals list\|get\|resolve` | Manage approvals |
+| `schedules list\|get\|create\|update\|delete\|pause\|resume\|runs` | Manage schedules |
+| `metrics get\|refresh` | View / refresh metrics |
+| `databases migrate <db_id>` | Run database migrations |
+| `registries list` | List registry items |
+| `components list\|get\|create\|update\|delete\|config ...` | Manage components in AgentOS |
+| `models list` | List available models in AgentOS |
+| `status` | Show AgentOS server status and resource overview |
+
+## Global options
 
 ```
---profile <name>       Stack shape: full (DB + API + MCP + UI) or api (DB + API + MCP, no UI) [default: full]
---agent-profile <name> Agent profile (full|sql-services|security|knowledge), used at install time
+# Stack shape & install-time
+--profile <name>       Stack shape: full / mcp / cli  [default: full]
+--mode <name>          Per-system mode: full / custom (install-time)
 --image-version <tag>  Pin image version (e.g., v1.2.0)
 --no-pull              Skip pulling images
 --purge                Remove volumes too (with uninstall)
 --runtime <name>       Force docker or podman
+
+# AgentOS targeting (consumed by ixora <runtime> ... commands)
+-s, --system <name>    Target a specific configured system. Implicit when only one is
+                       running, or when the configured default (ixora stack system default)
+                       is in the running set. Always wins when supplied.
+--url <url>            Override AgentOS endpoint entirely (skips system resolution)
+--key <key>            Override AgentOS API key for this invocation
+--timeout <seconds>    Override request timeout in seconds
+--no-color             Disable color output
+--json [fields]        Emit JSON; `--json id,name` projects fields
+-o, --output <format>  Output format: json or table (auto-detects from TTY)
 ```
-
-`--profile` and `--agent-profile` are independent axes:
-
-- **`--profile`** controls _which containers_ run (stack shape).
-- **`--agent-profile`** controls _which agents_ the API loads inside those containers.
 
 ## Development
 
@@ -112,4 +176,4 @@ The original `ixora.sh` shell script is still available in this repo for referen
 curl -LsSf https://raw.githubusercontent.com/ibmi-agi/ixora-cli/main/install.sh | sh
 ```
 
-This installs the shell script to `~/.local/bin/ixora`. The Node.js CLI above is the recommended version going forward.
+This installs the shell script to `~/.local/bin/ixora`. The Node.js CLI above is the recommended version going forward. (The shell script does not include the AgentOS runtime commands — only the stack-management surface.)

@@ -7,26 +7,38 @@ describe("CLI program", () => {
     expect(program.name()).toBe("ixora");
   });
 
-  it("has all expected commands", () => {
+  it("exposes the stack group at top level", () => {
     const program = createProgram();
-    const commandNames = program.commands.map((c) => c.name());
-
-    expect(commandNames).toContain("install");
-    expect(commandNames).toContain("start");
-    expect(commandNames).toContain("stop");
-    expect(commandNames).toContain("restart");
-    expect(commandNames).toContain("status");
-    expect(commandNames).toContain("upgrade");
-    expect(commandNames).toContain("uninstall");
-    expect(commandNames).toContain("logs");
-    expect(commandNames).toContain("version");
-    expect(commandNames).toContain("config");
-    expect(commandNames).toContain("system");
+    const topNames = program.commands.map((c) => c.name());
+    expect(topNames).toContain("stack");
   });
 
-  it("config has subcommands", () => {
+  it("stack group contains every relocated command", () => {
     const program = createProgram();
-    const configCmd = program.commands.find((c) => c.name() === "config");
+    const stackCmd = program.commands.find((c) => c.name() === "stack");
+    expect(stackCmd).toBeDefined();
+    const stackSubNames = stackCmd!.commands.map((c) => c.name());
+
+    expect(stackSubNames).toContain("install");
+    expect(stackSubNames).toContain("start");
+    expect(stackSubNames).toContain("stop");
+    expect(stackSubNames).toContain("restart");
+    expect(stackSubNames).toContain("status");
+    expect(stackSubNames).toContain("upgrade");
+    expect(stackSubNames).toContain("uninstall");
+    expect(stackSubNames).toContain("logs");
+    expect(stackSubNames).toContain("version");
+    expect(stackSubNames).toContain("config");
+    expect(stackSubNames).toContain("agents");
+    expect(stackSubNames).toContain("components");
+    expect(stackSubNames).toContain("system");
+    expect(stackSubNames).toContain("models");
+  });
+
+  it("stack config has subcommands", () => {
+    const program = createProgram();
+    const stackCmd = program.commands.find((c) => c.name() === "stack");
+    const configCmd = stackCmd!.commands.find((c) => c.name() === "config");
     expect(configCmd).toBeDefined();
     const subNames = configCmd!.commands.map((c) => c.name());
     expect(subNames).toContain("show");
@@ -34,14 +46,16 @@ describe("CLI program", () => {
     expect(subNames).toContain("edit");
   });
 
-  it("system has subcommands", () => {
+  it("stack system has subcommands", () => {
     const program = createProgram();
-    const systemCmd = program.commands.find((c) => c.name() === "system");
+    const stackCmd = program.commands.find((c) => c.name() === "stack");
+    const systemCmd = stackCmd!.commands.find((c) => c.name() === "system");
     expect(systemCmd).toBeDefined();
     const subNames = systemCmd!.commands.map((c) => c.name());
     expect(subNames).toContain("add");
     expect(subNames).toContain("remove");
     expect(subNames).toContain("list");
+    expect(subNames).toContain("default");
   });
 
   it("has global options", () => {

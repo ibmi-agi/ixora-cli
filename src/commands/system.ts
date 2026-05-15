@@ -7,7 +7,7 @@ import {
   addSystem,
   removeSystem,
 } from "../lib/systems.js";
-import { envGet } from "../lib/env.js";
+import { envGet, updateEnvKey } from "../lib/env.js";
 import {
   requireInstalled,
   writeComposeFile,
@@ -72,6 +72,14 @@ export async function cmdSystemAdd(): Promise<void> {
     },
   });
 
+  // Optional AgentOS API key. Empty/blank means the system runs unauthenticated
+  // (the default for local containers). Stored as SYSTEM_<ID>_AGENTOS_KEY in
+  // .env so the agno-mounted commands' resolver can pick it up.
+  const agentosKey = await password({
+    message: "AgentOS API key (leave blank for local/unauthenticated):",
+    mask: "*",
+  });
+
   let mode = await select<DeploymentMode>({
     message: "How should this system be deployed?",
     choices: [
@@ -115,6 +123,12 @@ export async function cmdSystemAdd(): Promise<void> {
     user: user.trim(),
     pass,
   });
+
+  const trimmedAgentosKey = agentosKey.trim();
+  if (trimmedAgentosKey.length > 0) {
+    const idUpper = cleanId.toUpperCase().replace(/-/g, "_");
+    updateEnvKey(`SYSTEM_${idUpper}_AGENTOS_KEY`, trimmedAgentosKey);
+  }
 
   console.log();
   success(`Added system '${cleanId}' (${host.trim()})`);
@@ -207,6 +221,61 @@ export async function cmdSystemStop(id: string): Promise<void> {
   success(`System '${id}' stopped`);
 }
 
+/**
+ * Show, set, or clear the configured default system.
+ *
+ * Used by the AgentOS resolver in the multi-system case: when 2+ systems are
+ * running and no `--system` is provided, the default is selected if and only
+ * if its name appears in the running set. The `--system` flag always wins.
+ */
+export function cmdSystemDefault(
+  id: string | undefined,
+  opts: { clear?: boolean } = {},
+): void {
+  if (opts.clear) {
+    if (id) die("Cannot specify both an ID and --clear");
+    updateEnvKey("IXORA_DEFAULT_SYSTEM", "");
+    success("Default system cleared");
+    console.log(
+      `  ${dim("With 2+ systems running, you must now pass --system <name>.")}`,
+    );
+    return;
+  }
+
+  if (!id) {
+    const current = (envGet("IXORA_DEFAULT_SYSTEM") ?? "").trim();
+    console.log();
+    if (current.length === 0) {
+      console.log(`  ${dim("No default system set.")}`);
+      console.log(`  Set with: ${bold("ixora stack system default <id>")}`);
+    } else if (!systemIdExists(current)) {
+      warn(
+        `Default system '${current}' is set but not in ixora-systems.yaml. Re-set or clear it.`,
+      );
+    } else {
+      console.log(`  Default system: ${bold(current)}`);
+      console.log(
+        `  ${dim("Used when 2+ systems are running and --system is omitted.")}`,
+      );
+    }
+    console.log();
+    return;
+  }
+
+  if (!systemIdExists(id)) {
+    const known = readSystems()
+      .map((s) => s.id)
+      .join(", ");
+    die(`System '${id}' not found. Configured: ${known}`);
+  }
+
+  updateEnvKey("IXORA_DEFAULT_SYSTEM", id);
+  success(`Default system set to '${id}'`);
+  console.log(
+    `  ${dim("With 2+ systems running and no --system flag, this system will be used.")}`,
+  );
+}
+
 export async function cmdSystemRestart(id: string): Promise<void> {
   try {
     requireInstalled();
@@ -235,6 +304,7 @@ export async function cmdSystemRestart(id: string): Promise<void> {
 
 export function cmdSystemList(): void {
   const systems = readSystems();
+  const defaultId = (envGet("IXORA_DEFAULT_SYSTEM") ?? "").trim();
 
   console.log();
   console.log(`  ${chalk.bold("IBM i Systems")}`);
@@ -242,14 +312,19 @@ export function cmdSystemList(): void {
 
   if (systems.length === 0) {
     console.log(
-      `  ${dim(`No systems configured. Run: ${bold("ixora install")}`)}`,
+      `  ${dim(`No systems configured. Run: ${bold("ixora stack install")}`)}`,
     );
   }
 
   for (const sys of systems) {
     const idUpper = sys.id.toUpperCase().replace(/-/g, "_");
     const sysHost = envGet(`SYSTEM_${idUpper}_HOST`) || dim("(no host)");
-    const marker = sys.id === "default" ? cyan("*") : cyan(" ");
+    // `*` marks the configured default system (IXORA_DEFAULT_SYSTEM in .env).
+    // Falls back to flagging the literal id "default" so single-system installs
+    // still get a marker without explicit configuration.
+    const isDefault =
+      defaultId.length > 0 ? sys.id === defaultId : sys.id === "default";
+    const marker = isDefault ? cyan("*") : cyan(" ");
     console.log(
       `  ${marker}  ${sys.id.padEnd(12)}  ${String(sysHost).padEnd(30)}  ${dim(sys.mode)}`,
     );
@@ -261,9 +336,12 @@ export function cmdSystemList(): void {
     console.log(
       `  ${dim("Multi-system mode: each system runs on its own port (18000, 18001, ...)")}`,
     );
+    console.log(
+      `  ${dim("Default for runtime commands: ixora stack system default <id>")}`,
+    );
   }
   console.log(
-    `  ${dim("Add: ixora system add  |  Remove: ixora system remove <id>")}`,
+    `  ${dim("Add: ixora stack system add  |  Remove: ixora stack system remove <id>")}`,
   );
   console.log();
 }

@@ -1,4 +1,25 @@
 import { Command } from "commander";
+import { agentsCommand } from "./agentos/agents.js";
+import { approvalsCommand } from "./agentos/approvals.js";
+import { componentsCommand as agnoComponentsCommand } from "./agentos/components.js";
+import { databasesCommand } from "./agentos/databases.js";
+import { evalsCommand } from "./agentos/evals.js";
+import { knowledgeCommand } from "./agentos/knowledge.js";
+import { memoriesCommand } from "./agentos/memories.js";
+import { metricsCommand } from "./agentos/metrics.js";
+import { modelsCommand as agnoModelsCommand } from "./agentos/models.js";
+import { registriesCommand } from "./agentos/registries.js";
+import { schedulesCommand } from "./agentos/schedules.js";
+import { sessionsCommand } from "./agentos/sessions.js";
+import { statusCommand as agnoStatusCommand } from "./agentos/status.js";
+import { teamsCommand } from "./agentos/teams.js";
+import { tracesCommand } from "./agentos/traces.js";
+import { workflowsCommand } from "./agentos/workflows.js";
+import { setAgentOSContext } from "./lib/agentos-context.js";
+import {
+  type ResolverFlags,
+  resolveAgentOSTarget,
+} from "./lib/agentos-resolver.js";
 import { SCRIPT_VERSION } from "./lib/constants.js";
 import { cmdVersion } from "./commands/version.js";
 import { cmdStatus } from "./commands/status.js";
@@ -21,6 +42,7 @@ import { cmdComponentsList } from "./commands/components.js";
 import { cmdAgentsEdit } from "./commands/agents.js";
 import {
   cmdSystemAdd,
+  cmdSystemDefault,
   cmdSystemRemove,
   cmdSystemList,
   cmdSystemStart,
@@ -45,9 +67,61 @@ export function createProgram(): Command {
     .option("--image-version <tag>", "Pin image version (e.g., v1.2.0)")
     .option("--no-pull", "Skip pulling images")
     .option("--purge", "Remove volumes too (with uninstall)")
-    .option("--runtime <name>", "Force container runtime (docker or podman)");
+    .option("--runtime <name>", "Force container runtime (docker or podman)")
+    // ── AgentOS-targeting flags (consumed by ported agno commands) ──
+    .option(
+      "-s, --system <name>",
+      "Target a specific configured system (omit to use the only running one)",
+    )
+    .option(
+      "--url <url>",
+      "Override AgentOS endpoint entirely (skips system resolution)",
+    )
+    .option("--key <key>", "Override AgentOS API key for this invocation")
+    .option(
+      "--timeout <seconds>",
+      "Override request timeout in seconds",
+      (v: string) => Number.parseFloat(v),
+    )
+    .option("--no-color", "Disable color output")
+    .option(
+      "--json [fields]",
+      "Emit JSON; pass a comma list (e.g. --json id,name) to project fields",
+    )
+    .option(
+      "-o, --output <format>",
+      "Output format: json or table (auto-detects from TTY)",
+    );
 
-  program
+  // The preAction hook fires before any subcommand's action. For commands
+  // mounted directly under the root (the ported agno tree), we resolve the
+  // AgentOS target from --system / .env / running-container state and stash
+  // it on the process-level context. Stack commands skip this — they have
+  // their own targeting (positional system IDs, etc).
+  program.hook("preAction", async (thisCmd, actionCmd) => {
+    if (isUnderStack(actionCmd)) return;
+
+    const opts = thisCmd.opts();
+    const flags: ResolverFlags = {
+      system: typeof opts.system === "string" ? opts.system : undefined,
+      url: typeof opts.url === "string" ? opts.url : undefined,
+      key: typeof opts.key === "string" ? opts.key : undefined,
+      timeout: typeof opts.timeout === "number" ? opts.timeout : undefined,
+    };
+    const ctx = await resolveAgentOSTarget(flags);
+    setAgentOSContext(ctx);
+  });
+
+  // All stack-management commands live under `ixora stack <cmd>`.
+  // The top-level command surface is reserved for AgentOS runtime commands
+  // (agents, teams, traces, sessions, ...) ported from agno-cli.
+  const stackCmd = program
+    .command("stack")
+    .description(
+      "Manage the local Ixora stack (install, start/stop, config, systems, models)",
+    );
+
+  stackCmd
     .command("install")
     .description("First-time setup (interactive)")
     .action(async () => {
@@ -55,7 +129,7 @@ export function createProgram(): Command {
       await cmdInstall(opts);
     });
 
-  program
+  stackCmd
     .command("start")
     .argument("[service]", "Service to start (omit for all)")
     .description("Start all services, or a specific service by name")
@@ -64,7 +138,7 @@ export function createProgram(): Command {
       await cmdStart(opts, service);
     });
 
-  program
+  stackCmd
     .command("stop")
     .argument("[service]", "Service to stop (omit for all)")
     .description("Stop all services, or a specific service by name")
@@ -73,7 +147,7 @@ export function createProgram(): Command {
       await cmdStop(opts, service);
     });
 
-  program
+  stackCmd
     .command("restart")
     .argument("[service]", "Service to restart (omit for all)")
     .description("Restart all services, or a specific service by name")
@@ -82,7 +156,7 @@ export function createProgram(): Command {
       await cmdRestart(opts, service);
     });
 
-  program
+  stackCmd
     .command("status")
     .description("Show service status and deployed profile")
     .action(async () => {
@@ -90,7 +164,7 @@ export function createProgram(): Command {
       await cmdStatus(opts);
     });
 
-  program
+  stackCmd
     .command("upgrade")
     .description("Pull latest images and restart")
     .argument("[version]", "Target version (e.g., 0.0.11 or v0.0.11)")
@@ -99,7 +173,7 @@ export function createProgram(): Command {
       await cmdUpgrade({ ...opts, version });
     });
 
-  program
+  stackCmd
     .command("uninstall")
     .description("Stop services and remove images")
     .action(async () => {
@@ -107,7 +181,7 @@ export function createProgram(): Command {
       await cmdUninstall(opts);
     });
 
-  program
+  stackCmd
     .command("logs")
     .argument("[service]", "Service to show logs for (omit for all)")
     .description("Tail service logs")
@@ -116,7 +190,7 @@ export function createProgram(): Command {
       await cmdLogs(opts, service);
     });
 
-  program
+  stackCmd
     .command("version")
     .description("Show CLI and image versions")
     .action(async () => {
@@ -125,7 +199,7 @@ export function createProgram(): Command {
     });
 
   // Config subcommands
-  const configCmd = program
+  const configCmd = stackCmd
     .command("config")
     .description("View and edit deployment configuration");
 
@@ -165,9 +239,6 @@ export function createProgram(): Command {
       cmdSystemConfigReset(system);
     });
 
-  // Override the default `show` action to accept an optional system arg.
-  // commander lets us add a second variant of "show" that takes the system
-  // ID and prints its mode + resolved component list.
   configCmd
     .command("show-system")
     .alias("show-sys")
@@ -177,11 +248,11 @@ export function createProgram(): Command {
       await cmdSystemConfigShow(system);
     });
 
-  // `ixora agents [system]` — focused entry point for editing the agents
+  // `ixora stack agents [system]` — focused entry point for editing the agents
   // enabled on a system. Identical plumbing to `config edit <system>` but
   // skips the Full/Custom prompt (picking implies Custom). Falls back to
   // a system picker when no system arg is supplied.
-  program
+  stackCmd
     .command("agents")
     .argument("[system]", "System ID — omit to pick interactively")
     .description("Edit the agents enabled on a system (opens the component picker)")
@@ -189,9 +260,9 @@ export function createProgram(): Command {
       await cmdAgentsEdit(system);
     });
 
-  // `ixora components list` — pretty-print the component manifest from the
-  // installed image so users authoring custom profiles can discover IDs.
-  const componentsCmd = program
+  // `ixora stack components list` — pretty-print the component manifest from
+  // the installed image so users authoring custom profiles can discover IDs.
+  const componentsCmd = stackCmd
     .command("components")
     .description("Inspect the components the installed image declares");
 
@@ -208,7 +279,7 @@ export function createProgram(): Command {
     });
 
   // System subcommands
-  const systemCmd = program
+  const systemCmd = stackCmd
     .command("system")
     .description("Manage IBM i systems (add, remove, list)");
 
@@ -236,7 +307,7 @@ export function createProgram(): Command {
 
   systemCmd
     .command("start")
-    .argument("<id>", "System ID (from ixora system)")
+    .argument("<id>", "System ID (from ixora stack system list)")
     .description("Start a specific system's services")
     .action(async (id: string) => {
       await cmdSystemStart(id);
@@ -244,7 +315,7 @@ export function createProgram(): Command {
 
   systemCmd
     .command("stop")
-    .argument("<id>", "System ID (from ixora system)")
+    .argument("<id>", "System ID (from ixora stack system list)")
     .description("Stop a specific system's services")
     .action(async (id: string) => {
       await cmdSystemStop(id);
@@ -252,14 +323,28 @@ export function createProgram(): Command {
 
   systemCmd
     .command("restart")
-    .argument("<id>", "System ID (from ixora system)")
+    .argument("<id>", "System ID (from ixora stack system list)")
     .description("Restart a specific system's services")
     .action(async (id: string) => {
       await cmdSystemRestart(id);
     });
 
+  systemCmd
+    .command("default")
+    .argument(
+      "[id]",
+      "System ID to set as the default; omit to show the current default",
+    )
+    .option("--clear", "Unset the default system")
+    .description(
+      "Set, show, or clear the default system used when 2+ are running and --system is omitted",
+    )
+    .action((id: string | undefined, opts: { clear?: boolean }) => {
+      cmdSystemDefault(id, opts);
+    });
+
   // Models subcommands
-  const modelsCmd = program
+  const modelsCmd = stackCmd
     .command("models")
     .description("View and switch AI model configuration");
 
@@ -281,5 +366,36 @@ export function createProgram(): Command {
       await cmdModelsSet(provider);
     });
 
+  // ── Mount the ported agno tree at top level ────────────────────────────
+  program.addCommand(agentsCommand);
+  program.addCommand(teamsCommand);
+  program.addCommand(workflowsCommand);
+  program.addCommand(tracesCommand);
+  program.addCommand(sessionsCommand);
+  program.addCommand(memoriesCommand);
+  program.addCommand(knowledgeCommand);
+  program.addCommand(evalsCommand);
+  program.addCommand(approvalsCommand);
+  program.addCommand(schedulesCommand);
+  program.addCommand(metricsCommand);
+  program.addCommand(databasesCommand);
+  program.addCommand(registriesCommand);
+  program.addCommand(agnoComponentsCommand);
+  program.addCommand(agnoModelsCommand);
+  program.addCommand(agnoStatusCommand);
+
   return program;
+}
+
+/**
+ * Walk a command's parent chain looking for the `stack` group. Used by the
+ * preAction hook to skip AgentOS resolution for stack-management commands.
+ */
+function isUnderStack(cmd: Command): boolean {
+  let c: Command | null = cmd;
+  while (c) {
+    if (c.name() === "stack") return true;
+    c = c.parent;
+  }
+  return false;
 }
