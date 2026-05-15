@@ -8,6 +8,7 @@ import {
   outputList,
   writeSuccess,
 } from "../lib/agentos-output.js";
+import { requestResumeStream } from "../lib/agentos-resume.js";
 import { handleNonStreamRun, handleStreamRun } from "../lib/agentos-stream.js";
 
 export const workflowsCommand = new Command("workflows").description(
@@ -172,6 +173,43 @@ workflowsCommand
       }
     },
   );
+
+workflowsCommand
+  .command("resume")
+  .argument("<workflow_id>", "Workflow ID")
+  .argument("<run_id>", "Run ID whose SSE stream you want to reconnect to")
+  .description(
+    "Resume an SSE stream for a workflow run after disconnection (replays missed events)",
+  )
+  .option(
+    "--last-event-index <n>",
+    "Index of the last SSE event you received (0-based). Omit to replay from start.",
+    (v: string) => Number.parseInt(v, 10),
+  )
+  .option(
+    "--session-id <id>",
+    "Session ID — required for database fallback when the run is no longer buffered",
+  )
+  .action(async (workflowId: string, runId: string, options, cmd) => {
+    try {
+      const client = getClient(cmd);
+      const stream = await requestResumeStream(
+        client,
+        "workflow",
+        workflowId,
+        runId,
+        {
+          lastEventIndex: options.lastEventIndex,
+          sessionId: options.sessionId,
+        },
+      );
+      await handleStreamRun(cmd, stream, "workflow", {
+        resourceId: workflowId,
+      });
+    } catch (err) {
+      handleError(err, { resource: "Workflow", url: getBaseUrl(cmd) });
+    }
+  });
 
 workflowsCommand
   .command("cancel")

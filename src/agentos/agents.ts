@@ -13,6 +13,7 @@ import {
   deletePausedRun,
   readPausedRun,
 } from "../lib/agentos-paused-runs.js";
+import { requestResumeStream } from "../lib/agentos-resume.js";
 import { handleNonStreamRun, handleStreamRun } from "../lib/agentos-stream.js";
 
 export const agentsCommand = new Command("agents").description("Manage agents");
@@ -259,6 +260,35 @@ agentsCommand
       }
     },
   );
+
+agentsCommand
+  .command("resume")
+  .argument("<agent_id>", "Agent ID")
+  .argument("<run_id>", "Run ID whose SSE stream you want to reconnect to")
+  .description(
+    "Resume an SSE stream for an agent run after disconnection (replays missed events)",
+  )
+  .option(
+    "--last-event-index <n>",
+    "Index of the last SSE event you received (0-based). Omit to replay from start.",
+    (v: string) => Number.parseInt(v, 10),
+  )
+  .option(
+    "--session-id <id>",
+    "Session ID — required for database fallback when the run is no longer buffered",
+  )
+  .action(async (agentId: string, runId: string, options, cmd) => {
+    try {
+      const client = getClient(cmd);
+      const stream = await requestResumeStream(client, "agent", agentId, runId, {
+        lastEventIndex: options.lastEventIndex,
+        sessionId: options.sessionId,
+      });
+      await handleStreamRun(cmd, stream, "agent", { resourceId: agentId });
+    } catch (err) {
+      handleError(err, { resource: "Agent", url: getBaseUrl(cmd) });
+    }
+  });
 
 agentsCommand
   .command("cancel")
