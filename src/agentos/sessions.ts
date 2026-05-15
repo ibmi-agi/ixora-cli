@@ -286,13 +286,7 @@ sessionsCommand
         dbId: opts.dbId,
       });
 
-      const data = (runs as Record<string, unknown>[]).map((r) => ({
-        run_id: (r as Record<string, unknown>).run_id ?? "",
-        status: (r as Record<string, unknown>).status ?? "",
-        created_at: (r as Record<string, unknown>).created_at ?? "",
-      }));
-
-      outputList(cmd, data, {
+      outputList(cmd, runs as unknown as Record<string, unknown>[], {
         columns: ["RUN_ID", "STATUS", "CREATED_AT"],
         keys: ["run_id", "status", "created_at"],
       });

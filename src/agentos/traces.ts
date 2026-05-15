@@ -156,39 +156,24 @@ tracesCommand
 
       const r = result as Record<string, unknown>;
       if (Array.isArray(r.data)) {
-        const data = r.data as Record<string, unknown>[];
-        outputList(
-          cmd,
-          data.map((s) => ({
-            session_id: (s as Record<string, unknown>).session_id ?? "",
-            user_id: (s as Record<string, unknown>).user_id ?? "",
-            agent_id: (s as Record<string, unknown>).agent_id ?? "",
-            total_traces:
-              (s as Record<string, unknown>).total_traces ?? 0,
-            first_trace_at:
-              (s as Record<string, unknown>).first_trace_at ?? "",
-            last_trace_at:
-              (s as Record<string, unknown>).last_trace_at ?? "",
-          })),
-          {
-            columns: [
-              "SESSION_ID",
-              "USER_ID",
-              "AGENT_ID",
-              "TOTAL_TRACES",
-              "FIRST_TRACE",
-              "LAST_TRACE",
-            ],
-            keys: [
-              "session_id",
-              "user_id",
-              "agent_id",
-              "total_traces",
-              "first_trace_at",
-              "last_trace_at",
-            ],
-          },
-        );
+        outputList(cmd, r.data as Record<string, unknown>[], {
+          columns: [
+            "SESSION_ID",
+            "USER_ID",
+            "AGENT_ID",
+            "TOTAL_TRACES",
+            "FIRST_TRACE",
+            "LAST_TRACE",
+          ],
+          keys: [
+            "session_id",
+            "user_id",
+            "agent_id",
+            "total_traces",
+            "first_trace_at",
+            "last_trace_at",
+          ],
+        });
       } else {
         outputDetail(cmd, r, { labels: [], keys: [] });
       }
@@ -236,20 +221,10 @@ tracesCommand
 
       const r = result as Record<string, unknown>;
       if (Array.isArray(r.data)) {
-        const data = r.data as Record<string, unknown>[];
-        outputList(
-          cmd,
-          data.map((t) => ({
-            trace_id: (t as Record<string, unknown>).trace_id ?? "",
-            name: (t as Record<string, unknown>).name ?? "",
-            status: (t as Record<string, unknown>).status ?? "",
-            duration: (t as Record<string, unknown>).duration ?? "",
-          })),
-          {
-            columns: ["TRACE_ID", "NAME", "STATUS", "DURATION"],
-            keys: ["trace_id", "name", "status", "duration"],
-          },
-        );
+        outputList(cmd, r.data as Record<string, unknown>[], {
+          columns: ["TRACE_ID", "NAME", "STATUS", "DURATION"],
+          keys: ["trace_id", "name", "status", "duration"],
+        });
       } else {
         outputDetail(cmd, r, { labels: [], keys: [] });
       }
