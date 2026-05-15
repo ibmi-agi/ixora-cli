@@ -91,7 +91,7 @@ export function createProgram(): Command {
     )
     .option(
       "-o, --output <format>",
-      "Output format: json or table (auto-detects from TTY)",
+      "Output format: json, table, or compact (compact applies to `agents run`/`agents continue`; auto-detects from TTY otherwise)",
     );
 
   // The preAction hook fires before any subcommand's action. For commands

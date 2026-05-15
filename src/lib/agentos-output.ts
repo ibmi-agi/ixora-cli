@@ -8,12 +8,17 @@ import type { Command } from "commander";
 /**
  * Determine output format from command options or TTY detection.
  * Returns "json" when explicitly requested, when --json flag is used, or when stdout is not a TTY (piped).
+ * Returns "compact" when explicitly requested — a run-scoped projection used by
+ * `agents run` / `agents continue`; list/detail commands coerce it back to "json".
  * Returns "table" when explicitly requested or when stdout is a TTY (interactive).
+ *
+ * Precedence: `--json` always wins over `--output` (matches existing behavior).
  */
-export function getOutputFormat(cmd: Command): "table" | "json" {
+export function getOutputFormat(cmd: Command): "table" | "json" | "compact" {
   const globals = cmd.optsWithGlobals();
   if (globals.json !== undefined) return "json";
   if (globals.output === "json") return "json";
+  if (globals.output === "compact") return "compact";
   if (globals.output === "table") return "table";
   return process.stdout.isTTY ? "table" : "json";
 }
@@ -71,7 +76,8 @@ export function outputList(
     };
   },
 ): void {
-  const format = getOutputFormat(cmd);
+  let format = getOutputFormat(cmd);
+  if (format === "compact") format = "json";
   if (format === "json") {
     const fields = getJsonFields(cmd);
     if (fields) {
@@ -112,7 +118,8 @@ export function outputDetail(
   data: Record<string, unknown>,
   opts: { labels: string[]; keys: string[] },
 ): void {
-  const format = getOutputFormat(cmd);
+  let format = getOutputFormat(cmd);
+  if (format === "compact") format = "json";
   if (format === "json") {
     const fields = getJsonFields(cmd);
     if (fields) {
