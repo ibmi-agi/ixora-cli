@@ -62,8 +62,9 @@ Every `ixora <runtime>` invocation needs a target. The order:
 | Runtime: agents / teams / workflows — list, get, run (streaming + sessions), continue, resume, cancel | [references/agents-teams-workflows.md](references/agents-teams-workflows.md) |
 | Debugging: traces + sessions, span trees, the failed-run walkthrough | [references/traces-sessions.md](references/traces-sessions.md) |
 | Knowledge base + memories — upload, search, multi-KB rules | [references/knowledge-memories.md](references/knowledge-memories.md) |
+| Schedules: cron jobs that fire AgentOS endpoint callbacks — full CRUD, pause/resume, manual trigger, run history | [references/schedules.md](references/schedules.md) |
 
-For misc runtime ops (`evals`, `approvals`, `schedules`, `metrics`, `databases`, `registries`, `health`), `ixora <cmd> --help` is the source of truth.
+For misc runtime ops (`evals`, `approvals`, `metrics`, `databases`, `registries`, `health`), `ixora <cmd> --help` is the source of truth.
 
 ## Local deployment shape
 
