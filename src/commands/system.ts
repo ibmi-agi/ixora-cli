@@ -285,6 +285,15 @@ function validateUrlStrict(value: string): boolean {
 }
 
 export function cmdSystemRemove(id: string): void {
+  // Capture the entry's kind BEFORE removal — we need it to decide whether
+  // to regenerate the compose file. Managed entries claim a port slot in the
+  // compose file (port = base + indexAmongManaged), so removing one in the
+  // middle of the ordering shifts the indices of every later managed entry.
+  // Without regenerating the compose file, the resolver would compute new
+  // indices for runtime commands while the bound containers stay on the old
+  // ports — ECONNREFUSED until the next `ixora stack restart`.
+  const removed = readSystems().find((s) => s.id === id);
+
   try {
     removeSystem(id);
   } catch (e: unknown) {
@@ -293,7 +302,15 @@ export function cmdSystemRemove(id: string): void {
 
   success(`Removed system '${id}'`);
   console.log(`  Systems: ${systemCount()}`);
-  console.log(`  Restart to apply: ${bold("ixora stack restart")}`);
+
+  if (removed?.kind === "managed") {
+    writeComposeFile();
+    warn(
+      "Compose file regenerated. Run `ixora stack restart` to apply port changes to any running systems.",
+    );
+  } else {
+    console.log(`  Restart to apply: ${bold("ixora stack restart")}`);
+  }
 }
 
 function validateSystemId(id: string): SystemConfig {

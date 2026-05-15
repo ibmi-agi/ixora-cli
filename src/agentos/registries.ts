@@ -1,11 +1,7 @@
 import { Command } from "commander";
 import { getBaseUrl, getClient } from "../lib/agentos-client.js";
 import { handleError } from "../lib/agentos-errors.js";
-import {
-  getOutputFormat,
-  outputList,
-  printJson,
-} from "../lib/agentos-output.js";
+import { outputList } from "../lib/agentos-output.js";
 
 export const registriesCommand = new Command("registries").description(
   "Manage registry",
@@ -51,12 +47,6 @@ registriesCommand
             total_count: number;
           }
         | undefined;
-
-      const format = getOutputFormat(cmd);
-      if (format === "json") {
-        printJson(meta ? { data, meta } : data);
-        return;
-      }
 
       outputList(
         cmd,

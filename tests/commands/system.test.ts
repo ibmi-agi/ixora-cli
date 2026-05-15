@@ -28,6 +28,17 @@ vi.mock("../../src/lib/constants.js", async () => {
   };
 });
 
+const writeComposeFileMock = vi.fn();
+vi.mock("../../src/lib/compose.js", async () => {
+  const actual = await vi.importActual<typeof import("../../src/lib/compose.js")>(
+    "../../src/lib/compose.js",
+  );
+  return {
+    ...actual,
+    writeComposeFile: writeComposeFileMock,
+  };
+});
+
 describe("system commands", () => {
   let consoleSpy: ReturnType<typeof vi.spyOn>;
   let ENV_FILE: string;
@@ -116,6 +127,36 @@ describe("system commands", () => {
 
       const output = consoleSpy.mock.calls.map((c) => c[0]).join("\n");
       expect(output).toContain("Removed system");
+    });
+
+    it("regenerates compose file when a managed system is removed", async () => {
+      writeFileSync(ENV_FILE, "SYSTEM_DEV_HOST='h'\n");
+      writeFileSync(SYSTEMS_CONFIG, SAMPLE_SYSTEMS_YAML);
+      writeComposeFileMock.mockClear();
+
+      const { cmdSystemRemove } = await import("../../src/commands/system.js");
+      cmdSystemRemove("dev");
+
+      expect(writeComposeFileMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("does NOT regenerate compose file when an external system is removed", async () => {
+      writeFileSync(ENV_FILE, "SYSTEM_CLOUD_AGENTOS_KEY='k'\n");
+      writeFileSync(
+        SYSTEMS_CONFIG,
+        `systems:
+  - id: cloud
+    name: 'Cloud'
+    kind: external
+    url: 'https://agentos.example.com'
+`,
+      );
+      writeComposeFileMock.mockClear();
+
+      const { cmdSystemRemove } = await import("../../src/commands/system.js");
+      cmdSystemRemove("cloud");
+
+      expect(writeComposeFileMock).not.toHaveBeenCalled();
     });
   });
 
