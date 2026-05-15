@@ -44,19 +44,11 @@ agentsCommand
         total_count: agents.length,
       };
 
-      outputList(
-        cmd,
-        paged.map((a) => ({
-          id: a.id ?? "",
-          name: a.name ?? "",
-          description: a.description ?? "",
-        })),
-        {
-          columns: ["ID", "NAME", "DESCRIPTION"],
-          keys: ["id", "name", "description"],
-          meta,
-        },
-      );
+      outputList(cmd, paged as unknown as Record<string, unknown>[], {
+        columns: ["ID", "NAME", "DESCRIPTION"],
+        keys: ["id", "name", "description"],
+        meta,
+      });
     } catch (err) {
       handleError(err, { url: getBaseUrl(cmd) });
     }

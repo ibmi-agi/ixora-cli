@@ -57,27 +57,11 @@ tracesCommand
           }
         | undefined;
 
-      const format = getOutputFormat(cmd);
-      if (format === "json") {
-        printJson({ data, meta });
-        return;
-      }
-
-      outputList(
-        cmd,
-        data.map((t) => ({
-          trace_id: (t as Record<string, unknown>).trace_id ?? "",
-          name: (t as Record<string, unknown>).name ?? "",
-          status: (t as Record<string, unknown>).status ?? "",
-          duration: (t as Record<string, unknown>).duration ?? "",
-          start_time: (t as Record<string, unknown>).start_time ?? "",
-        })),
-        {
-          columns: ["TRACE_ID", "NAME", "STATUS", "DURATION", "START_TIME"],
-          keys: ["trace_id", "name", "status", "duration", "start_time"],
-          meta,
-        },
-      );
+      outputList(cmd, data, {
+        columns: ["TRACE_ID", "NAME", "STATUS", "DURATION", "START_TIME"],
+        keys: ["trace_id", "name", "status", "duration", "start_time"],
+        meta,
+      });
     } catch (err) {
       handleError(err, { url: getBaseUrl(cmd) });
     }

@@ -58,26 +58,11 @@ sessionsCommand
           }
         | undefined;
 
-      const format = getOutputFormat(cmd);
-      if (format === "json") {
-        printJson({ data, meta });
-        return;
-      }
-
-      outputList(
-        cmd,
-        data.map((s) => ({
-          session_id: (s as Record<string, unknown>).session_id ?? "",
-          name: (s as Record<string, unknown>).session_name ?? "",
-          type: (s as Record<string, unknown>).type ?? "",
-          created_at: (s as Record<string, unknown>).created_at ?? "",
-        })),
-        {
-          columns: ["SESSION_ID", "NAME", "TYPE", "CREATED_AT"],
-          keys: ["session_id", "name", "type", "created_at"],
-          meta,
-        },
-      );
+      outputList(cmd, data, {
+        columns: ["SESSION_ID", "NAME", "TYPE", "CREATED_AT"],
+        keys: ["session_id", "session_name", "type", "created_at"],
+        meta,
+      });
     } catch (err) {
       handleError(err, { url: getBaseUrl(cmd) });
     }
