@@ -53,11 +53,11 @@ schedulesCommand
           name: s.name ?? "",
           cron: s.cron_expr ?? "",
           enabled: s.enabled ?? "",
-          next_run: s.next_run ?? "",
+          next_run_at: s.next_run_at ?? "",
         })),
         {
-          columns: ["ID", "NAME", "CRON", "ENABLED", "NEXT_RUN"],
-          keys: ["id", "name", "cron", "enabled", "next_run"],
+          columns: ["ID", "NAME", "CRON", "ENABLED", "NEXT_RUN_AT"],
+          keys: ["id", "name", "cron", "enabled", "next_run_at"],
           meta,
         },
       );
@@ -95,7 +95,7 @@ schedulesCommand
           method: s.method ?? "",
           enabled: s.enabled ?? "",
           timezone: s.timezone ?? "",
-          next_run: s.next_run ?? "",
+          next_run_at: s.next_run_at ?? "",
           created_at: s.created_at ?? "",
         },
         {
@@ -107,7 +107,7 @@ schedulesCommand
             "Method",
             "Enabled",
             "Timezone",
-            "Next Run",
+            "Next Run At",
             "Created",
           ],
           keys: [
@@ -118,7 +118,7 @@ schedulesCommand
             "method",
             "enabled",
             "timezone",
-            "next_run",
+            "next_run_at",
             "created_at",
           ],
         },
@@ -350,16 +350,146 @@ schedulesCommand
         cmd,
         (data as Record<string, unknown>[]).map((run) => ({
           id: run.id ?? "",
+          attempt: run.attempt ?? "",
           status: run.status ?? "",
-          started_at: run.started_at ?? "",
+          run_id: run.run_id ?? "",
+          triggered_at: run.triggered_at ?? "",
           completed_at: run.completed_at ?? "",
         })),
         {
-          columns: ["ID", "STATUS", "STARTED_AT", "COMPLETED_AT"],
-          keys: ["id", "status", "started_at", "completed_at"],
+          columns: [
+            "ID",
+            "ATTEMPT",
+            "STATUS",
+            "RUN_ID",
+            "TRIGGERED_AT",
+            "COMPLETED_AT",
+          ],
+          keys: [
+            "id",
+            "attempt",
+            "status",
+            "run_id",
+            "triggered_at",
+            "completed_at",
+          ],
           meta,
         },
       );
+    } catch (err) {
+      handleError(err, { resource: "Schedule", url: getBaseUrl(cmd) });
+    }
+  });
+
+schedulesCommand
+  .command("get-run")
+  .argument("<id>", "Schedule ID")
+  .argument("<run_id>", "Run ID")
+  .description("Get details for a single schedule run")
+  .action(async (id: string, runId: string, _options, cmd) => {
+    try {
+      const client = getClient(cmd);
+      const result = await client.schedules.getRun(id, runId);
+
+      const format = getOutputFormat(cmd);
+      if (format === "json") {
+        printJson(result);
+        return;
+      }
+
+      const run = result as Record<string, unknown>;
+      outputDetail(
+        cmd,
+        {
+          id: run.id ?? "",
+          schedule_id: run.schedule_id ?? "",
+          attempt: run.attempt ?? "",
+          status: run.status ?? "",
+          status_code: run.status_code ?? "",
+          run_id: run.run_id ?? "",
+          session_id: run.session_id ?? "",
+          triggered_at: run.triggered_at ?? "",
+          completed_at: run.completed_at ?? "",
+          error: run.error ?? "",
+        },
+        {
+          labels: [
+            "ID",
+            "Schedule ID",
+            "Attempt",
+            "Status",
+            "Status Code",
+            "Run ID",
+            "Session ID",
+            "Triggered At",
+            "Completed At",
+            "Error",
+          ],
+          keys: [
+            "id",
+            "schedule_id",
+            "attempt",
+            "status",
+            "status_code",
+            "run_id",
+            "session_id",
+            "triggered_at",
+            "completed_at",
+            "error",
+          ],
+        },
+      );
+    } catch (err) {
+      handleError(err, { resource: "Schedule run", url: getBaseUrl(cmd) });
+    }
+  });
+
+schedulesCommand
+  .command("trigger")
+  .argument("<id>", "Schedule ID")
+  .description("Manually trigger a schedule run now")
+  .action(async (id: string, _options, cmd) => {
+    try {
+      const client = getClient(cmd);
+      const result = await client.schedules.trigger(id);
+
+      const format = getOutputFormat(cmd);
+      if (format === "json") {
+        printJson(result);
+        return;
+      }
+
+      const run = result as Record<string, unknown>;
+      outputDetail(
+        cmd,
+        {
+          id: run.id ?? "",
+          schedule_id: run.schedule_id ?? "",
+          attempt: run.attempt ?? "",
+          status: run.status ?? "",
+          run_id: run.run_id ?? "",
+          triggered_at: run.triggered_at ?? "",
+        },
+        {
+          labels: [
+            "Run ID",
+            "Schedule ID",
+            "Attempt",
+            "Status",
+            "Agent Run ID",
+            "Triggered At",
+          ],
+          keys: [
+            "id",
+            "schedule_id",
+            "attempt",
+            "status",
+            "run_id",
+            "triggered_at",
+          ],
+        },
+      );
+      writeSuccess("Schedule triggered.");
     } catch (err) {
       handleError(err, { resource: "Schedule", url: getBaseUrl(cmd) });
     }
