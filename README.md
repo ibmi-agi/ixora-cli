@@ -145,6 +145,7 @@ By default each IBM i system gets its **own** `ai_<id>` Postgres database (and i
 | `components list\|get\|create\|update\|delete\|config ...` | Manage components in AgentOS |
 | `models list` | List available models in AgentOS |
 | `status` | Show AgentOS server status and resource overview |
+| `health` | Ping `/health` on the resolved system; reports status + uptime + latency (exits non-zero when unhealthy) |
 
 ## Global options
 

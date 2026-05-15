@@ -4,6 +4,7 @@ import { approvalsCommand } from "./agentos/approvals.js";
 import { componentsCommand as agnoComponentsCommand } from "./agentos/components.js";
 import { databasesCommand } from "./agentos/databases.js";
 import { evalsCommand } from "./agentos/evals.js";
+import { healthCommand } from "./agentos/health.js";
 import { knowledgeCommand } from "./agentos/knowledge.js";
 import { memoriesCommand } from "./agentos/memories.js";
 import { metricsCommand } from "./agentos/metrics.js";
@@ -423,6 +424,7 @@ export function createProgram(): Command {
   program.addCommand(agnoComponentsCommand);
   program.addCommand(agnoModelsCommand);
   program.addCommand(agnoStatusCommand);
+  program.addCommand(healthCommand);
 
   return program;
 }
