@@ -286,12 +286,6 @@ sessionsCommand
         dbId: opts.dbId,
       });
 
-      const format = getOutputFormat(cmd);
-      if (format === "json") {
-        printJson({ data: runs });
-        return;
-      }
-
       const data = (runs as Record<string, unknown>[]).map((r) => ({
         run_id: (r as Record<string, unknown>).run_id ?? "",
         status: (r as Record<string, unknown>).status ?? "",

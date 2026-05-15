@@ -5,7 +5,6 @@ import {
   getOutputFormat,
   outputDetail,
   outputList,
-  printJson,
   writeError,
 } from "../lib/agentos-output.js";
 
@@ -155,12 +154,6 @@ tracesCommand
         dbId: opts.dbId,
       });
 
-      const format = getOutputFormat(cmd);
-      if (format === "json") {
-        printJson(result);
-        return;
-      }
-
       const r = result as Record<string, unknown>;
       if (Array.isArray(r.data)) {
         const data = r.data as Record<string, unknown>[];
@@ -197,7 +190,7 @@ tracesCommand
           },
         );
       } else {
-        printJson(result);
+        outputDetail(cmd, r, { labels: [], keys: [] });
       }
     } catch (err) {
       handleError(err, { url: getBaseUrl(cmd) });
@@ -241,12 +234,6 @@ tracesCommand
         dbId: opts.dbId,
       });
 
-      const format = getOutputFormat(cmd);
-      if (format === "json") {
-        printJson(result);
-        return;
-      }
-
       const r = result as Record<string, unknown>;
       if (Array.isArray(r.data)) {
         const data = r.data as Record<string, unknown>[];
@@ -264,7 +251,7 @@ tracesCommand
           },
         );
       } else {
-        printJson(result);
+        outputDetail(cmd, r, { labels: [], keys: [] });
       }
     } catch (err) {
       handleError(err, { url: getBaseUrl(cmd) });

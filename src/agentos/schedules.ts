@@ -46,12 +46,6 @@ schedulesCommand
           }
         | undefined;
 
-      const format = getOutputFormat(cmd);
-      if (format === "json") {
-        printJson({ data, meta });
-        return;
-      }
-
       outputList(
         cmd,
         data.map((s) => ({
@@ -351,12 +345,6 @@ schedulesCommand
             total_count: number;
           }
         | undefined;
-
-      const format = getOutputFormat(cmd);
-      if (format === "json") {
-        printJson(meta ? { data, meta } : data);
-        return;
-      }
 
       outputList(
         cmd,

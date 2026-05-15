@@ -5,7 +5,6 @@ import {
   getOutputFormat,
   outputDetail,
   outputList,
-  printJson,
   writeSuccess,
 } from "../lib/agentos-output.js";
 
@@ -60,12 +59,6 @@ evalsCommand
             total_count: number;
           }
         | undefined;
-
-      const format = getOutputFormat(cmd);
-      if (format === "json") {
-        printJson({ data, meta });
-        return;
-      }
 
       outputList(
         cmd,

@@ -51,12 +51,6 @@ approvalsCommand
           }
         | undefined;
 
-      const format = getOutputFormat(cmd);
-      if (format === "json") {
-        printJson({ data, meta });
-        return;
-      }
-
       outputList(
         cmd,
         data.map((a) => ({
