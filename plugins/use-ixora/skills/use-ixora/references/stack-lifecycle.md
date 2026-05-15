@@ -1,6 +1,10 @@
 # Stack lifecycle — `ixora stack`
 
+> **For exact flags, run `ixora stack <cmd> --help`.** This reference covers workflows, gotchas, and non-obvious patterns — it does not transcribe every flag.
+
 Local-stack management. All commands live under `ixora stack <cmd>`. None of them respect `--system` / `--url` — they target the local deployment directly. The `agentos-db` / `agentos-api` / `ibmi-mcp-server` / `carbon-ui` containers are spawned via `docker compose` (or `podman compose`) against the generated `~/.ixora/docker-compose.yml`.
+
+**Prereqs**: Node ≥ 20 and a running Docker (or Podman) daemon.
 
 ## install — first-time setup
 
@@ -87,11 +91,17 @@ Common config keys (`config set`):
 ## agents — edit which components a system loads
 
 ```bash
-ixora stack agents              # pick a system interactively
+ixora stack agents              # pick a managed system interactively
 ixora stack agents <system>     # open the picker directly for that system
 ```
 
-Wraps the same component picker `install --mode custom` uses. Picking implies Custom mode — there's no Full/Custom prompt here. Writes `~/.ixora/profiles/<system>.yaml`. Restart the system after editing for changes to take effect (`ixora stack system restart <id>`).
+**Managed only.** Externals are configured at their AgentOS source — running `stack agents` against an external (or with no managed systems registered) errors out with a hint to run `ixora stack install` or `ixora stack system add`.
+
+Wraps the same component picker `install --mode custom` uses. Picking implies Custom mode — there's no Full/Custom prompt here. Writes `~/.ixora/profiles/<system>.yaml`. Restart the system after editing for changes to take effect:
+
+```bash
+ixora stack system restart <id>
+```
 
 ## components — inspect the deployed image
 

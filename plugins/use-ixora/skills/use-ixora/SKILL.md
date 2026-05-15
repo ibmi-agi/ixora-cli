@@ -52,6 +52,12 @@ Every `ixora <runtime>` invocation needs a target. The order:
 
 For misc runtime ops (`evals`, `approvals`, `schedules`, `metrics`, `databases`, `registries`, `health`), `ixora <cmd> --help` is the source of truth.
 
+## Local deployment shape
+
+- **Prereqs:** Node ≥ 20 and a running Docker (or Podman) daemon.
+- **Default ports** for the first managed system: API `18000`, DB `15432`, UI `13000`. Each additional managed system shifts the API port by `+1` (system index 1 → `18001`, index 2 → `18002`, …). DB and UI ports are shared across systems.
+- **Runtime override:** auto-detection tries `docker compose` then `podman compose` then legacy `docker-compose`. Force one with `--runtime docker` / `--runtime podman` on any `stack` command.
+
 ## Gotchas
 
 - **`ixora stack start <external-id>` errors out.** Externals have no local lifecycle — they're URLs that runtime commands route to. Only managed systems respond to `system start|stop|restart`.
@@ -61,9 +67,13 @@ For misc runtime ops (`evals`, `approvals`, `schedules`, `metrics`, `databases`,
 - **Per-system DB isolation is the default.** Each system gets its own `ai_<id>` Postgres database inside the shared `agentos-db` container. Consolidate with `ixora stack config set IXORA_DB_ISOLATION shared && ixora stack restart`.
 - **Custom component profiles only apply when `mode: custom`.** They live in `~/.ixora/profiles/<id>.yaml`. Flip Full ↔ Custom with `ixora stack config edit <id>`, or use `ixora stack agents <id>` for an agent-only picker.
 - **Runtime commands ignore `--profile`.** That flag is install/start-time only. Don't pass it to `ixora agents`, `ixora traces`, etc.
-- **Knowledge commands require `--knowledge-id <id>` when multiple KBs exist.** Find IDs via `ixora status --json knowledge`. See [references/knowledge-memories.md](references/knowledge-memories.md).
+- **Knowledge commands require `--knowledge-id <id>` when multiple KBs exist.** Find IDs via `ixora status -o json | jq '.knowledge.knowledge_instances[] | {id, name}'`. See [references/knowledge-memories.md](references/knowledge-memories.md).
+- **`knowledge upload` from a URL uses `--from-url`, NOT `--url`.** The top-level `--url` flag overrides the AgentOS endpoint; using it for an upload silently redirects the entire request to that host.
+- **`traces list` has no `--team-id` filter.** Use `--agent-id <member>` to filter by team member, `traces stats --team-id` for rollups, or `traces search --filter '{"team_id":"..."}'` for raw per-trace listing.
 - **`traces stats` does NOT accept `--group-by`.** That flag lives on `traces search` only.
+- **`sessions delete-all` and `memories delete-all` are batch-by-ID, not filter-based.** Both require `--ids id1,id2,...`; `sessions delete-all` additionally requires a matching `--types` array.
 - **`evals` is read-only from the CLI** — `list / get / delete`. Evals are launched server-side.
+- **`ixora stack agents <id>` only works on managed systems.** External systems are configured at their AgentOS source, not via ixora's component picker.
 
 ## Debugging a failed run
 
@@ -72,7 +82,8 @@ The non-obvious path from "something broke" to "I see why":
 ```bash
 ixora status                                          # AgentOS overview
 ixora traces list --limit 5                           # newest traces
-ixora traces list --team-id <id> --status ERROR       # filter to failures
+ixora traces list --status ERROR --limit 20           # filter to failures across all components
+ixora traces list --agent-id <member_id> --limit 20   # filter to one team member's traces
 ixora traces get <trace_id>                           # span tree + attributes
 ixora sessions runs <session_id>                      # every run in the session
 ixora stack logs agentos-api                          # container-level last resort

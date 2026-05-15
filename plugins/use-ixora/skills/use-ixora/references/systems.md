@@ -1,5 +1,7 @@
 # Multi-system management — `ixora stack system`
 
+> **For exact flags, run `ixora stack system <verb> --help`.** This reference covers the kind discriminator, the implicit-pick rule, env var conventions, and worked examples — it does not transcribe every flag.
+
 `ixora` operates against one or more **systems**. Each system is one of two kinds:
 
 | Kind | What it is | Lifecycle commands? |

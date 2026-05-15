@@ -1,185 +1,144 @@
 # Traces and Sessions — `ixora traces` / `ixora sessions`
 
+> **For exact flags, run `ixora traces <verb> --help` and `ixora sessions <verb> --help`.** This reference covers workflows, gotchas, and non-obvious patterns — it does not transcribe every flag.
+
 These are the **debugging surface**. A **trace** captures one invocation (with all its spans — model calls, tool calls, sub-agent calls). A **session** is the conversation container; a session has zero or more **runs**, each producing one or more traces.
 
-> Both command families target the resolved system. Use `--system <id>` to pick a specific one.
+Both target the resolved system. Use `--system <id>` to pick a specific one.
 
 ## traces
 
-Four subcommands: `list`, `get`, `stats`, `search`.
+Verbs: `list`, `get`, `stats`, `search`. Each has a different filter surface — they are **not** uniform.
+
+### Filter surface — which verb supports which filter
+
+| Filter | `list` | `stats` | `search` |
+|---|---|---|---|
+| `--run-id` | ✅ | — | — |
+| `--session-id` | ✅ | — | — |
+| `--user-id` | ✅ | ✅ | — |
+| `--agent-id` | ✅ | ✅ | — |
+| **`--team-id`** | **❌ — not on `list`** | ✅ | — |
+| `--workflow-id` | — | ✅ | — |
+| `--status` (OK \| ERROR) | ✅ | — | — |
+| `--start-time` / `--end-time` (ISO) | — | ✅ | — |
+| `--filter <json>` (raw API pass-through) | — | — | ✅ |
+| `--group-by run\|session` | — | — | ✅ |
+
+**Common mistake**: `traces list --team-id <id>` looks reasonable but the flag isn't registered there. To get per-trace listing for a team, either filter by a specific team member (`--agent-id <member>`), use `traces search --filter '{"team_id":"<id>"}'`, or pull a session-grouped rollup with `traces search --group-by session`.
 
 ### traces list
 
-```
-ixora traces list [options]
-
-  --run-id <id>       filter by run ID (single invocation inside a session)
-  --session-id <id>   filter by session ID (conversation)
-  --user-id <id>      filter by user
-  --agent-id <id>     filter by agent member (e.g. toystore-analytics-analyst)
-  --team-id <id>      filter by team
-  --status <status>   OK | ERROR (exact match)
-  --limit <n>         page size (default 20)
-  --page <n>          page number (default 1)
-  --db-id <id>        database ID (only if multi-DB)
-```
-
-Each row includes `trace_id`, `name`, `status`, `duration`, `total_spans`, `error_count`, `start_time`, `end_time`, `created_at`, and (when available) `input`, `run_id`, `session_id`, `user_id`, `agent_id`, `team_id`.
-
-Response includes a `meta` block with `page`, `limit`, `total_pages`, `total_count`, `search_time_ms`.
+Newest first; paginates. Response wraps a `meta` block with `page`, `limit`, `total_pages`, `total_count`, `search_time_ms`. Each row carries `trace_id`, `name`, `status`, `duration`, `total_spans`, `error_count`, `start_time`, `end_time`, `created_at`, and (when available) `input`, `run_id`, `session_id`, `user_id`, `agent_id`, `team_id`.
 
 ```bash
-# last 5 traces on a team
-ixora traces list --team-id ibmi-dash-toystore --limit 5
-
-# errors only
-ixora traces list --status ERROR --limit 20
-
-# one user's last page
-ixora traces list --user-id ajshedivyaj@gmail.com --limit 50
-
-# all traces for a single run
-ixora traces list --run-id ee7a0342-5699-47fb-83b9-af1a14c8e27d
-
-# just the IDs for scripting
-ixora traces list --limit 20 --json trace_id,run_id,input
+ixora traces list --limit 20                                          # newest 20
+ixora traces list --status ERROR --limit 50                           # errors only
+ixora traces list --agent-id toystore-analytics-engineer --limit 10   # one team member
+ixora traces list --user-id <user> --limit 50
+ixora traces list --run-id <run_id>                                   # all traces for one run
+ixora traces list --limit 20 --json trace_id,run_id,input             # IDs only for scripting
 ```
 
 ### traces get
 
-```
-ixora traces get <trace_id> [--db-id <id>]
+```bash
+ixora traces get <trace_id>
 ```
 
-Returns the full trace envelope plus a `tree` array representing the span hierarchy. Fields: `trace_id`, `name`, `status`, `duration`, `start_time`, `end_time`, `total_spans`, `error_count`, `tree`.
-
-**Gotcha**: `tree` can be empty (`[]`) when the underlying spans weren't persisted in hierarchical form. The top-level trace still has all the metadata; use `traces list --run-id <run_id>` to enumerate related traces instead.
+Returns the trace envelope plus a `tree` of spans. **Gotcha**: `tree` can be empty (`[]`) when spans weren't persisted in hierarchical form — top-level metadata is still valid. Fall back to `traces list --run-id <run_id>` to enumerate related traces.
 
 ### traces stats
 
-Aggregated counts / durations / token totals over a filter.
+Aggregated counts / durations / token totals over a filter. **Use this — not `list` — when you want a team-level rollup.** No `--group-by` here (that's on `search`).
 
+```bash
+ixora traces stats --team-id ibmi-dash-toystore
+ixora traces stats --team-id ibmi-dash-toystore --start-time 2026-05-01 --end-time 2026-05-15
+ixora traces stats --user-id <user> --start-time 2026-05-01
 ```
-ixora traces stats [options]
-
-  --user-id <id>      filter by user
-  --agent-id <id>     filter by agent
-  --team-id <id>      filter by team
-  --workflow-id <id>  filter by workflow
-  --start-time <ts>   ISO time filter
-  --end-time <ts>     ISO time filter
-  --limit <n>         page size
-  --page <n>          page number
-  --db-id <id>        database ID
-```
-
-No `--group-by` — that's on `traces search`. Use `stats` for rollups like "how many runs did team X do this week + total tokens".
 
 ### traces search
 
-Free-form filter + optional grouping.
-
-```
-ixora traces search [options]
-
-  --filter <json>       JSON filter (pass-through to API)
-  --group-by <field>    run | session
-  --limit <n>           page size (default 20)
-  --page <n>            page number
-  --db-id <id>          database ID
-```
-
-`--group-by session` collapses rows to one per session with `total_traces`, `first_trace_at`, `last_trace_at`. Useful for "which sessions has this team been active in?".
+Free-form filter + optional grouping. `--filter` is a raw JSON pass-through to the underlying API — useful for filter dims `list` doesn't expose.
 
 ```bash
-# sessions sorted by recency
-ixora traces search --group-by session --limit 20
-
-# raw JSON filter (pass-through to API)
-ixora traces search --filter '{"agent_id": "toystore-analytics-analyst"}'
+ixora traces search --group-by session --limit 20                              # one row per session
+ixora traces search --group-by run --limit 50                                  # one row per run
+ixora traces search --filter '{"team_id":"ibmi-dash-toystore"}' --limit 20     # per-trace listing for a team
+ixora traces search --filter '{"agent_id":"toystore-analytics-analyst"}'
 ```
 
 ## sessions
 
-A **session** is a conversation container. Each session has zero or more **runs** (single agent/team/workflow invocations). Sessions belong to a user or are anonymous.
+A **session** is a conversation container. Sessions belong to a user or are anonymous; each has zero or more **runs** (one agent/team/workflow invocation each).
 
-### sessions list
-
-```
-ixora sessions list [options]
-
-  --type <type>         agent | team | workflow
-  --component-id <id>   filter by agent/team/workflow ID
-  --user-id <id>        filter by user
-  --limit <n>           page size (default 20)
-  --page <n>            page number
-  --sort-by <field>     sort key
-  --sort-order asc|desc
-  --db-id <id>          database ID
-```
-
-Fields: `session_id`, `session_name`, `session_type`, `session_state`, `created_at`, `updated_at`, `user_id`, `agent_id` | `team_id` | `workflow_id`, `metrics` (token counts per model).
-
-### sessions get / runs / create / update / delete
+### list / get / runs / create / update / delete
 
 ```bash
-ixora sessions get <session_id>                  # full state incl. messages
-ixora sessions runs <session_id>                 # every run in the session
-ixora sessions create --type team --component-id ibmi-team --name "Debug session" --user-id me
+ixora sessions list --type team --component-id ibmi-dash-toystore --limit 10
+ixora sessions list --user-id <user> --sort-by created_at --sort-order desc
+
+ixora sessions get  <session_id>                          # full state incl. messages
+ixora sessions runs <session_id>                          # every run in the session
+
+ixora sessions create --type team --component-id ibmi-team --name "Debug" --user-id <user>
 ixora sessions update <id> --name "new name" --state '{"foo":"bar"}' --metadata '{"tag":"dev"}'
 ixora sessions delete <id>
-ixora sessions delete-all                        # bulk (reads filter flags)
 ```
 
-`sessions update` accepts `--name`, `--state <json>`, `--metadata <json>`, `--summary <text>`.
+`--type` is `agent | team | workflow`. Returned fields: `session_id`, `session_name`, `session_type`, `session_state`, `created_at`, `updated_at`, `user_id`, the matching component ID, and `metrics` (per-model token counts).
 
-### Recipes
+### delete-all is batch-by-ID with parallel types — NOT filter-based
 
 ```bash
-# latest 10 sessions for a team
-ixora sessions list --type team --component-id ibmi-dash-toystore --limit 10
-
-# all runs in a session
-ixora sessions runs 6d9db701-39e7-4ccc-b989-6f1a72970ad6
-
-# my sessions, sorted newest first
-ixora sessions list --user-id ajshedivyaj@gmail.com --sort-by created_at --sort-order desc
+ixora sessions delete-all --ids id1,id2,id3 --types team,team,agent
 ```
 
-## Debugging a failed run (concrete workflow)
+Both `--ids` and `--types` are **required**, and the arrays must be the same length (one type per ID). It is not a "delete every session matching a filter" sweep. To purge by filter:
 
-The fastest path from "something broke" to "I see why":
+```bash
+sids=$(ixora sessions list --type team --component-id ibmi-dash-toystore --limit 200 \
+       --json session_id | jq -r 'map(.session_id) | join(",")')
+sct=$(ixora sessions list --type team --component-id ibmi-dash-toystore --limit 200 \
+      --json session_id | jq -r 'map("team") | join(",")')
+ixora sessions delete-all --ids "$sids" --types "$sct"
+```
+
+## Debugging a failed run (concrete walkthrough)
+
+The non-obvious sequence from "something broke" to "I see why":
 
 1. **Trigger or recall the run.** If you have the team ID:
    ```bash
    ixora teams run ibmi-dash-toystore "Monthly revenue for 1997" --stream
    ```
-2. **Grab the session_id and run_id** from the streamed output, or pull the latest trace:
+2. **Grab the session and run IDs** from the streamed output, or from the latest trace:
    ```bash
-   ixora traces list --team-id ibmi-dash-toystore --limit 1 \
-     --json session_id,run_id,trace_id,input
+   ixora traces list --limit 1 --json session_id,run_id,trace_id,input
    ```
-3. **See every trace inside that session**:
+   (no `--team-id` here — `list` doesn't take it)
+3. **See every trace in that session**:
    ```bash
    ixora traces list --session-id <session_id> --limit 50
    ```
-4. **Zoom into one trace**:
+4. **Zoom into one**:
    ```bash
    ixora traces get <trace_id>
    ```
-5. **If a team member seems to have skipped a step**, filter to just that member:
+5. **Filter to one team member** if a handoff looks wrong:
    ```bash
    ixora traces list --session-id <session_id> --agent-id toystore-analytics-engineer
    ```
-6. **If the failure is below the AgentOS layer** (network, MCP, container restart), tail container logs:
+6. **If the failure is below the AgentOS layer** (network, MCP, container restart):
    ```bash
    ixora stack logs agentos-api
    ixora stack logs ibmi-mcp-server
    ```
 
-## Span-tree interpretation
+## Span-tree shape
 
-When `tree` is populated, each node has the shape:
+When `tree` is populated, each node looks like:
 
 ```json
 {
@@ -193,7 +152,7 @@ When `tree` is populated, each node has the shape:
 }
 ```
 
-Tool-call names (`MCPTools.call_tool.<tool_name>`) are where tool-usage bugs surface — missing tool calls, duplicated calls, wrong tool selected. Tally them to diagnose routing.
+Tool-call names (`MCPTools.call_tool.<tool_name>`) are where tool-usage bugs surface — missing calls, duplicated calls, wrong tool selected. Tally them to diagnose routing.
 
 ## Sessions vs traces — when to reach for which
 
@@ -202,5 +161,6 @@ Tool-call names (`MCPTools.call_tool.<tool_name>`) are where tool-usage bugs sur
 | "What was the user-visible conversation?" | `ixora sessions get <id>` |
 | "What invocations happened in this session?" | `ixora sessions runs <id>` |
 | "What did the agent/tools actually do during one invocation?" | `ixora traces get <trace_id>` |
-| "Was there an error?" | `ixora traces list --status ERROR` |
-| "How much did team X spend on tokens this week?" | `ixora traces stats --team-id ...` |
+| "Were there any errors?" | `ixora traces list --status ERROR` |
+| "How much did team X spend on tokens this week?" | `ixora traces stats --team-id <id> --start-time ...` |
+| "Which sessions has team X been active in?" | `ixora traces search --filter '{"team_id":"<id>"}' --group-by session` |
