@@ -61,7 +61,7 @@ For misc runtime ops (`evals`, `approvals`, `schedules`, `metrics`, `databases`,
   - `api-<system_id>` — AgentOS API for each managed system (e.g. `api-default`)
   - `mcp-<system_id>` — MCP server for each managed system (omitted under `--profile cli`)
   - `ui` — Carbon UI (only under `--profile full`)
-  - Run `ixora stack status` to see the live list — these names are templated per system.
+  - Run `ixora stack status` to see the live list. The SERVICE column shows these canonical names; the NAME column shows compose's container names (`ixora-<service>-<replica>`, e.g. `ixora-api-default-1`). The CLI accepts **either form** — it normalizes container names back to service names — but prefer the SERVICE column form in scripts.
 - **Runtime override:** auto-detection tries `docker compose` then `podman compose` then legacy `docker-compose`. Force one with `--runtime docker` / `--runtime podman` on any `stack` command.
 
 ## Gotchas

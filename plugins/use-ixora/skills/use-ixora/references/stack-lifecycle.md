@@ -139,7 +139,14 @@ Compose service names are **templated per system**, not fixed. The set:
 | `mcp-<system_id>` | When `--profile full` or `--profile mcp` | The MCP server container. Absent under `--profile cli`. |
 | `ui` | When `--profile full` | The Carbon UI container. Single instance shared across systems. |
 
-Pass any of these to `stack logs|restart|stop|start <service>`. Run `ixora stack status` for the live list — it prints the current service-name set with state, container name, and port mapping.
+Pass any of these to `stack logs|restart|stop|start <service>`. Run `ixora stack status` for the live list.
+
+`stack status` shows two columns that look similar but mean different things:
+
+- **SERVICE** column — the canonical compose service name (`api-default`, `agentos-db`, …). What the commands above expect.
+- **NAME** column — the actual container name compose assigns: `ixora-<service>-<replica>`, e.g. `ixora-api-default-1`. Docker / podman conventions.
+
+The CLI accepts **either form**. `resolveService` in `src/lib/compose.ts` strips the `ixora-` prefix and `-<N>` replica suffix, so `ixora stack logs ixora-api-default-1` and `ixora stack logs api-default` are equivalent. Prefer the SERVICE form in scripts — it's stable across replicas and project names.
 
 The old `agentos-api` / `ibmi-mcp-server` / `carbon-ui` names from earlier ixora versions are gone — service names are now system-scoped because a single deployment can host multiple managed systems on different ports.
 
