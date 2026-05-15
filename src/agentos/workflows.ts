@@ -41,19 +41,11 @@ workflowsCommand
         total_count: workflows.length,
       };
 
-      outputList(
-        cmd,
-        paged.map((w) => ({
-          id: w.id ?? "",
-          name: w.name ?? "",
-          description: w.description ?? "",
-        })),
-        {
-          columns: ["ID", "NAME", "DESCRIPTION"],
-          keys: ["id", "name", "description"],
-          meta,
-        },
-      );
+      outputList(cmd, paged as unknown as Record<string, unknown>[], {
+        columns: ["ID", "NAME", "DESCRIPTION"],
+        keys: ["id", "name", "description"],
+        meta,
+      });
     } catch (err) {
       handleError(err, { url: getBaseUrl(cmd) });
     }

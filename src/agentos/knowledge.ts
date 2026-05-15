@@ -135,26 +135,11 @@ knowledgeCommand
           }
         | undefined;
 
-      const format = getOutputFormat(cmd);
-      if (format === "json") {
-        printJson({ data, meta });
-        return;
-      }
-
-      outputList(
-        cmd,
-        data.map((k) => ({
-          id: k.id ?? "",
-          name: k.name ?? "",
-          status: k.status ?? "",
-          type: k.type ?? "",
-        })),
-        {
-          columns: ["ID", "NAME", "STATUS", "TYPE"],
-          keys: ["id", "name", "status", "type"],
-          meta,
-        },
-      );
+      outputList(cmd, data, {
+        columns: ["ID", "NAME", "STATUS", "TYPE"],
+        keys: ["id", "name", "status", "type"],
+        meta,
+      });
     } catch (err) {
       handleError(err, { url: getBaseUrl(cmd) });
     }

@@ -39,18 +39,11 @@ modelsCommand
         total_count: models.length,
       };
 
-      outputList(
-        cmd,
-        paged.map((m) => ({
-          id: m.id ?? "",
-          provider: m.provider ?? "",
-        })),
-        {
-          columns: ["ID", "PROVIDER"],
-          keys: ["id", "provider"],
-          meta,
-        },
-      );
+      outputList(cmd, paged as unknown as Record<string, unknown>[], {
+        columns: ["ID", "PROVIDER"],
+        keys: ["id", "provider"],
+        meta,
+      });
     } catch (err) {
       handleError(err, { url: getBaseUrl(cmd) });
     }

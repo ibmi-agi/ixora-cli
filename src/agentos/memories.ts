@@ -65,28 +65,11 @@ memoriesCommand
           }
         | undefined;
 
-      const format = getOutputFormat(cmd);
-      if (format === "json") {
-        printJson({ data, meta });
-        return;
-      }
-
-      outputList(
-        cmd,
-        data.map((m) => ({
-          memory_id: (m as Record<string, unknown>).memory_id ?? "",
-          memory: (m as Record<string, unknown>).memory ?? "",
-          topics: Array.isArray((m as Record<string, unknown>).topics)
-            ? ((m as Record<string, unknown>).topics as string[]).join(", ")
-            : "",
-          user_id: (m as Record<string, unknown>).user_id ?? "",
-        })),
-        {
-          columns: ["ID", "MEMORY", "TOPICS", "USER_ID"],
-          keys: ["memory_id", "memory", "topics", "user_id"],
-          meta,
-        },
-      );
+      outputList(cmd, data, {
+        columns: ["ID", "MEMORY", "TOPICS", "USER_ID"],
+        keys: ["memory_id", "memory", "topics", "user_id"],
+        meta,
+      });
     } catch (err) {
       handleError(err, { url: getBaseUrl(cmd) });
     }

@@ -39,20 +39,11 @@ teamsCommand
         total_count: teams.length,
       };
 
-      outputList(
-        cmd,
-        paged.map((t) => ({
-          id: t.id ?? "",
-          name: t.name ?? "",
-          mode: t.mode ?? "",
-          description: t.description ?? "",
-        })),
-        {
-          columns: ["ID", "NAME", "MODE", "DESCRIPTION"],
-          keys: ["id", "name", "mode", "description"],
-          meta,
-        },
-      );
+      outputList(cmd, paged as unknown as Record<string, unknown>[], {
+        columns: ["ID", "NAME", "MODE", "DESCRIPTION"],
+        keys: ["id", "name", "mode", "description"],
+        meta,
+      });
     } catch (err) {
       handleError(err, { url: getBaseUrl(cmd) });
     }

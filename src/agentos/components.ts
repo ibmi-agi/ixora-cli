@@ -46,26 +46,11 @@ componentsCommand
           }
         | undefined;
 
-      const format = getOutputFormat(cmd);
-      if (format === "json") {
-        printJson({ data, meta });
-        return;
-      }
-
-      outputList(
-        cmd,
-        data.map((c) => ({
-          id: c.id ?? "",
-          name: c.name ?? "",
-          type: c.component_type ?? "",
-          stage: c.stage ?? "",
-        })),
-        {
-          columns: ["ID", "NAME", "TYPE", "STAGE"],
-          keys: ["id", "name", "type", "stage"],
-          meta,
-        },
-      );
+      outputList(cmd, data, {
+        columns: ["ID", "NAME", "TYPE", "STAGE"],
+        keys: ["id", "name", "component_type", "stage"],
+        meta,
+      });
     } catch (err) {
       handleError(err, { url: getBaseUrl(cmd) });
     }
