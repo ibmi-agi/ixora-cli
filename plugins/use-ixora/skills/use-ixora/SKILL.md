@@ -59,7 +59,7 @@ Every `ixora <runtime>` invocation needs a target. The order:
 |---|---|
 | Stack install / start / stop / upgrade / logs / config / models / components | [references/stack-lifecycle.md](references/stack-lifecycle.md) |
 | Multi-system: add/remove/start/stop, managed vs external, env var naming | [references/systems.md](references/systems.md) |
-| Runtime: agents / teams / workflows — list, get, run (streaming + sessions), continue, cancel | [references/agents-teams-workflows.md](references/agents-teams-workflows.md) |
+| Runtime: agents / teams / workflows — list, get, run (streaming + sessions), continue, resume, cancel | [references/agents-teams-workflows.md](references/agents-teams-workflows.md) |
 | Debugging: traces + sessions, span trees, the failed-run walkthrough | [references/traces-sessions.md](references/traces-sessions.md) |
 | Knowledge base + memories — upload, search, multi-KB rules | [references/knowledge-memories.md](references/knowledge-memories.md) |
 
