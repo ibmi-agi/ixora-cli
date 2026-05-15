@@ -18,7 +18,7 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
-      - run: npm install --no-audit --no-fund
+      - run: rm -f package-lock.json && npm install --no-audit --no-fund
       - run: npm run lint
       - run: npm test
       - run: npm run build
@@ -32,7 +32,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm install --no-audit --no-fund
+      - run: rm -f package-lock.json && npm install --no-audit --no-fund
       - run: npm run build
       - name: Verify CLI runs
         run: node dist/index.js --help

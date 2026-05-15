@@ -36,10 +36,13 @@ jobs:
           fi
 
       - name: Install dependencies
-        # Use `npm install` (not `npm ci`) so cross-platform optional deps
-        # missing from the lockfile (e.g. @rollup/rollup-linux-x64-gnu when
-        # the lockfile was regenerated on macOS) get resolved at install time.
-        run: npm install --no-audit --no-fund
+        # Drop the lockfile then `npm install`. The lockfile may have been
+        # regenerated on a different platform and pins out optional
+        # platform-specific deps (e.g. @rollup/rollup-linux-x64-gnu, pulled
+        # in by tsup/rollup). Both `npm ci` and `npm install` honor that
+        # exclusion if the lockfile is present — see npm/cli#4828. Removing
+        # the lockfile lets npm resolve all optionals fresh on Linux.
+        run: rm -f package-lock.json && npm install --no-audit --no-fund
 
       - name: Type check
         run: npx tsc --noEmit
