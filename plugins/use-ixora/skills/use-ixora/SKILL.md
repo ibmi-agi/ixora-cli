@@ -1,6 +1,19 @@
 ---
 name: use-ixora
-description: "Operate the Ixora platform via the `ixora` CLI. Use when the user asks to install / start / stop / restart / upgrade the ixora stack, add or remove an ixora system (managed compose stack OR external AgentOS URL), configure the model provider, switch between systems via `--system`, list or run ixora agents / teams / workflows, inspect traces or sessions on a running system, search the knowledge base, manage memories, check system health, edit per-system component profiles (Full vs Custom), tail container logs, or pin/upgrade the deployed image version. Covers the `kind: managed | external` discriminator and per-system `SYSTEM_<ID>_*` env vars in `~/.ixora/.env`."
+description: >
+  Operate the Ixora platform via the `ixora` CLI: install, start, stop, restart,
+  and upgrade the local stack; add, remove, list, and switch between systems
+  (managed compose stack OR external AgentOS URL via the `kind: managed | external`
+  discriminator); configure the model provider; list and run agents, teams, and
+  workflows; inspect traces, sessions, memories, and the knowledge base; check
+  health, status, and metrics; edit per-system component profiles (Full vs Custom);
+  manage per-system `SYSTEM_<ID>_*` env vars in `~/.ixora/.env`; tail container
+  logs; and pin or bump the deployed image version. Use this skill whenever the
+  user mentions ixora, Ixora, AgentOS, the ixora stack, agents, teams, workflows,
+  traces, sessions, memories, the knowledge base, or anything connected to an
+  ixora system — even in passing and even if they don't explicitly ask for an
+  action.
+allowed-tools: Bash(ixora:*), Bash(which:*), Bash(command:*), Bash(docker:*), Bash(podman:*), Bash(curl:*), Bash(cat:*), Bash(ls:*), Bash(grep:*), Bash(tail:*)
 ---
 
 # use-ixora
