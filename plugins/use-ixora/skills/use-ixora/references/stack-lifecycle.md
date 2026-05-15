@@ -2,7 +2,7 @@
 
 > **For exact flags, run `ixora stack <cmd> --help`.** This reference covers workflows, gotchas, and non-obvious patterns — it does not transcribe every flag.
 
-Local-stack management. All commands live under `ixora stack <cmd>`. None of them respect `--system` / `--url` — they target the local deployment directly. The `agentos-db` / `agentos-api` / `ibmi-mcp-server` / `carbon-ui` containers are spawned via `docker compose` (or `podman compose`) against the generated `~/.ixora/docker-compose.yml`.
+Local-stack management. All commands live under `ixora stack <cmd>`. None of them respect `--system` / `--url` — they target the local deployment directly. Containers (`agentos-db`, `api-<system_id>`, `mcp-<system_id>`, `ui`) are spawned via `docker compose` (or `podman compose`) against the generated `~/.ixora/docker-compose.yml`. See [Service names](#service-names) below for the templating.
 
 **Prereqs**: Node ≥ 20 and a running Docker (or Podman) daemon.
 
@@ -42,9 +42,9 @@ ixora stack status                     # service list + deployed profile
 
 | Profile | Containers | Use case |
 |---|---|---|
-| `full` (default) | agentos-db, agentos-api, ibmi-mcp-server, carbon-ui | Local dev with the bundled UI |
-| `mcp` | agentos-db, agentos-api, ibmi-mcp-server | Backend-only (`--profile api` is accepted as an alias with a deprecation warning) |
-| `cli` | agentos-db, agentos-api | API runs in CLI mode (`IXORA_CLI_MODE=true`), no MCP container — agents reach IBM i via the bundled `ibmi` CLI directly. PASE unavailable. |
+| `full` (default) | `agentos-db`, `api-<id>`, `mcp-<id>`, `ui` | Local dev with the bundled UI |
+| `mcp` | `agentos-db`, `api-<id>`, `mcp-<id>` | Backend-only (`--profile api` is accepted as an alias with a deprecation warning) |
+| `cli` | `agentos-db`, `api-<id>` | API runs in CLI mode (`IXORA_CLI_MODE=true`), no MCP container — agents reach IBM i via the bundled `ibmi` CLI directly. PASE unavailable. |
 
 ```bash
 ixora stack start --profile mcp     # no UI; API on :18000
@@ -62,7 +62,7 @@ ixora stack upgrade --no-pull     # don't fetch; use already-pulled image
 ixora stack uninstall             # stop services + remove images
 ixora stack uninstall --purge     # ALSO removes the agentos-db volume — destroys data
 ixora stack logs                  # tail all services
-ixora stack logs agentos-api      # tail one service
+ixora stack logs api-default      # tail one service (service names are `api-<system_id>`, `mcp-<system_id>`, `ui`, `agentos-db`)
 ixora stack version               # CLI + image versions side-by-side
 ```
 
@@ -127,6 +127,21 @@ ixora stack models set custom                                 # raw provider + b
 ```
 
 `set` prompts for the API key (unless `ollama`, which is keyless). The API container needs a restart to pick up provider changes — `ixora stack restart` after.
+
+## Service names
+
+Compose service names are **templated per system**, not fixed. The set:
+
+| Service | When present | Notes |
+|---|---|---|
+| `agentos-db` | Always | Shared Postgres container for every managed system |
+| `api-<system_id>` | Always for each managed system | The AgentOS API container. E.g. `api-default`, `api-prod`. |
+| `mcp-<system_id>` | When `--profile full` or `--profile mcp` | The MCP server container. Absent under `--profile cli`. |
+| `ui` | When `--profile full` | The Carbon UI container. Single instance shared across systems. |
+
+Pass any of these to `stack logs|restart|stop|start <service>`. Run `ixora stack status` for the live list — it prints the current service-name set with state, container name, and port mapping.
+
+The old `agentos-api` / `ibmi-mcp-server` / `carbon-ui` names from earlier ixora versions are gone — service names are now system-scoped because a single deployment can host multiple managed systems on different ports.
 
 ## Runtime detection order
 

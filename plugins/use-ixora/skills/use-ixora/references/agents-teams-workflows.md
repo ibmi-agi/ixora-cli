@@ -64,7 +64,35 @@ ixora teams     continue <team_id>     <run_id> "<message>" [--stream]
 ixora workflows continue <workflow_id> <run_id> "<message>"
 ```
 
-`--confirm` and `--reject` are agent-only — they auto-reconstruct the paused tool-call payload from cache, which is the natural HITL UX. For agents, prefer them over hand-building `tool_results` JSON. Pair with `ixora approvals resolve` if the pause came from an approvals workflow.
+`--confirm` and `--reject` are agent-only. They reconstruct the paused tool-call payload from a local cache so you don't have to hand-build `tool_results` JSON. Pair with `ixora approvals resolve` if the pause originated from an approvals workflow.
+
+### `--confirm` / `--reject` cache prerequisite
+
+The cache that `--confirm` / `--reject` read from is written **only when the original `agents run` (or a prior `continue`) observed a paused event with tools** — i.e. you ran the agent and it actually paused waiting for human approval. It lives at:
+
+```
+~/.ixora/agentos-paused-runs/<run_id>.json
+```
+
+Cache entries **expire after 24 hours**. If the cache is missing or stale, `agents continue --confirm` errors with:
+
+```
+No cached paused state for run <run_id>. Provide tool results JSON
+directly or re-run the agent with --stream to capture the paused state.
+```
+
+Recovery options when the cache isn't there:
+
+```bash
+# 1. Pass raw tool_results JSON as the positional arg
+ixora agents continue <agent_id> <run_id> '{"tool_call_id":"...","output":"..."}'
+
+# 2. Re-run the agent to repopulate the cache, then --confirm/--reject
+ixora agents run <agent_id> "<same prompt>" --stream
+ixora agents continue <agent_id> <new_run_id> --confirm
+```
+
+The cache survives terminal sessions and shells — what matters is whether the run is younger than 24h and was originally observed by **this** machine's CLI (the cache is local to `~/.ixora/`, not shared from the server).
 
 ## cancel
 

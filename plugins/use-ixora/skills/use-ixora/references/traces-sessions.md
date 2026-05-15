@@ -132,8 +132,8 @@ The non-obvious sequence from "something broke" to "I see why":
    ```
 6. **If the failure is below the AgentOS layer** (network, MCP, container restart):
    ```bash
-   ixora stack logs agentos-api
-   ixora stack logs ibmi-mcp-server
+   ixora stack logs api-<system_id>      # e.g. api-default
+   ixora stack logs mcp-<system_id>      # e.g. mcp-default
    ```
 
 ## Span-tree shape

@@ -56,6 +56,12 @@ For misc runtime ops (`evals`, `approvals`, `schedules`, `metrics`, `databases`,
 
 - **Prereqs:** Node ≥ 20 and a running Docker (or Podman) daemon.
 - **Default ports** for the first managed system: API `18000`, DB `15432`, UI `13000`. Each additional managed system shifts the API port by `+1` (system index 1 → `18001`, index 2 → `18002`, …). DB and UI ports are shared across systems.
+- **Service names** (what to pass to `stack logs|restart|stop|start <service>`):
+  - `agentos-db` — shared Postgres
+  - `api-<system_id>` — AgentOS API for each managed system (e.g. `api-default`)
+  - `mcp-<system_id>` — MCP server for each managed system (omitted under `--profile cli`)
+  - `ui` — Carbon UI (only under `--profile full`)
+  - Run `ixora stack status` to see the live list — these names are templated per system.
 - **Runtime override:** auto-detection tries `docker compose` then `podman compose` then legacy `docker-compose`. Force one with `--runtime docker` / `--runtime podman` on any `stack` command.
 
 ## Gotchas
@@ -86,7 +92,7 @@ ixora traces list --status ERROR --limit 20           # filter to failures acros
 ixora traces list --agent-id <member_id> --limit 20   # filter to one team member's traces
 ixora traces get <trace_id>                           # span tree + attributes
 ixora sessions runs <session_id>                      # every run in the session
-ixora stack logs agentos-api                          # container-level last resort
+ixora stack logs api-default                          # container-level last resort (service = api-<system_id>)
 ```
 
 See [references/traces-sessions.md](references/traces-sessions.md) for the full pattern including span-tree interpretation.
