@@ -1,6 +1,6 @@
 ---
 name: use-ixora
-description: Operate the Ixora platform via the `ixora` CLI. Use when the user asks to install / start / stop / restart / upgrade the ixora stack, add or remove an ixora system (managed compose stack OR external AgentOS URL), configure the model provider, switch between systems via `--system`, list or run ixora agents / teams / workflows, inspect traces or sessions on a running system, search the knowledge base, manage memories, check system health, edit per-system component profiles (Full vs Custom), tail container logs, or pin/upgrade the deployed image version. Covers the `kind: managed | external` discriminator and per-system `SYSTEM_<ID>_*` env vars in `~/.ixora/.env`.
+description: "Operate the Ixora platform via the `ixora` CLI. Use when the user asks to install / start / stop / restart / upgrade the ixora stack, add or remove an ixora system (managed compose stack OR external AgentOS URL), configure the model provider, switch between systems via `--system`, list or run ixora agents / teams / workflows, inspect traces or sessions on a running system, search the knowledge base, manage memories, check system health, edit per-system component profiles (Full vs Custom), tail container logs, or pin/upgrade the deployed image version. Covers the `kind: managed | external` discriminator and per-system `SYSTEM_<ID>_*` env vars in `~/.ixora/.env`."
 ---
 
 # use-ixora
