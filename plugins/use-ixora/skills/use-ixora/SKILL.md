@@ -21,7 +21,7 @@ allowed-tools: Bash(ixora:*), Bash(which:*), Bash(command:*), Bash(docker:*), Ba
 The `ixora` binary exposes **two command trees** with different targeting:
 
 - `ixora stack <cmd>` — local stack lifecycle (install / start / stop / config / multi-system / models / logs). Targets the local deployment directly; ignores `--system`.
-- `ixora <runtime> <cmd>` — talk to a running AgentOS (`agents`, `teams`, `workflows`, `traces`, `sessions`, `memories`, `knowledge`, plus `evals`, `approvals`, `schedules`, `metrics`, `databases`, `registries`, `components`, `models`, `status`, `health`). Resolves a target system from `~/.ixora/ixora-systems.yaml`.
+- `ixora <runtime> <cmd>` — talk to a running AgentOS (`agents`, `teams`, `workflows`, `traces`, `sessions`, `memories`, `knowledge`, plus `evals`, `docs`, `approvals`, `schedules`, `metrics`, `databases`, `registries`, `components`, `models`, `status`, `health`). Resolves a target system from `~/.ixora/ixora-systems.yaml`.
 
 The runtime commands are **plural** (`ixora agents list`, not `ixora agent list`). Memory and session CRUD verbs are `create`/`update`/`delete` (not `add`/`edit`/`remove`).
 
@@ -63,8 +63,23 @@ Every `ixora <runtime>` invocation needs a target. The order:
 | Debugging: traces + sessions, span trees, the failed-run walkthrough | [references/traces-sessions.md](references/traces-sessions.md) |
 | Knowledge base + memories — upload, search, multi-KB rules | [references/knowledge-memories.md](references/knowledge-memories.md) |
 | Schedules: cron jobs that fire AgentOS endpoint callbacks — full CRUD, pause/resume, manual trigger, run history | [references/schedules.md](references/schedules.md) |
+| Evals: `list / get / run / delete`, eval-type semantics | [references/evals.md](references/evals.md) |
+| Docs: raw OpenAPI discovery — `list / show / spec` + curl examples | [references/docs.md](references/docs.md) |
 
-For misc runtime ops (`evals`, `approvals`, `metrics`, `databases`, `registries`, `health`), `ixora <cmd> --help` is the source of truth.
+For misc runtime ops (`approvals`, `metrics`, `databases`, `registries`, `health`), `ixora <cmd> --help` is the source of truth.
+
+## Raw HTTP API — use `ixora docs` instead of curl-guessing
+
+The AgentOS server ships an OpenAPI spec at `/openapi.json`. `ixora docs` reads it so you don't have to leave the terminal:
+
+```bash
+ixora docs list --tag Evals                     # what eval endpoints exist
+ixora docs show run_eval                        # full schema + a curl example
+ixora docs show /eval-runs --method POST        # disambiguate when needed
+ixora docs spec | jq '.components.schemas.EvalRunInput'   # raw passthrough
+```
+
+Reach for this **before** writing a curl against an endpoint the SDK doesn't wrap — `docs show` prints a copy-pasteable curl with placeholders for path params, query params, body fields (stubbed from the schema), and a literal `$AGENTOS_KEY` placeholder for auth. It also resolves `$ref`s inline, so the printed schema is the real shape the server expects. See [references/docs.md](references/docs.md) for the full discoverability pattern.
 
 ## Local deployment shape
 
@@ -92,7 +107,6 @@ For misc runtime ops (`evals`, `approvals`, `metrics`, `databases`, `registries`
 - **`traces list` has no `--team-id` filter.** Use `--agent-id <member>` to filter by team member, `traces stats --team-id` for rollups, or `traces search --filter '{"team_id":"..."}'` for raw per-trace listing.
 - **`traces stats` does NOT accept `--group-by`.** That flag lives on `traces search` only.
 - **`sessions delete-all` and `memories delete-all` are batch-by-ID, not filter-based.** Both require `--ids id1,id2,...`; `sessions delete-all` additionally requires a matching `--types` array.
-- **`evals` is read-only from the CLI** — `list / get / delete`. Evals are launched server-side.
 - **`ixora stack agents <id>` only works on managed systems.** External systems are configured at their AgentOS source, not via ixora's component picker.
 
 ## Debugging a failed run
