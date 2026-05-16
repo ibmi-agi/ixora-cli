@@ -2,6 +2,9 @@
 
 CLI for managing ixora AI agent deployments on IBM i — and for talking to the running AgentOS.
 
+> [!TIP]
+> Full documentation lives in [`docs/`](docs/README.md) — every command, every flag, with examples. Start with [Getting Started](docs/getting-started.md) or browse the [docs index](docs/README.md).
+
 ## Install
 
 ```sh
