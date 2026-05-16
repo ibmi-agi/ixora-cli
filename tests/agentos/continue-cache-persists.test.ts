@@ -77,6 +77,7 @@ vi.mock("@worksofadam/agentos-sdk", () => {
 });
 
 const writePausedRunSpy = vi.fn();
+const mergePausedRunSpy = vi.fn();
 vi.mock("../../src/lib/agentos-paused-runs.js", async () => {
   const actual =
     await vi.importActual<
@@ -85,7 +86,13 @@ vi.mock("../../src/lib/agentos-paused-runs.js", async () => {
   return {
     ...actual,
     writePausedRun: (state: unknown) => writePausedRunSpy(state),
+    // mergePausedRun is what the stream lib now calls; the production helper
+    // would read prior cache state and forward to writePausedRun. The test
+    // doesn't care about the merge math — we only need to confirm a write
+    // happens and capture what shape would be persisted.
+    mergePausedRun: (state: unknown) => mergePausedRunSpy(state),
     readPausedRun: vi.fn().mockReturnValue(CACHED_FIRST_PAUSE),
+    listPausedRuns: vi.fn().mockReturnValue([]),
     deletePausedRun: vi.fn(),
   };
 });
@@ -104,6 +111,7 @@ describe("agents continue --confirm: paused-state cache persists across re-pause
     resetClient();
     clearAgentOSContext();
     writePausedRunSpy.mockClear();
+    mergePausedRunSpy.mockClear();
     continueFn.mockClear();
     continueFn.mockResolvedValue(PAUSED_WITH_REQUIREMENTS);
     vi.spyOn(process.stdout, "write").mockImplementation(() => true);
@@ -124,8 +132,8 @@ describe("agents continue --confirm: paused-state cache persists across re-pause
       "http://test",
     ]);
 
-    expect(writePausedRunSpy).toHaveBeenCalledOnce();
-    const written = writePausedRunSpy.mock.calls[0]?.[0] as {
+    expect(mergePausedRunSpy).toHaveBeenCalledOnce();
+    const written = mergePausedRunSpy.mock.calls[0]?.[0] as {
       tools: Array<{ tool_call_id: string; tool_name: string }>;
       run_id: string;
     };

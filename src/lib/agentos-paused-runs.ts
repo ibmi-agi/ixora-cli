@@ -23,6 +23,9 @@ export interface PausedRunState {
   session_id: string | null;
   resource_type: string;
   paused_at: string;
+  /** Original message that started this run — used by `agents pending` to
+   *  surface a re-run hint when the cache outlived its agent_id context. */
+  prompt?: string;
   tools: Array<{
     tool_call_id: string;
     tool_name: string;
@@ -43,11 +46,55 @@ export function writePausedRun(state: PausedRunState): void {
   );
 }
 
+/**
+ * Merge an incoming paused state with whatever's already on disk for this
+ * run_id, then write the combined record. Use this whenever the source event
+ * may carry partial fields (most notably `session_id`, which the AgentOS
+ * RunStarted event omits on re-pause inside a `continue` stream — without
+ * the merge, every re-pause would clobber the session_id and the next
+ * `--confirm` would 400 with "session_id is required").
+ *
+ * Tools are NOT merged — the new `tools[]` is the authoritative pending
+ * set for the new pause.
+ */
+export function mergePausedRun(state: PausedRunState): void {
+  const prev = readPausedRunRaw(state.run_id);
+  writePausedRun({
+    ...state,
+    session_id: state.session_id ?? prev?.session_id ?? null,
+    prompt: state.prompt ?? prev?.prompt,
+  });
+}
+
 export function readPausedRun(runId: string): PausedRunState | null {
   cleanStalePausedRuns();
+  return readPausedRunRaw(runId);
+}
+
+function readPausedRunRaw(runId: string): PausedRunState | null {
   const filePath = join(CACHE_DIR, `${runId}.json`);
   if (!existsSync(filePath)) return null;
   return JSON.parse(readFileSync(filePath, "utf-8")) as PausedRunState;
+}
+
+export function listPausedRuns(): PausedRunState[] {
+  cleanStalePausedRuns();
+  if (!existsSync(CACHE_DIR)) return [];
+  const out: PausedRunState[] = [];
+  for (const file of readdirSync(CACHE_DIR)) {
+    if (!file.endsWith(".json")) continue;
+    try {
+      const state = JSON.parse(
+        readFileSync(join(CACHE_DIR, file), "utf-8"),
+      ) as PausedRunState;
+      out.push(state);
+    } catch {
+      // Skip files that aren't valid JSON — the cache is best-effort.
+    }
+  }
+  // Newest first by paused_at when present, else by file mtime.
+  out.sort((a, b) => (b.paused_at ?? "").localeCompare(a.paused_at ?? ""));
+  return out;
 }
 
 export function deletePausedRun(runId: string): void {

@@ -3,7 +3,7 @@ import chalk from "chalk";
 import type { Command } from "commander";
 import { getOutputFormat, writeError, writeWarning } from "./agentos-output.js";
 import type { PausedRunState } from "./agentos-paused-runs.js";
-import { writePausedRun } from "./agentos-paused-runs.js";
+import { mergePausedRun } from "./agentos-paused-runs.js";
 
 // Ported from agno-cli/src/lib/stream.ts. Hint messages updated to point at
 // the ixora `agents continue` surface.
@@ -12,6 +12,10 @@ export type ResourceType = "agent" | "team" | "workflow";
 
 export interface StreamRunOptions {
   resourceId: string;
+  /** Original message that started this run — persisted in the paused-state
+   *  cache so `agents pending` can suggest a re-run command if the cache
+   *  outlived the user's shell history. */
+  prompt?: string;
 }
 
 const CONTENT_EVENTS: Record<ResourceType, string> = {
@@ -173,7 +177,12 @@ export function projectCompact(
   };
 }
 
-function displayPausedToolInfo(
+/**
+ * Pretty-print the pending tool calls and the next-step commands. Always
+ * writes to stderr so it composes with `-o json` / `-o compact` output on
+ * stdout without corrupting it.
+ */
+export function displayPausedToolInfo(
   tools: Array<Record<string, unknown>>,
   resourceId: string,
   runId: string,
@@ -193,17 +202,32 @@ function displayPausedToolInfo(
     );
   }
   process.stderr.write(
-    `To confirm: ${chalk.green(`ixora agents continue ${resourceId} ${runId} --confirm --stream`)}\n`,
+    `To confirm: ${chalk.green(`ixora agents continue ${runId} --confirm --stream`)}\n`,
   );
   process.stderr.write(
-    `To reject:  ${chalk.red(`ixora agents continue ${resourceId} ${runId} --reject --stream`)}\n`,
+    `To reject:  ${chalk.red(`ixora agents continue ${runId} --reject --stream`)}\n`,
+  );
+  process.stderr.write(
+    `${chalk.dim(`(agent_id ${resourceId} will be looked up from the cache)`)}\n`,
   );
 }
 
-/** Result of a streamed run. `paused` is true if a RunPaused event fired. */
+/**
+ * Result of a streamed run. `paused` is true if a RunPaused event fired.
+ * When paused, the run/session IDs and pending tool list are surfaced so
+ * the caller can drive an interactive resume loop without re-parsing the
+ * stream.
+ */
 export interface StreamRunResult {
   paused: boolean;
+  runId?: string | null;
+  sessionId?: string | null;
+  pendingTools?: PendingTool[];
 }
+
+/** Exit code emitted when a run paused awaiting tool confirmation. Scripts
+ *  can branch on this without parsing JSON output. */
+export const EXIT_CODE_PAUSED = 4;
 
 export async function handleStreamRun(
   cmd: Command,
@@ -212,6 +236,11 @@ export async function handleStreamRun(
   options?: StreamRunOptions,
 ): Promise<StreamRunResult> {
   let observedPause = false;
+  // Hoisted so both the json/compact and table branches can publish pause
+  // details out to the function's return value without restructuring.
+  let pauseRunId: string | null = null;
+  let pauseSessionId: string | null = null;
+  let pausePendingTools: PendingTool[] = [];
   const format = getOutputFormat(cmd);
   const contentEvent = CONTENT_EVENTS[resourceType];
   const completedEvent = COMPLETED_EVENTS[resourceType];
@@ -276,14 +305,23 @@ export async function handleStreamRun(
               created_at: t.created_at as number | undefined,
             }));
             if (options?.resourceId && resourceType === "agent") {
-              writePausedRun({
+              mergePausedRun({
                 agent_id: options.resourceId,
                 run_id: eventRunId ?? "unknown",
                 session_id: accSessionId,
                 resource_type: resourceType,
                 paused_at: new Date().toISOString(),
+                prompt: options.prompt,
                 tools: accPendingTools,
               });
+              displayPausedToolInfo(
+                tools,
+                options.resourceId,
+                eventRunId ?? "unknown",
+              );
+              pauseRunId = eventRunId;
+              pauseSessionId = accSessionId;
+              pausePendingTools = accPendingTools;
             }
           }
         }
@@ -339,12 +377,13 @@ export async function handleStreamRun(
           const eventRunId =
             ((event as Record<string, unknown>).run_id as string) ?? runId;
           if (tools && tools.length > 0 && options?.resourceId) {
-            writePausedRun({
+            mergePausedRun({
               agent_id: options.resourceId,
               run_id: eventRunId ?? "unknown",
               session_id: sessionId,
               resource_type: resourceType,
               paused_at: new Date().toISOString(),
+              prompt: options.prompt,
               tools: tools as PausedRunState["tools"],
             });
             displayPausedToolInfo(
@@ -352,6 +391,20 @@ export async function handleStreamRun(
               options.resourceId,
               eventRunId ?? "unknown",
             );
+            // Capture for return so callers can drive an interactive resume
+            // without re-parsing the stream.
+            pauseRunId = eventRunId ?? null;
+            pauseSessionId = sessionId;
+            pausePendingTools = tools.map((t) => ({
+              tool_call_id: String(t.tool_call_id ?? ""),
+              tool_name: String(t.tool_name ?? ""),
+              tool_args: (t.tool_args as Record<string, unknown>) ?? {},
+              requires_confirmation: t.requires_confirmation as
+                | boolean
+                | undefined,
+              confirmed: t.confirmed as boolean | null | undefined,
+              created_at: t.created_at as number | undefined,
+            }));
           }
         }
       }
@@ -363,7 +416,16 @@ export async function handleStreamRun(
   } finally {
     process.removeListener("SIGINT", onSigint);
   }
-  return { paused: observedPause };
+  if (observedPause) {
+    process.exitCode = EXIT_CODE_PAUSED;
+    return {
+      paused: true,
+      runId: pauseRunId,
+      sessionId: pauseSessionId,
+      pendingTools: pausePendingTools,
+    };
+  }
+  return { paused: false };
 }
 
 /**
@@ -384,7 +446,12 @@ export async function handleStreamRun(
 export async function handleNonStreamRun(
   cmd: Command,
   input: (() => Promise<unknown>) | { result: unknown },
-  options?: { resourceType?: ResourceType; resourceId?: string },
+  options?: {
+    resourceType?: ResourceType;
+    resourceId?: string;
+    /** Original message that started this run; persisted for `agents pending`. */
+    prompt?: string;
+  },
 ): Promise<void> {
   const format = getOutputFormat(cmd);
 
@@ -415,31 +482,32 @@ export async function handleNonStreamRun(
   ) {
     const pausedRunId = (resultObj?.run_id as string) ?? "unknown";
     const pausedSessionId = (resultObj?.session_id as string) ?? null;
-    writePausedRun({
+    mergePausedRun({
       agent_id: options.resourceId,
       run_id: pausedRunId,
       session_id: pausedSessionId,
       resource_type: options.resourceType,
       paused_at: new Date().toISOString(),
+      prompt: options.prompt,
       tools: pendingTools,
     });
-    if (format === "table") {
-      displayPausedToolInfo(
-        pendingTools as unknown as Array<Record<string, unknown>>,
-        options.resourceId,
-        pausedRunId,
-      );
-    }
+    // Always show the pause hint on stderr — used to be table-only, but
+    // -o json/-o compact users were left without a next-step command.
+    displayPausedToolInfo(
+      pendingTools as unknown as Array<Record<string, unknown>>,
+      options.resourceId,
+      pausedRunId,
+    );
   } else if (
     isPaused &&
     pendingTools.length === 0 &&
-    options?.resourceType === "agent" &&
-    format === "table"
+    options?.resourceType === "agent"
   ) {
     writeWarning(
       "Run paused but no pending tool calls could be extracted from the response. --confirm will not work for this run.",
     );
   }
+  if (isPaused) process.exitCode = EXIT_CODE_PAUSED;
 
   if (format === "compact") {
     process.stdout.write(
