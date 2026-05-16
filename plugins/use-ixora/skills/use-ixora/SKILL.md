@@ -96,7 +96,7 @@ Reach for this **before** writing a curl against an endpoint the SDK doesn't wra
 ## Gotchas
 
 - **`ixora stack start <external-id>` errors out.** Externals have no local lifecycle — they're URLs that runtime commands route to. Only managed systems respond to `system start|stop|restart`.
-- **System ID → env var name**: hyphens become underscores, all uppercased. `my-system` → `SYSTEM_MY_SYSTEM_HOST`, `SYSTEM_MY_SYSTEM_AGENTOS_KEY`. Watch this when editing `~/.ixora/.env` by hand.
+- **System ID → env var name**: hyphens become underscores, all uppercased. `my-system` → `SYSTEM_MY_SYSTEM_HOST`, `SYSTEM_MY_SYSTEM_AGENTOS_KEY`. Write with `ixora stack config set <key> <value>`.
 - **`--profile cli` skips the MCP container.** Sets `IXORA_CLI_MODE=true`; agents reach IBM i via the bundled `ibmi` CLI directly using stored `SYSTEM_<ID>_*` creds. PASE is unavailable in this mode.
 - **Profile is sticky.** Once set by `stack start --profile <name>`, subsequent `stop|status|logs|restart|upgrade` calls without `--profile` keep the same shape. Pass `--profile` again to switch.
 - **Per-system DB isolation is the default.** Each system gets its own `ai_<id>` Postgres database inside the shared `agentos-db` container. Consolidate with `ixora stack config set IXORA_DB_ISOLATION shared && ixora stack restart`.
