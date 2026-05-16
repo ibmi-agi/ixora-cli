@@ -88,38 +88,74 @@ ixora traces list --limit 1 --json trace_id,run_id,session_id,input
 `continue` resumes a run that paused for human input (tool approval, clarifying question, workflow step). The argument list and convenience flags differ across the three:
 
 ```bash
-# agents: optional tool_results — or use --confirm / --reject for paused tool calls
-ixora agents continue <agent_id> <run_id>                                    # interactive
-ixora agents continue <agent_id> <run_id> --confirm                          # approve & resume
-ixora agents continue <agent_id> <run_id> --reject "use a soft delete instead"
-ixora agents continue <agent_id> <run_id> '{"tool_call_id":"...","output":"..."}'   # raw payload
+# agents — agent_id is OPTIONAL when the cache has the run (preferred form)
+ixora agents continue <run_id>                                              # interactive (raw)
+ixora agents continue <run_id> --confirm                                    # approve & resume
+ixora agents continue <run_id> --reject "use a soft delete instead"
+ixora agents continue <run_id> '{"tool_call_id":"...","output":"..."}'      # raw payload
+
+# Legacy 2-positional form still works:
+ixora agents continue <agent_id> <run_id> --confirm
 
 # teams + workflows: required <message>, no --confirm/--reject
 ixora teams     continue <team_id>     <run_id> "<message>" [--stream]
 ixora workflows continue <workflow_id> <run_id> "<message>"
 ```
 
-`--confirm` / `--reject` are agent-only. They reconstruct the paused tool-call payload from a local cache so you don't have to hand-build `tool_results` JSON.
+`--confirm` / `--reject` are agent-only. They reconstruct the paused tool-call payload from a local cache so you don't have to hand-build `tool_results` JSON. The agent_id is read from that same cache when the single-positional form is used.
 
-The non-stream `continue` result honors `--json fields` projection — `ixora agents continue <id> <run> --confirm --json run_id,session_id` returns just those fields.
+The non-stream `continue` result honors `--json fields` projection — `ixora agents continue <run> --confirm --json run_id,session_id` returns just those fields.
+
+### Interactive resume — `--interactive` / `-i`
+
+Skip the bounce to a second invocation. With `--stream --interactive` (and a TTY), pauses prompt inline:
+
+```bash
+ixora agents run <agent_id> "<message>" --stream --interactive
+# on RunPaused:
+#   > Approve all
+#     Reject all
+#     Show details
+#     Quit (cache preserved)
+# Loops on every re-pause; resolves the same SSE stream.
+```
+
+Same flag works on `agents continue` for the case where you started raw and want the loop to take over after the first manual approval.
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | Run completed (or completed after interactive resume). |
+| `2` | Stream emitted a `RunError`. |
+| `4` | Run paused awaiting tool confirmation. Branch on `$?` instead of grepping the log. |
+
+### Discovering paused runs — `agents pending`
+
+```bash
+ixora agents pending                # table of cached paused runs
+ixora agents pending <run_id>       # pretty-print pending tools + original prompt
+ixora agents pending <run_id> --json
+```
+
+Use this when you start a run, walk away, and come back not remembering which run paused.
 
 ### The local paused-run cache
 
 The cache `--confirm` / `--reject` read from is written **only when the original `agents run` (or a prior `continue`) observed a paused event with tools**. It lives at:
 
 ```
-~/.ixora/paused-runs/<run_id>.json
+~/.ixora/agentos-paused-runs/<run_id>.json
 ```
 
-(Older versions used `~/.ixora/agentos-paused-runs/`; same idea.)
+The cache record stores `agent_id`, `session_id`, `tools[]`, and the original `prompt`. **It's merged on every re-pause** so consecutive `--confirm`s preserve `session_id` even when AgentOS's `RunStarted` on the second pause omits it (this used to surface as `session_id is required to continue a run`).
 
 **TTL: 24 hours.** Cache entries also evaporate if the run is resolved without re-pausing. If the cache is missing or stale:
 
 ```
 Error: No cached paused state for run <run_id>.
        The cache may have expired (>24h) or this run was never paused.
-       Provide tool results JSON directly or re-run the agent with --stream
-       to capture the paused state.
+       Pass agent_id explicitly: ixora agents continue <agent_id> <run_id>
 ```
 
 Recovery options:
@@ -130,7 +166,7 @@ ixora agents continue <agent_id> <run_id> '{"tool_call_id":"...","output":"..."}
 
 # 2. Re-run the agent to repopulate the cache, then --confirm/--reject
 ixora agents run <agent_id> "<same prompt>" --stream
-ixora agents continue <agent_id> <new_run_id> --confirm
+ixora agents continue <new_run_id> --confirm
 ```
 
 The cache survives shell sessions but is **local to this machine** — a teammate's CLI can't `--confirm` a run you observed.
@@ -217,10 +253,13 @@ ixora traces get "$RUN_ID"
 ### Approve a paused tool call
 
 ```bash
-ixora agents run sql-agent "drop temp tables" --stream
-# ... pauses on db.execute
-ixora agents continue sql-agent <run_id> --confirm                              # approve
-ixora agents continue sql-agent <run_id> --reject "use soft delete instead"     # or reject
+# Inline (single terminal session, recommended for human use):
+ixora agents run sql-agent "drop temp tables" --stream --interactive
+
+# Out-of-band (the "I closed the terminal" recovery):
+ixora agents pending                          # find the run
+ixora agents continue <run_id> --confirm      # approve (agent_id pulled from cache)
+ixora agents continue <run_id> --reject "use soft delete instead"   # or reject
 ```
 
 ### Continue a team conversation

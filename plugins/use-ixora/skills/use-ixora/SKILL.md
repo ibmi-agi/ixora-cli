@@ -175,7 +175,11 @@ See [`docs/configuration.md`](docs/configuration.md) for full file formats.
 - **`traces stats` does NOT accept `--group-by`.** That flag lives on `traces search` only.
 - **`sessions delete-all` and `memories delete-all` are batch-by-ID, not filter-based.** Both require `--ids id1,id2,...`; `sessions delete-all` additionally requires a matching `--types` array.
 - **`ixora stack agents <id>` only works on managed systems.** External systems are configured at their AgentOS source, not via ixora's component picker.
-- **`agents continue --confirm/--reject` reads a local 24h cache** at `~/.ixora/paused-runs/<run_id>.json`. If the cache expired or this machine never saw the pause, pass tool-results JSON explicitly. See [`references/agents-teams-workflows.md`](references/agents-teams-workflows.md).
+- **`agents continue --confirm/--reject` reads a local 24h cache** at `~/.ixora/agentos-paused-runs/<run_id>.json`. If the cache expired or this machine never saw the pause, pass tool-results JSON explicitly. The cache is **merged on every re-pause** so consecutive `--confirm`s preserve `session_id` automatically. See [`references/agents-teams-workflows.md`](references/agents-teams-workflows.md).
+- **`agents run --stream` exits 4 on `RunPaused`** (otherwise 0 = completed, 2 = stream error). Branch on `$?` instead of grepping the log.
+- **`ixora agents pending`** lists local paused runs (run_id, agent, age, pending tools); `agents pending <run_id>` pretty-prints the pending tool calls plus the original prompt. Use it to discover what's queued before approving.
+- **`agents continue` can be called with just `<run_id>`** — agent_id is read from the cache. The legacy `<agent_id> <run_id>` form still works.
+- **`agents run --interactive --stream`** drops you into an inline approve / reject / show-details / quit prompt on each pause and continues the same stream — no second invocation, no `--session-id` hunting.
 
 ## Debugging a failed run
 
