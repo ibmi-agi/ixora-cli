@@ -137,6 +137,34 @@ export function extractPendingTools(
 }
 
 /**
+ * Filter the raw `tools[]` list from a RunPaused stream event down to the
+ * subset that actually needs confirmation. The event includes every tool
+ * call from the run — completed ones come through with `confirmed: true`
+ * (or no requires_confirmation flag) and were already executed server-side;
+ * showing them in the pause prompt or sending them back via --confirm is
+ * misleading at best, double-execution at worst.
+ */
+function filterPendingEventTools(
+  tools: Array<Record<string, unknown>>,
+): PendingTool[] {
+  return tools
+    .filter(
+      (t) =>
+        t.requires_confirmation === true &&
+        (t.confirmed === null || t.confirmed === undefined),
+    )
+    .map((t) => ({
+      tool_call_id: String(t.tool_call_id ?? ""),
+      tool_name: String(t.tool_name ?? ""),
+      tool_args: (t.tool_args as Record<string, unknown>) ?? {},
+      requires_confirmation: true,
+      confirmed: t.confirmed as boolean | null | undefined,
+      created_at: t.created_at as number | undefined,
+    }))
+    .filter((t) => t.tool_call_id && t.tool_name);
+}
+
+/**
  * Project a raw SDK run response down to the compact agent-friendly shape.
  *
  * Pure projection: no IO. Missing fields become `null`/`{}` rather than
@@ -294,17 +322,15 @@ export async function handleStreamRun(
             (ev.run_id as string | undefined) ?? accRunId;
           accRunId = eventRunId;
           if (tools && tools.length > 0) {
-            accPendingTools = tools.map((t) => ({
-              tool_call_id: String(t.tool_call_id ?? ""),
-              tool_name: String(t.tool_name ?? ""),
-              tool_args: (t.tool_args as Record<string, unknown>) ?? {},
-              requires_confirmation: t.requires_confirmation as
-                | boolean
-                | undefined,
-              confirmed: t.confirmed as boolean | null | undefined,
-              created_at: t.created_at as number | undefined,
-            }));
-            if (options?.resourceId && resourceType === "agent") {
+            // Filter out already-completed tool calls from the event payload —
+            // RunPaused includes the full run history, but only unconfirmed
+            // tools actually need user input.
+            accPendingTools = filterPendingEventTools(tools);
+            if (
+              accPendingTools.length > 0 &&
+              options?.resourceId &&
+              resourceType === "agent"
+            ) {
               mergePausedRun({
                 agent_id: options.resourceId,
                 run_id: eventRunId ?? "unknown",
@@ -315,7 +341,7 @@ export async function handleStreamRun(
                 tools: accPendingTools,
               });
               displayPausedToolInfo(
-                tools,
+                accPendingTools as unknown as Array<Record<string, unknown>>,
                 options.resourceId,
                 eventRunId ?? "unknown",
               );
@@ -377,34 +403,30 @@ export async function handleStreamRun(
           const eventRunId =
             ((event as Record<string, unknown>).run_id as string) ?? runId;
           if (tools && tools.length > 0 && options?.resourceId) {
-            mergePausedRun({
-              agent_id: options.resourceId,
-              run_id: eventRunId ?? "unknown",
-              session_id: sessionId,
-              resource_type: resourceType,
-              paused_at: new Date().toISOString(),
-              prompt: options.prompt,
-              tools: tools as PausedRunState["tools"],
-            });
-            displayPausedToolInfo(
-              tools,
-              options.resourceId,
-              eventRunId ?? "unknown",
-            );
-            // Capture for return so callers can drive an interactive resume
-            // without re-parsing the stream.
-            pauseRunId = eventRunId ?? null;
-            pauseSessionId = sessionId;
-            pausePendingTools = tools.map((t) => ({
-              tool_call_id: String(t.tool_call_id ?? ""),
-              tool_name: String(t.tool_name ?? ""),
-              tool_args: (t.tool_args as Record<string, unknown>) ?? {},
-              requires_confirmation: t.requires_confirmation as
-                | boolean
-                | undefined,
-              confirmed: t.confirmed as boolean | null | undefined,
-              created_at: t.created_at as number | undefined,
-            }));
+            // Filter out already-completed tool calls — see
+            // filterPendingEventTools for the rationale.
+            const pending = filterPendingEventTools(tools);
+            if (pending.length > 0) {
+              mergePausedRun({
+                agent_id: options.resourceId,
+                run_id: eventRunId ?? "unknown",
+                session_id: sessionId,
+                resource_type: resourceType,
+                paused_at: new Date().toISOString(),
+                prompt: options.prompt,
+                tools: pending,
+              });
+              displayPausedToolInfo(
+                pending as unknown as Array<Record<string, unknown>>,
+                options.resourceId,
+                eventRunId ?? "unknown",
+              );
+              // Capture for return so callers can drive an interactive resume
+              // without re-parsing the stream.
+              pauseRunId = eventRunId ?? null;
+              pauseSessionId = sessionId;
+              pausePendingTools = pending;
+            }
           }
         }
       }
