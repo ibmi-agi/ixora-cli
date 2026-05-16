@@ -1,10 +1,12 @@
 # Schedules — `ixora schedules`
 
-> **For exact flags, run `ixora schedules <verb> --help`.** This reference covers workflows and gotchas — it does not transcribe every flag.
+> Canonical flag reference: [`../docs/runtime/schedules.md`](../docs/runtime/schedules.md). This page covers the path-vs-URL trap, the `trigger` vs cron-tick distinction, and the ID confusion between schedule-run IDs and agent run IDs.
 
-Schedules are cron jobs the AgentOS server fires against its own HTTP endpoints (for example, kicking off an agent or team run on a recurring cadence). Each fire is recorded as a **schedule run** with its status, attempt count, and the resulting agent `run_id` / `session_id`.
+Schedules are cron jobs the AgentOS server fires against its own HTTP endpoints (typically kicking off an agent / team / workflow run on a recurring cadence). Each fire is recorded as a **schedule run** with status, attempt count, and the resulting agent `run_id` / `session_id`.
 
 Targets the resolved system. Use `--system <id>` to pick a specific one; `--url <url>` to skip resolution.
+
+---
 
 ## Verbs
 
@@ -14,7 +16,7 @@ Targets the resolved system. Use `--system <id>` to pick a specific one; `--url 
 |---|---|
 | `list` | Paginated schedule list. `--enabled` filters to enabled only. |
 | `get <id>` | Single schedule's full config (cron, endpoint, method, timezone, next run). |
-| `create` | Define a new schedule. Server requires the `croniter` Python package — if missing, create returns 500 with an install hint. |
+| `create` | Define a new schedule. Server requires the `croniter` package — without it `create` returns 500 with an install hint. |
 | `update <id>` | Patch one or more fields; only supplied flags are sent. |
 | `delete <id>` | Permanent. No undo. |
 | `pause <id>` | Disables — schedule stops firing but state is preserved. |
@@ -22,6 +24,8 @@ Targets the resolved system. Use `--system <id>` to pick a specific one; `--url 
 | `trigger <id>` | Manually fire **now**, outside the cron cadence. Returns the new run record. |
 | `runs <id>` | Paginated history of fires for one schedule. |
 | `get-run <id> <run_id>` | Single run's status + linked agent `run_id` + `session_id` + error/output. |
+
+---
 
 ## create — endpoint must be a path, not a URL
 
@@ -40,9 +44,11 @@ ixora schedules create \
 
 **Critical**: `--endpoint` is the **path** (e.g. `/agents/.../runs`), not a full URL. The server rejects values that don't start with `/`. The host is the AgentOS itself.
 
-`--payload` is a JSON string passed verbatim as the request body. Quote carefully in shells.
+`--payload` is a JSON string passed verbatim as the request body. Quote carefully — `'...'` (single quotes) keeps the JSON intact in bash/zsh. Invalid JSON errors client-side.
 
-`--cron` accepts standard 5-field cron. `--timezone` defaults to `UTC`.
+`--cron` accepts standard 5-field cron. `--timezone` defaults to `UTC` and accepts IANA names.
+
+---
 
 ## trigger — fire now, ignore the cadence
 
@@ -52,7 +58,11 @@ ixora schedules trigger <schedule_id>
 
 Returns the freshly created run record (`id`, `attempt`, `status`, plus the agent's own `run_id` once it's been issued). Use this to smoke-test a schedule's endpoint+payload without waiting for the cron tick.
 
-The returned `run_id` field is the **agent/team run ID** — feed it to `ixora traces list --filter '{"run_id":"..."}'` or use `ixora sessions runs <session_id>` to follow the work.
+The returned `run_id` field is the **agent/team run ID** — feed it to `ixora traces list --run-id ...` or use `ixora sessions runs <session_id>` to follow the work.
+
+`trigger` does **not** bypass `enabled`. Even paused schedules accept manual triggers (they ignore the disabled flag), so a `trigger` on a paused schedule still runs.
+
+---
 
 ## runs / get-run — inspect history
 
@@ -62,14 +72,21 @@ ixora schedules get-run <schedule_id> <run_id>
 ```
 
 Fields on a run:
-- `id` — the schedule-run record's UUID (different from the agent `run_id`)
-- `attempt` — increments on retry
-- `status` — server-defined (`pending`, `success`, `failed`, etc.)
-- `status_code` — HTTP status of the dispatched call
-- `run_id` / `session_id` — links back to the agent run the schedule kicked off
-- `triggered_at` / `completed_at` — unix timestamps
-- `error` — populated on failure
-- `output` — response body of the dispatched call (truncated by output formatter)
+
+| Field | Meaning |
+|---|---|
+| `id` | The schedule-run record's UUID (different from the agent `run_id`) |
+| `attempt` | Increments on retry |
+| `status` | Server-defined (`pending`, `success`, `failed`, etc.) |
+| `status_code` | HTTP status of the dispatched call |
+| `run_id` / `session_id` | Links back to the agent run the schedule kicked off |
+| `triggered_at` / `completed_at` | Unix epoch seconds (not ISO) |
+| `error` | Populated on failure |
+| `output` | Response body of the dispatched call (truncated by output formatter) |
+
+**ID confusion alert**: a schedule-run has its own `id`, and (once dispatched) a separate `run_id` belonging to the agent/team/workflow it triggered. They look similar but are not interchangeable.
+
+---
 
 ## pause / resume vs delete
 
@@ -79,36 +96,58 @@ ixora schedules resume <id>     # disabled = false
 ixora schedules delete <id>     # gone
 ```
 
-Prefer `pause` when troubleshooting; delete only when the schedule is permanently retired.
+Prefer `pause` when troubleshooting; `delete` only when the schedule is permanently retired.
+
+---
 
 ## Recipes
 
 ```bash
-# what's scheduled to fire today?
+# What's scheduled to fire today?
 ixora schedules list --enabled --json id,name,cron,next_run_at
 
-# trigger a schedule and watch the resulting agent run
+# Trigger a schedule and watch the resulting agent run
 RUN_JSON=$(ixora schedules trigger <schedule_id> --json id,run_id,session_id)
 AGENT_RUN=$(echo "$RUN_JSON" | jq -r '.run_id')
 SESSION=$(echo "$RUN_JSON" | jq -r '.session_id')
 ixora sessions runs "$SESSION"
-ixora traces list --json trace_id,run_id,status | jq --arg r "$AGENT_RUN" '.[] | select(.run_id==$r)'
+ixora traces list --run-id "$AGENT_RUN"
 
-# find recent failures across one schedule's history
+# Build a schedule, dry-run it, then enable
+SID=$(ixora schedules create --name "Test" --cron "0 3 * * *" \
+      --endpoint /agents/sql-agent/runs --method POST \
+      --payload '{"message":"hello"}' --json | jq -r '.id')
+ixora schedules pause "$SID"           # don't fire on cron yet
+ixora schedules trigger "$SID"         # run once now
+ixora schedules runs "$SID"            # check it
+ixora schedules resume "$SID"          # arm it
+
+# Find recent failures across one schedule's history
 ixora schedules runs <schedule_id> --json id,status,error \
-  | jq '.[] | select(.status != "success")'
+  | jq '.data[] | select(.status != "success")'
 
-# bulk-pause every enabled schedule (rolling restart of cadence)
+# Bulk-pause every enabled schedule (rolling restart of cadence)
 ixora schedules list --enabled --json id \
-  | jq -r '.[].id' \
+  | jq -r '.data[].id' \
   | xargs -n1 ixora schedules pause
 ```
+
+---
 
 ## Gotchas
 
 - **`--endpoint` is a path, not a URL.** Must start with `/`. The server validates and rejects full URLs.
 - **`create` requires `croniter` on the server.** AgentOS installs it as part of the `agno[scheduler]` extra. A bare AgentOS without the extra returns `500 - 'croniter' not installed` on create.
 - **`run_id` on a schedule-run is the agent's run ID**, not the schedule-run's own ID — that's `id`. Don't confuse the two when chaining into `traces` or `sessions`.
-- **`update` is patch semantics.** Only the flags you pass are sent; omitted fields keep their current value. Empty string is not "clear" — there's no clear-field surface today.
-- **`trigger` does not bypass `enabled`.** Even paused schedules accept manual triggers (they ignore the disabled flag), so a `trigger` on a paused schedule still runs.
-- **`runs` and `get-run` time fields are unix epoch seconds**, not ISO strings. Convert with `jq 'todate'` or `date -r` for human reading.
+- **`update` is patch semantics.** Only the flags you pass are sent; omitted fields keep their current value. Empty string is **not** "clear" — there's no clear-field surface.
+- **`trigger` does not bypass `enabled`.** Paused schedules still accept manual triggers — useful for smoke-testing without arming the cron.
+- **`runs` and `get-run` time fields are unix epoch seconds**, not ISO. Convert with `jq 'todate'` or `date -r` for human reading.
+
+---
+
+## See also
+
+- [`../docs/runtime/schedules.md`](../docs/runtime/schedules.md) — canonical command reference
+- [`agents-teams-workflows.md`](agents-teams-workflows.md) — what the schedule's endpoint typically calls
+- [`traces-sessions.md`](traces-sessions.md) — follow the trace via the schedule-run's `run_id` / `session_id`
+- [`docs.md`](docs.md) — discover other schedulable endpoints via `ixora docs list --tag Schedules`
