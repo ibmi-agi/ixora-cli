@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { createProgram } from "../../src/cli.js";
 
 describe("CLI program", () => {
@@ -67,6 +67,59 @@ describe("CLI program", () => {
     expect(optionNames).toContain("--no-pull");
     expect(optionNames).toContain("--purge");
     expect(optionNames).toContain("--runtime");
+  });
+
+  it("registers hidden top-level hints for stack-only commands", () => {
+    const program = createProgram();
+    const hintNames = [
+      "install",
+      "start",
+      "stop",
+      "restart",
+      "upgrade",
+      "uninstall",
+      "logs",
+      "config",
+      "system",
+      "version",
+    ];
+    for (const name of hintNames) {
+      const cmd = program.commands.find((c) => c.name() === name);
+      expect(cmd, `top-level hint for '${name}' must exist`).toBeDefined();
+      // Hidden so they don't pollute `--help`.
+      // commander exposes the hidden flag via the internal `_hidden` property.
+      expect(
+        (cmd as unknown as { _hidden: boolean })._hidden,
+        `hint '${name}' must be hidden`,
+      ).toBe(true);
+    }
+  });
+
+  it("hint shim points at the stack subcommand and exits non-zero", async () => {
+    const program = createProgram();
+    const errSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    // The shim calls process.exit(1) directly. Throw from the mock so the
+    // shim aborts cleanly without killing vitest.
+    const exitSpy = vi
+      .spyOn(process, "exit")
+      .mockImplementation((() => {
+        throw new Error("__exit__");
+      }) as never);
+    let exitCode: number | undefined;
+    try {
+      await program.parseAsync(["node", "test", "restart"]);
+    } catch (e) {
+      if ((e as Error).message !== "__exit__") throw e;
+      exitCode = exitSpy.mock.calls[0]?.[0] as number;
+    }
+    expect(exitCode).toBe(1);
+    const stderr = errSpy.mock.calls.map((c) => c.join(" ")).join("\n");
+    expect(stderr).toContain("ixora stack restart");
+    expect(stderr).toContain("ixora stack --help");
+    errSpy.mockRestore();
+    exitSpy.mockRestore();
   });
 
   it("parses --help without error", () => {

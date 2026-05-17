@@ -11,7 +11,7 @@ import {
 } from "../lib/platform.js";
 import { waitForHealthy } from "../lib/health.js";
 import { info, success, die } from "../lib/ui.js";
-import { printRunningBanner } from "../lib/banner.js";
+import { printRunningBanner, printUsageBanner } from "../lib/banner.js";
 import {
   resolveStackProfile,
   persistStackProfile,
@@ -68,5 +68,6 @@ export async function cmdRestart(
     );
     await waitForHealthy(composeCmd);
     printRunningBanner({ profile });
+    printUsageBanner();
   }
 }
