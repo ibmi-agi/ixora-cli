@@ -52,6 +52,7 @@ import {
   cmdSystemRestart,
 } from "./commands/system.js";
 import { cmdModelsShow, cmdModelsSet } from "./commands/models.js";
+import { isStackHintName, registerStackHints } from "./lib/stack-hints.js";
 
 export function createProgram(): Command {
   const program = new Command()
@@ -102,6 +103,7 @@ export function createProgram(): Command {
   // their own targeting (positional system IDs, etc).
   program.hook("preAction", async (thisCmd, actionCmd) => {
     if (isUnderStack(actionCmd)) return;
+    if (isStackHintName(actionCmd.name())) return;
 
     const opts = thisCmd.opts();
     const flags: ResolverFlags = {
@@ -407,6 +409,12 @@ export function createProgram(): Command {
     .action(async (provider?: string) => {
       await cmdModelsSet(provider);
     });
+
+  // Friendly hints for users who type `ixora restart` / `start` / etc. without
+  // the `stack` prefix (those commands moved under `ixora stack` in v0.2.0).
+  // Registered before the agno tree so shim names don't shadow real commands —
+  // none of the hint names collide with top-level agno commands.
+  registerStackHints(program);
 
   // ── Mount the ported agno tree at top level ────────────────────────────
   program.addCommand(agentsCommand);
