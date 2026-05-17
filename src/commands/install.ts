@@ -16,7 +16,7 @@ import {
   type DeploymentMode,
 } from "../lib/constants.js";
 import { info, success, warn, die, bold, dim } from "../lib/ui.js";
-import { printRunningBanner } from "../lib/banner.js";
+import { printRunningBanner, printUsageBanner } from "../lib/banner.js";
 import { fetchImageTags, normalizeVersion } from "../lib/registry.js";
 import { promptModelProvider } from "../lib/models.js";
 import { ensureManifest } from "../lib/manifest.js";
@@ -277,9 +277,7 @@ export async function cmdInstall(opts: InstallOptions): Promise<void> {
   await waitForHealthy(composeCmd);
 
   printRunningBanner({ profile: "full" });
-  console.log(
-    `  Manage with: ${bold("ixora start|stop|restart|status|upgrade|config|logs")}`,
-  );
-  console.log(`  Config dir:  ${dim(IXORA_DIR)}`);
+  printUsageBanner();
+  console.log(`  ${bold("Config dir:")}      ${dim(IXORA_DIR)}`);
   console.log();
 }

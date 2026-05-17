@@ -2,7 +2,7 @@ import { envGet, getApiPortBase } from "./env.js";
 import { getManagedSystems, readSystems } from "./systems.js";
 import type { StackProfile } from "./constants.js";
 import { VALID_STACK_PROFILES } from "./constants.js";
-import { success, bold, dim } from "./ui.js";
+import { info, success, bold, dim } from "./ui.js";
 
 interface BannerOptions {
   title?: string;
@@ -134,5 +134,14 @@ export function printRunningBanner(opts: BannerOptions = {}): void {
     }
   }
 
+  console.log();
+}
+
+export function printUsageBanner(): void {
+  info("ixora CLI usage:");
+  console.log(`  ${bold("Manage with:")}     ixora stack ...`);
+  console.log(
+    `  ${bold("Talk to AgentOS:")} ixora agents|teams|workflows|traces|sessions|knowledge ...`,
+  );
   console.log();
 }
