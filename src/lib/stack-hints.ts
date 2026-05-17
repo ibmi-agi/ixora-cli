@@ -2,9 +2,9 @@ import type { Command } from "commander";
 import chalk from "chalk";
 
 /**
- * Stack-management commands that used to live at the top level (pre-v0.2.0).
- * If a user types `ixora restart` we hint them at `ixora stack restart` rather
- * than letting commander dump "error: unknown command 'restart'".
+ * Stack-management command names that live under `ixora stack`. If a user
+ * types the bare name (`ixora restart`) we hint them at `ixora stack restart`
+ * rather than letting commander dump "error: unknown command 'restart'".
  *
  * Only names without an existing top-level equivalent are shimmed — `status`,
  * `agents`, `components`, and `models` exist at both levels and the top-level
@@ -29,13 +29,9 @@ export function isStackHintName(name: string): boolean {
 
 function printStackHint(name: string): never {
   console.error(
-    `${chalk.red("Error:")} ${chalk.bold(`ixora ${name}`)} moved to ${chalk.bold(`ixora stack ${name}`)}`,
+    `${chalk.yellow("Hint:")} stack commands live under ${chalk.bold("ixora stack")}.`,
   );
-  console.error();
-  console.error(
-    `  Stack lifecycle commands live under ${chalk.bold("ixora stack")}.`,
-  );
-  console.error(`  Run: ${chalk.bold(`ixora stack ${name}`)}`);
+  console.error(`  Try: ${chalk.bold(`ixora stack ${name}`)}`);
   console.error(`  See: ${chalk.bold("ixora stack --help")}`);
   process.exit(1);
 }

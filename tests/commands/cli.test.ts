@@ -95,7 +95,7 @@ describe("CLI program", () => {
     }
   });
 
-  it("hint shim prints redirect and exits non-zero", async () => {
+  it("hint shim points at the stack subcommand and exits non-zero", async () => {
     const program = createProgram();
     const errSpy = vi
       .spyOn(console, "error")
@@ -116,8 +116,8 @@ describe("CLI program", () => {
     }
     expect(exitCode).toBe(1);
     const stderr = errSpy.mock.calls.map((c) => c.join(" ")).join("\n");
-    expect(stderr).toContain("ixora restart");
     expect(stderr).toContain("ixora stack restart");
+    expect(stderr).toContain("ixora stack --help");
     errSpy.mockRestore();
     exitSpy.mockRestore();
   });
