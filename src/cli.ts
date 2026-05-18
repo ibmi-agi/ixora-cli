@@ -1,4 +1,4 @@
-import { Command } from "commander";
+import { Command, type Help, type HelpConfiguration } from "commander";
 import { agentsCommand } from "./agentos/agents.js";
 import { approvalsCommand } from "./agentos/approvals.js";
 import { componentsCommand as agnoComponentsCommand } from "./agentos/components.js";
@@ -54,23 +54,101 @@ import {
 import { cmdModelsShow, cmdModelsSet } from "./commands/models.js";
 import { isStackHintName, registerStackHints } from "./lib/stack-hints.js";
 
+/**
+ * Custom help that lists Commands before Options. Mirrors Commander's
+ * default formatHelp but swaps the order of the Commands and Options
+ * sections, so `ixora --help` surfaces what users can do first and the
+ * global flags second.
+ */
+const commandsFirstHelp: HelpConfiguration = {
+  formatHelp(cmd, helper) {
+    const termWidth = helper.padWidth(cmd, helper);
+    const helpWidth = helper.helpWidth ?? 80;
+    const self = this as Help;
+
+    const callFormatItem = (term: string, description: string) =>
+      helper.formatItem(term, termWidth, description, helper);
+
+    let output: string[] = [
+      `${helper.styleTitle("Usage:")} ${helper.styleUsage(helper.commandUsage(cmd))}`,
+      "",
+    ];
+
+    const description = helper.commandDescription(cmd);
+    if (description.length > 0) {
+      output = output.concat([
+        helper.boxWrap(
+          helper.styleCommandDescription(description),
+          helpWidth,
+        ),
+        "",
+      ]);
+    }
+
+    const argumentList = helper.visibleArguments(cmd).map((arg) =>
+      callFormatItem(
+        helper.styleArgumentTerm(helper.argumentTerm(arg)),
+        helper.styleArgumentDescription(helper.argumentDescription(arg)),
+      ),
+    );
+    output = output.concat(
+      self.formatItemList("Arguments:", argumentList, helper),
+    );
+
+    const commandGroups = self.groupItems(
+      [...cmd.commands],
+      helper.visibleCommands(cmd),
+      (sub) => sub.helpGroup() || "Commands:",
+    );
+    commandGroups.forEach((commands, group) => {
+      const commandList = commands.map((sub) =>
+        callFormatItem(
+          helper.styleSubcommandTerm(helper.subcommandTerm(sub)),
+          helper.styleSubcommandDescription(helper.subcommandDescription(sub)),
+        ),
+      );
+      output = output.concat(self.formatItemList(group, commandList, helper));
+    });
+
+    const optionGroups = self.groupItems(
+      [...cmd.options],
+      helper.visibleOptions(cmd),
+      (option) => option.helpGroupHeading ?? "Options:",
+    );
+    optionGroups.forEach((options, group) => {
+      const optionList = options.map((option) =>
+        callFormatItem(
+          helper.styleOptionTerm(helper.optionTerm(option)),
+          helper.styleOptionDescription(helper.optionDescription(option)),
+        ),
+      );
+      output = output.concat(self.formatItemList(group, optionList, helper));
+    });
+
+    if (helper.showGlobalOptions) {
+      const globalOptionList = helper
+        .visibleGlobalOptions(cmd)
+        .map((option) =>
+          callFormatItem(
+            helper.styleOptionTerm(helper.optionTerm(option)),
+            helper.styleOptionDescription(helper.optionDescription(option)),
+          ),
+        );
+      output = output.concat(
+        self.formatItemList("Global Options:", globalOptionList, helper),
+      );
+    }
+
+    return output.join("\n");
+  },
+};
+
 export function createProgram(): Command {
   const program = new Command()
     .name("ixora")
     .description("Manage ixora AI agent deployments on IBM i")
     .version(SCRIPT_VERSION, "-V, --cli-version", "Show CLI version number")
-    .option(
-      "--profile <name>",
-      "Stack shape: full (DB + API + MCP + UI), mcp (DB + API + MCP, no UI), or cli (DB + API only, no MCP container) [default: full]",
-    )
-    .option(
-      "--mode <name>",
-      "Deployment mode for this system: full (every component) or custom (interactive picker writing ~/.ixora/profiles/<id>.yaml). Used at install time.",
-    )
-    .option("--image-version <tag>", "Pin image version (e.g., v1.2.0)")
-    .option("--no-pull", "Skip pulling images")
-    .option("--purge", "Remove volumes too (with uninstall)")
-    .option("--runtime <name>", "Force container runtime (docker or podman)")
+    .configureHelp(commandsFirstHelp)
     // ── AgentOS-targeting flags (consumed by ported agno commands) ──
     .option(
       "-s, --system <name>",
@@ -103,7 +181,17 @@ export function createProgram(): Command {
   // their own targeting (positional system IDs, etc).
   program.hook("preAction", async (thisCmd, actionCmd) => {
     if (isUnderStack(actionCmd)) return;
-    if (isStackHintName(actionCmd.name())) return;
+    // The hint shims (e.g. `ixora restart` → "use ixora stack restart") are
+    // mounted as direct children of the root program. Only short-circuit
+    // when the action command IS one of those top-level hints; matching by
+    // leaf name alone would also catch e.g. `ixora knowledge config` whose
+    // leaf name happens to be `config`.
+    if (
+      actionCmd.parent === program &&
+      isStackHintName(actionCmd.name())
+    ) {
+      return;
+    }
 
     const opts = thisCmd.opts();
     const flags: ResolverFlags = {
@@ -123,14 +211,26 @@ export function createProgram(): Command {
     .command("stack")
     .description(
       "Manage the local Ixora stack (install, start/stop, config, systems, models)",
-    );
+    )
+    .configureHelp(commandsFirstHelp)
+    .option(
+      "--profile <name>",
+      "Stack shape: full (DB + API + MCP + UI), mcp (DB + API + MCP, no UI), or cli (DB + API only, no MCP container) [default: full]",
+    )
+    .option(
+      "--mode <name>",
+      "Deployment mode for this system: full (every component) or custom (interactive picker writing ~/.ixora/profiles/<id>.yaml). Used at install time.",
+    )
+    .option("--image-version <tag>", "Pin image version (e.g., v1.2.0)")
+    .option("--no-pull", "Skip pulling images")
+    .option("--purge", "Remove volumes too (with uninstall)")
+    .option("--runtime <name>", "Force container runtime (docker or podman)");
 
   stackCmd
     .command("install")
     .description("First-time setup (interactive)")
     .action(async () => {
-      const opts = program.opts();
-      await cmdInstall(opts);
+      await cmdInstall(stackCmd.opts());
     });
 
   stackCmd
@@ -138,8 +238,7 @@ export function createProgram(): Command {
     .argument("[service]", "Service to start (omit for all)")
     .description("Start all services, or a specific service by name")
     .action(async (service?: string) => {
-      const opts = program.opts();
-      await cmdStart(opts, service);
+      await cmdStart(stackCmd.opts(), service);
     });
 
   stackCmd
@@ -147,8 +246,7 @@ export function createProgram(): Command {
     .argument("[service]", "Service to stop (omit for all)")
     .description("Stop all services, or a specific service by name")
     .action(async (service?: string) => {
-      const opts = program.opts();
-      await cmdStop(opts, service);
+      await cmdStop(stackCmd.opts(), service);
     });
 
   stackCmd
@@ -156,16 +254,14 @@ export function createProgram(): Command {
     .argument("[service]", "Service to restart (omit for all)")
     .description("Restart all services, or a specific service by name")
     .action(async (service?: string) => {
-      const opts = program.opts();
-      await cmdRestart(opts, service);
+      await cmdRestart(stackCmd.opts(), service);
     });
 
   stackCmd
     .command("status")
     .description("Show service status and deployed profile")
     .action(async () => {
-      const opts = program.opts();
-      await cmdStatus(opts);
+      await cmdStatus(stackCmd.opts());
     });
 
   stackCmd
@@ -173,16 +269,14 @@ export function createProgram(): Command {
     .description("Pull latest images and restart")
     .argument("[version]", "Target version (e.g., 0.0.11 or v0.0.11)")
     .action(async (version?: string) => {
-      const opts = program.opts();
-      await cmdUpgrade({ ...opts, version });
+      await cmdUpgrade({ ...stackCmd.opts(), version });
     });
 
   stackCmd
     .command("uninstall")
     .description("Stop services and remove images")
     .action(async () => {
-      const opts = program.opts();
-      await cmdUninstall(opts);
+      await cmdUninstall(stackCmd.opts());
     });
 
   stackCmd
@@ -190,16 +284,14 @@ export function createProgram(): Command {
     .argument("[service]", "Service to show logs for (omit for all)")
     .description("Tail service logs")
     .action(async (service?: string) => {
-      const opts = program.opts();
-      await cmdLogs(opts, service);
+      await cmdLogs(stackCmd.opts(), service);
     });
 
   stackCmd
     .command("version")
     .description("Show CLI and image versions")
     .action(async () => {
-      const opts = program.opts();
-      await cmdVersion(opts);
+      await cmdVersion(stackCmd.opts());
     });
 
   // Config subcommands

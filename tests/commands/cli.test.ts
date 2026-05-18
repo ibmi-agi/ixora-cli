@@ -58,15 +58,23 @@ describe("CLI program", () => {
     expect(subNames).toContain("default");
   });
 
-  it("has global options", () => {
+  it("exposes stack deployment options on the stack group, not at top level", () => {
     const program = createProgram();
-    const optionNames = program.options.map((o) => o.long);
+    const topLevelNames = program.options.map((o) => o.long);
+    const stackCmd = program.commands.find((c) => c.name() === "stack")!;
+    const stackOptionNames = stackCmd.options.map((o) => o.long);
 
-    expect(optionNames).toContain("--profile");
-    expect(optionNames).toContain("--image-version");
-    expect(optionNames).toContain("--no-pull");
-    expect(optionNames).toContain("--purge");
-    expect(optionNames).toContain("--runtime");
+    for (const flag of [
+      "--profile",
+      "--mode",
+      "--image-version",
+      "--no-pull",
+      "--purge",
+      "--runtime",
+    ]) {
+      expect(stackOptionNames).toContain(flag);
+      expect(topLevelNames).not.toContain(flag);
+    }
   });
 
   it("registers hidden top-level hints for stack-only commands", () => {
