@@ -1,5 +1,9 @@
 import { Command } from "commander";
-import { getBaseUrl, getClient } from "../lib/agentos-client.js";
+import {
+  getBaseUrl,
+  getClient,
+  isUrlOverridden,
+} from "../lib/agentos-client.js";
 import { handleError } from "../lib/agentos-errors.js";
 import {
   getOutputFormat,
@@ -150,7 +154,13 @@ evalsCommand
         },
       );
     } catch (err) {
-      handleError(err, { resource: "Eval", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Eval run",
+        identifier: evalRunId,
+        listCommand: "ixora evals list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });
 
@@ -332,7 +342,20 @@ evalsCommand
         },
       );
     } catch (err) {
-      handleError(err, { resource: "Eval", url: getBaseUrl(cmd) });
+      // The most common 404 here is the agent/team the eval points at, not
+      // the eval itself. Surface whichever the user provided so the hint
+      // pulls them straight to the right list.
+      const opts = cmd.optsWithGlobals();
+      const hasAgent = Boolean(opts.agentId);
+      handleError(err, {
+        resource: hasAgent ? "Agent" : "Team",
+        identifier: hasAgent
+          ? (opts.agentId as string)
+          : (opts.teamId as string),
+        listCommand: hasAgent ? "ixora agents list" : "ixora teams list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });
 

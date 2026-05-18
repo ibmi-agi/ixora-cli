@@ -1,5 +1,9 @@
 import { Command } from "commander";
-import { getBaseUrl, getClient } from "../lib/agentos-client.js";
+import {
+  getBaseUrl,
+  getClient,
+  isUrlOverridden,
+} from "../lib/agentos-client.js";
 import { handleError } from "../lib/agentos-errors.js";
 import {
   getOutputFormat,
@@ -105,7 +109,13 @@ approvalsCommand
         },
       );
     } catch (err) {
-      handleError(err, { resource: "Approval", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Approval",
+        identifier: id,
+        listCommand: "ixora approvals list --status pending",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });
 
@@ -163,6 +173,12 @@ approvalsCommand
       );
       writeSuccess("Approval resolved.");
     } catch (err) {
-      handleError(err, { resource: "Approval", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Approval",
+        identifier: id,
+        listCommand: "ixora approvals list --status pending",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });

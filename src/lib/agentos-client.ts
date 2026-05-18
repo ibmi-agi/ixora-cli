@@ -50,6 +50,28 @@ export function getBaseUrl(cmd?: Command): string {
 }
 
 /**
+ * True when the user passed --url on the command line. Connection-error
+ * hints check this to avoid recommending `ixora stack status` (which only
+ * diagnoses configured systems, not arbitrary URLs).
+ */
+export function isUrlOverridden(cmd?: Command): boolean {
+  if (!cmd) return false;
+  return typeof cmd.optsWithGlobals().url === "string";
+}
+
+/**
+ * Build the shared transport-level fields every `handleError` call site
+ * passes: the resolved URL and whether it came from a --url override.
+ * Spread into the rest of the ErrorContext at the call site.
+ */
+export function urlContext(cmd?: Command): {
+  url: string;
+  viaOverrideUrl: boolean;
+} {
+  return { url: getBaseUrl(cmd), viaOverrideUrl: isUrlOverridden(cmd) };
+}
+
+/**
  * Reset the cached client. Exported for testing.
  */
 export function resetClient(): void {

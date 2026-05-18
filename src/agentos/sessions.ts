@@ -1,5 +1,9 @@
 import { Command } from "commander";
-import { getBaseUrl, getClient } from "../lib/agentos-client.js";
+import {
+  getBaseUrl,
+  getClient,
+  isUrlOverridden,
+} from "../lib/agentos-client.js";
 import { handleError } from "../lib/agentos-errors.js";
 import {
   getOutputFormat,
@@ -121,7 +125,13 @@ sessionsCommand
         },
       );
     } catch (err) {
-      handleError(err, { resource: "Session", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Session",
+        identifier: sessionId,
+        listCommand: "ixora sessions list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });
 
@@ -220,7 +230,13 @@ sessionsCommand
 
       writeSuccess("Session updated.");
     } catch (err) {
-      handleError(err, { resource: "Session", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Session",
+        identifier: sessionId,
+        listCommand: "ixora sessions list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });
 
@@ -233,10 +249,20 @@ sessionsCommand
     try {
       const opts = cmd.optsWithGlobals();
       const client = getClient(cmd);
+      // The AgentOS delete endpoint returns 2xx whether or not the session
+      // existed. Pre-check with .get() so a typo doesn't silently exit 0
+      // and mislead any script that grep's for "Success:" or $?==0.
+      await client.sessions.get(sessionId, { dbId: opts.dbId });
       await client.sessions.delete(sessionId, { dbId: opts.dbId });
       writeSuccess("Session deleted.");
     } catch (err) {
-      handleError(err, { resource: "Session", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Session",
+        identifier: sessionId,
+        listCommand: "ixora sessions list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });
 
@@ -291,6 +317,12 @@ sessionsCommand
         keys: ["run_id", "status", "created_at"],
       });
     } catch (err) {
-      handleError(err, { resource: "Session", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Session",
+        identifier: sessionId,
+        listCommand: "ixora sessions list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });

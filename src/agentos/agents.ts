@@ -2,7 +2,11 @@ import type { AgentOSClient, AgentStream } from "@worksofadam/agentos-sdk";
 import { select } from "@inquirer/prompts";
 import chalk from "chalk";
 import { Command } from "commander";
-import { getBaseUrl, getClient } from "../lib/agentos-client.js";
+import {
+  getBaseUrl,
+  getClient,
+  isUrlOverridden,
+} from "../lib/agentos-client.js";
 import { handleError } from "../lib/agentos-errors.js";
 import {
   getOutputFormat,
@@ -99,7 +103,13 @@ agentsCommand
         },
       );
     } catch (err) {
-      handleError(err, { resource: "Agent", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Agent",
+        identifier: agentId,
+        listCommand: "ixora agents list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });
 
@@ -156,7 +166,13 @@ agentsCommand
         });
       }
     } catch (err) {
-      handleError(err, { resource: "Agent", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Agent",
+        identifier: agentId,
+        listCommand: "ixora agents list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });
 
@@ -223,6 +239,9 @@ agentsCommand
       options,
       cmd,
     ) => {
+      // Snapshot of the parsed agent_id so the catch handler can echo it.
+      // The actual destructure below keeps the original narrowed types.
+      let capturedAgentId: string | undefined;
       try {
         const client = getClient(cmd);
 
@@ -235,6 +254,7 @@ agentsCommand
           return;
         }
         let { agentId, runId, toolResults } = parsed;
+        capturedAgentId = agentId;
 
         let cached: PausedRunState | null = null;
         if (!agentId || options.confirm || options.reject !== undefined) {
@@ -347,7 +367,13 @@ agentsCommand
           });
         }
       } catch (err) {
-        handleError(err, { resource: "Agent", url: getBaseUrl(cmd) });
+        handleError(err, {
+          resource: "Agent",
+          identifier: capturedAgentId,
+          listCommand: "ixora agents list",
+          url: getBaseUrl(cmd),
+          viaOverrideUrl: isUrlOverridden(cmd),
+        });
       }
     },
   );
@@ -415,7 +441,13 @@ agentsCommand
         );
       }
     } catch (err) {
-      handleError(err, { resource: "Agent", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Paused run",
+        identifier: runId,
+        listCommand: "ixora agents pending",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });
 
@@ -444,7 +476,13 @@ agentsCommand
       });
       await handleStreamRun(cmd, stream, "agent", { resourceId: agentId });
     } catch (err) {
-      handleError(err, { resource: "Agent", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Agent",
+        identifier: agentId,
+        listCommand: "ixora agents list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });
 
@@ -459,7 +497,13 @@ agentsCommand
       await client.agents.cancel(agentId, runId);
       writeSuccess(`Cancelled run ${runId} for agent ${agentId}`);
     } catch (err) {
-      handleError(err, { resource: "Agent", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Agent",
+        identifier: agentId,
+        listCommand: "ixora agents list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });
 

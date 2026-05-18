@@ -1,5 +1,9 @@
 import { Command } from "commander";
-import { getBaseUrl, getClient } from "../lib/agentos-client.js";
+import {
+  getBaseUrl,
+  getClient,
+  isUrlOverridden,
+} from "../lib/agentos-client.js";
 import { handleError } from "../lib/agentos-errors.js";
 import {
   getOutputFormat,
@@ -120,7 +124,13 @@ tracesCommand
         },
       );
     } catch (err) {
-      handleError(err, { resource: "Trace", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Trace",
+        identifier: traceId,
+        listCommand: "ixora traces list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });
 

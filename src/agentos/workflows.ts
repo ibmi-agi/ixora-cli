@@ -1,6 +1,10 @@
 import type { AgentStream } from "@worksofadam/agentos-sdk";
 import { Command } from "commander";
-import { getBaseUrl, getClient } from "../lib/agentos-client.js";
+import {
+  getBaseUrl,
+  getClient,
+  isUrlOverridden,
+} from "../lib/agentos-client.js";
 import { handleError } from "../lib/agentos-errors.js";
 import {
   getOutputFormat,
@@ -85,7 +89,13 @@ workflowsCommand
         },
       );
     } catch (err) {
-      handleError(err, { resource: "Workflow", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Workflow",
+        identifier: workflowId,
+        listCommand: "ixora workflows list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });
 
@@ -122,7 +132,13 @@ workflowsCommand
         );
       }
     } catch (err) {
-      handleError(err, { resource: "Workflow", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Workflow",
+        identifier: workflowId,
+        listCommand: "ixora workflows list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });
 
@@ -169,7 +185,13 @@ workflowsCommand
           );
         }
       } catch (err) {
-        handleError(err, { resource: "Workflow", url: getBaseUrl(cmd) });
+        handleError(err, {
+          resource: "Workflow",
+          identifier: workflowId,
+          listCommand: "ixora workflows list",
+          url: getBaseUrl(cmd),
+          viaOverrideUrl: isUrlOverridden(cmd),
+        });
       }
     },
   );
@@ -207,7 +229,13 @@ workflowsCommand
         resourceId: workflowId,
       });
     } catch (err) {
-      handleError(err, { resource: "Workflow", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Workflow",
+        identifier: workflowId,
+        listCommand: "ixora workflows list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });
 
@@ -222,6 +250,12 @@ workflowsCommand
       await client.workflows.cancel(workflowId, runId);
       writeSuccess(`Cancelled run ${runId} for workflow ${workflowId}`);
     } catch (err) {
-      handleError(err, { resource: "Workflow", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Workflow",
+        identifier: workflowId,
+        listCommand: "ixora workflows list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });

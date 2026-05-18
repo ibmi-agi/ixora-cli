@@ -1,5 +1,9 @@
 import { Command } from "commander";
-import { getBaseUrl, getClient } from "../lib/agentos-client.js";
+import {
+  getBaseUrl,
+  getClient,
+  isUrlOverridden,
+} from "../lib/agentos-client.js";
 import { handleError } from "../lib/agentos-errors.js";
 import {
   getOutputFormat,
@@ -131,7 +135,13 @@ memoriesCommand
         },
       );
     } catch (err) {
-      handleError(err, { resource: "Memory", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Memory",
+        identifier: memoryId,
+        listCommand: "ixora memories list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });
 
@@ -208,7 +218,13 @@ memoriesCommand
 
       writeSuccess("Memory updated.");
     } catch (err) {
-      handleError(err, { resource: "Memory", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Memory",
+        identifier: memoryId,
+        listCommand: "ixora memories list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });
 
@@ -224,7 +240,13 @@ memoriesCommand
       await client.memories.delete(memoryId, { dbId: opts.dbId });
       writeSuccess("Memory deleted.");
     } catch (err) {
-      handleError(err, { resource: "Memory", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Memory",
+        identifier: memoryId,
+        listCommand: "ixora memories list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });
 

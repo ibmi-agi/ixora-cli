@@ -1,6 +1,10 @@
 import type { AgentStream } from "@worksofadam/agentos-sdk";
 import { Command } from "commander";
-import { getBaseUrl, getClient } from "../lib/agentos-client.js";
+import {
+  getBaseUrl,
+  getClient,
+  isUrlOverridden,
+} from "../lib/agentos-client.js";
 import { handleError } from "../lib/agentos-errors.js";
 import {
   getOutputFormat,
@@ -85,7 +89,13 @@ teamsCommand
         },
       );
     } catch (err) {
-      handleError(err, { resource: "Team", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Team",
+        identifier: teamId,
+        listCommand: "ixora teams list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });
 
@@ -120,7 +130,13 @@ teamsCommand
         );
       }
     } catch (err) {
-      handleError(err, { resource: "Team", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Team",
+        identifier: teamId,
+        listCommand: "ixora teams list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });
 
@@ -167,7 +183,13 @@ teamsCommand
           );
         }
       } catch (err) {
-        handleError(err, { resource: "Team", url: getBaseUrl(cmd) });
+        handleError(err, {
+          resource: "Team",
+          identifier: teamId,
+          listCommand: "ixora teams list",
+          url: getBaseUrl(cmd),
+          viaOverrideUrl: isUrlOverridden(cmd),
+        });
       }
     },
   );
@@ -197,7 +219,13 @@ teamsCommand
       });
       await handleStreamRun(cmd, stream, "team", { resourceId: teamId });
     } catch (err) {
-      handleError(err, { resource: "Team", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Team",
+        identifier: teamId,
+        listCommand: "ixora teams list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });
 
@@ -212,6 +240,12 @@ teamsCommand
       await client.teams.cancel(teamId, runId);
       writeSuccess(`Cancelled run ${runId} for team ${teamId}`);
     } catch (err) {
-      handleError(err, { resource: "Team", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Team",
+        identifier: teamId,
+        listCommand: "ixora teams list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });

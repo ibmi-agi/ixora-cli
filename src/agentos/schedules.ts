@@ -1,5 +1,9 @@
 import { Command } from "commander";
-import { getBaseUrl, getClient } from "../lib/agentos-client.js";
+import {
+  getBaseUrl,
+  getClient,
+  isUrlOverridden,
+} from "../lib/agentos-client.js";
 import { handleError } from "../lib/agentos-errors.js";
 import {
   getOutputFormat,
@@ -124,7 +128,13 @@ schedulesCommand
         },
       );
     } catch (err) {
-      handleError(err, { resource: "Schedule", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Schedule",
+        identifier: id,
+        listCommand: "ixora schedules list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });
 
@@ -278,7 +288,13 @@ schedulesCommand
       );
       writeSuccess("Schedule updated.");
     } catch (err) {
-      handleError(err, { resource: "Schedule", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Schedule",
+        identifier: id,
+        listCommand: "ixora schedules list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });
 
@@ -292,7 +308,13 @@ schedulesCommand
       await client.schedules.delete(id);
       writeSuccess(`Schedule ${id} deleted.`);
     } catch (err) {
-      handleError(err, { resource: "Schedule", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Schedule",
+        identifier: id,
+        listCommand: "ixora schedules list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });
 
@@ -306,7 +328,13 @@ schedulesCommand
       await client.schedules.disable(id);
       writeSuccess("Schedule paused.");
     } catch (err) {
-      handleError(err, { resource: "Schedule", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Schedule",
+        identifier: id,
+        listCommand: "ixora schedules list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });
 
@@ -320,7 +348,13 @@ schedulesCommand
       await client.schedules.enable(id);
       writeSuccess("Schedule resumed.");
     } catch (err) {
-      handleError(err, { resource: "Schedule", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Schedule",
+        identifier: id,
+        listCommand: "ixora schedules list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });
 
@@ -377,7 +411,13 @@ schedulesCommand
         },
       );
     } catch (err) {
-      handleError(err, { resource: "Schedule", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Schedule",
+        identifier: id,
+        listCommand: "ixora schedules list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });
 
@@ -491,6 +531,12 @@ schedulesCommand
       );
       writeSuccess("Schedule triggered.");
     } catch (err) {
-      handleError(err, { resource: "Schedule", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Schedule",
+        identifier: id,
+        listCommand: "ixora schedules list",
+        url: getBaseUrl(cmd),
+        viaOverrideUrl: isUrlOverridden(cmd),
+      });
     }
   });
