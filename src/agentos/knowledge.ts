@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { Command } from "commander";
+import { Command, Option } from "commander";
 import { getBaseUrl, getClient } from "../lib/agentos-client.js";
 import { handleError } from "../lib/agentos-errors.js";
 import {
@@ -108,7 +108,9 @@ knowledgeCommand
   )
   .option("--page <n>", "Page number", (v: string) => Number.parseInt(v, 10), 1)
   .option("--sort-by <field>", "Sort field")
-  .option("--sort-order <order>", "Sort order (asc, desc)")
+  .addOption(
+    new Option("--sort-order <order>", "Sort order").choices(["asc", "desc"]),
+  )
   .option("--db-id <id>", "Database ID")
   .option("--knowledge-id <id>", "Knowledge base ID")
   .action(async (_options, cmd) => {

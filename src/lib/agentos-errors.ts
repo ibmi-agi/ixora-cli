@@ -124,7 +124,7 @@ function reclassifyInternalServerError(
   if (!match) return null;
   const status = Number.parseInt(match[1] ?? "", 10);
   const detail = (match[2] ?? "").trim();
-  if (!Number.isFinite(status) || !detail) return null;
+  if (!detail) return null;
   if (status === 404) {
     // Prefer the detail from the server, but layer on the listCommand
     // breadcrumb the call site provided.

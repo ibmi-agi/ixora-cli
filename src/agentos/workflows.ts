@@ -3,9 +3,10 @@ import { Command } from "commander";
 import {
   getBaseUrl,
   getClient,
-  isUrlOverridden,
+  urlContext,
 } from "../lib/agentos-client.js";
 import { handleError } from "../lib/agentos-errors.js";
+import { emitDryRunPlan, isDryRun } from "../lib/dry-run.js";
 import {
   getOutputFormat,
   outputDetail,
@@ -93,8 +94,7 @@ workflowsCommand
         resource: "Workflow",
         identifier: workflowId,
         listCommand: "ixora workflows list",
-        url: getBaseUrl(cmd),
-        viaOverrideUrl: isUrlOverridden(cmd),
+        ...urlContext(cmd),
       });
     }
   });
@@ -107,9 +107,27 @@ workflowsCommand
   .option("--stream", "Stream the response via SSE")
   .option("--session-id <id>", "Session ID for conversation context")
   .option("--user-id <id>", "User ID for personalization")
+  .option(
+    "--dry-run",
+    "Verify the workflow exists and emit the request payload as JSON without running",
+  )
   .action(async (workflowId: string, message: string, options, cmd) => {
     try {
       const client = getClient(cmd);
+      if (isDryRun(cmd)) {
+        await client.workflows.get(workflowId);
+        emitDryRunPlan({
+          action: "workflows.run",
+          target: workflowId,
+          payload: {
+            message,
+            session_id: options.sessionId,
+            user_id: options.userId,
+            stream: Boolean(options.stream),
+          },
+        });
+        return;
+      }
       if (options.stream) {
         const stream = await client.workflows.runStream(workflowId, {
           message,
@@ -136,8 +154,7 @@ workflowsCommand
         resource: "Workflow",
         identifier: workflowId,
         listCommand: "ixora workflows list",
-        url: getBaseUrl(cmd),
-        viaOverrideUrl: isUrlOverridden(cmd),
+        ...urlContext(cmd),
       });
     }
   });
@@ -189,8 +206,7 @@ workflowsCommand
           resource: "Workflow",
           identifier: workflowId,
           listCommand: "ixora workflows list",
-          url: getBaseUrl(cmd),
-          viaOverrideUrl: isUrlOverridden(cmd),
+          ...urlContext(cmd),
         });
       }
     },
@@ -233,8 +249,7 @@ workflowsCommand
         resource: "Workflow",
         identifier: workflowId,
         listCommand: "ixora workflows list",
-        url: getBaseUrl(cmd),
-        viaOverrideUrl: isUrlOverridden(cmd),
+        ...urlContext(cmd),
       });
     }
   });
@@ -244,9 +259,22 @@ workflowsCommand
   .argument("<workflow_id>", "Workflow ID")
   .argument("<run_id>", "Run ID to cancel")
   .description("Cancel an in-progress workflow run")
+  .option(
+    "--dry-run",
+    "Verify the workflow exists and emit the plan as JSON without cancelling",
+  )
   .action(async (workflowId: string, runId: string, _options, cmd) => {
     try {
       const client = getClient(cmd);
+      if (isDryRun(cmd)) {
+        await client.workflows.get(workflowId);
+        emitDryRunPlan({
+          action: "workflows.cancel",
+          target: workflowId,
+          payload: { run_id: runId },
+        });
+        return;
+      }
       await client.workflows.cancel(workflowId, runId);
       writeSuccess(`Cancelled run ${runId} for workflow ${workflowId}`);
     } catch (err) {
@@ -254,8 +282,7 @@ workflowsCommand
         resource: "Workflow",
         identifier: workflowId,
         listCommand: "ixora workflows list",
-        url: getBaseUrl(cmd),
-        viaOverrideUrl: isUrlOverridden(cmd),
+        ...urlContext(cmd),
       });
     }
   });

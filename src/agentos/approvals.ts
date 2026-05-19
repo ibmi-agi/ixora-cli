@@ -2,9 +2,10 @@ import { Command } from "commander";
 import {
   getBaseUrl,
   getClient,
-  isUrlOverridden,
+  urlContext,
 } from "../lib/agentos-client.js";
 import { handleError } from "../lib/agentos-errors.js";
+import { emitDryRunPlan, isDryRun } from "../lib/dry-run.js";
 import {
   getOutputFormat,
   outputDetail,
@@ -113,8 +114,7 @@ approvalsCommand
         resource: "Approval",
         identifier: id,
         listCommand: "ixora approvals list --status pending",
-        url: getBaseUrl(cmd),
-        viaOverrideUrl: isUrlOverridden(cmd),
+        ...urlContext(cmd),
       });
     }
   });
@@ -129,6 +129,10 @@ approvalsCommand
   )
   .option("--resolved-by <user>", "Who resolved the approval")
   .option("--resolution-data <json>", "Additional resolution data as JSON")
+  .option(
+    "--dry-run",
+    "Verify the approval exists and emit the resolve payload as JSON without applying it",
+  )
   .action(async (id: string, _options, cmd) => {
     try {
       const opts = cmd.optsWithGlobals();
@@ -143,6 +147,20 @@ approvalsCommand
           process.exitCode = 1;
           return;
         }
+      }
+
+      if (isDryRun(cmd)) {
+        await client.approvals.get(id);
+        emitDryRunPlan({
+          action: "approvals.resolve",
+          target: id,
+          payload: {
+            status: opts.status,
+            resolved_by: opts.resolvedBy,
+            resolution_data: resolutionData,
+          },
+        });
+        return;
       }
 
       const result = await client.approvals.resolve(id, {
@@ -177,8 +195,7 @@ approvalsCommand
         resource: "Approval",
         identifier: id,
         listCommand: "ixora approvals list --status pending",
-        url: getBaseUrl(cmd),
-        viaOverrideUrl: isUrlOverridden(cmd),
+        ...urlContext(cmd),
       });
     }
   });

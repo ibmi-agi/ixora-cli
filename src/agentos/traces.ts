@@ -2,7 +2,7 @@ import { Command } from "commander";
 import {
   getBaseUrl,
   getClient,
-  isUrlOverridden,
+  urlContext,
 } from "../lib/agentos-client.js";
 import { handleError } from "../lib/agentos-errors.js";
 import {
@@ -128,8 +128,7 @@ tracesCommand
         resource: "Trace",
         identifier: traceId,
         listCommand: "ixora traces list",
-        url: getBaseUrl(cmd),
-        viaOverrideUrl: isUrlOverridden(cmd),
+        ...urlContext(cmd),
       });
     }
   });

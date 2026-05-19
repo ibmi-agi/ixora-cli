@@ -5,9 +5,10 @@ import { Command } from "commander";
 import {
   getBaseUrl,
   getClient,
-  isUrlOverridden,
+  urlContext,
 } from "../lib/agentos-client.js";
 import { handleError } from "../lib/agentos-errors.js";
+import { emitDryRunPlan, isDryRun } from "../lib/dry-run.js";
 import {
   getOutputFormat,
   outputDetail,
@@ -107,8 +108,7 @@ agentsCommand
         resource: "Agent",
         identifier: agentId,
         listCommand: "ixora agents list",
-        url: getBaseUrl(cmd),
-        viaOverrideUrl: isUrlOverridden(cmd),
+        ...urlContext(cmd),
       });
     }
   });
@@ -125,9 +125,27 @@ agentsCommand
     "-i, --interactive",
     "Prompt for approve/reject inline when the run pauses (requires --stream and a TTY)",
   )
+  .option(
+    "--dry-run",
+    "Verify the agent exists and emit the request payload as JSON without running",
+  )
   .action(async (agentId: string, message: string, options, cmd) => {
     try {
       const client = getClient(cmd);
+      if (isDryRun(cmd)) {
+        await client.agents.get(agentId);
+        emitDryRunPlan({
+          action: "agents.run",
+          target: agentId,
+          payload: {
+            message,
+            session_id: options.sessionId,
+            user_id: options.userId,
+            stream: Boolean(options.stream),
+          },
+        });
+        return;
+      }
       let result: StreamRunResult | undefined;
       if (options.stream) {
         const stream = await client.agents.runStream(agentId, {
@@ -170,8 +188,7 @@ agentsCommand
         resource: "Agent",
         identifier: agentId,
         listCommand: "ixora agents list",
-        url: getBaseUrl(cmd),
-        viaOverrideUrl: isUrlOverridden(cmd),
+        ...urlContext(cmd),
       });
     }
   });
@@ -371,8 +388,7 @@ agentsCommand
           resource: "Agent",
           identifier: capturedAgentId,
           listCommand: "ixora agents list",
-          url: getBaseUrl(cmd),
-          viaOverrideUrl: isUrlOverridden(cmd),
+          ...urlContext(cmd),
         });
       }
     },
@@ -445,8 +461,7 @@ agentsCommand
         resource: "Paused run",
         identifier: runId,
         listCommand: "ixora agents pending",
-        url: getBaseUrl(cmd),
-        viaOverrideUrl: isUrlOverridden(cmd),
+        ...urlContext(cmd),
       });
     }
   });
@@ -480,8 +495,7 @@ agentsCommand
         resource: "Agent",
         identifier: agentId,
         listCommand: "ixora agents list",
-        url: getBaseUrl(cmd),
-        viaOverrideUrl: isUrlOverridden(cmd),
+        ...urlContext(cmd),
       });
     }
   });
@@ -491,9 +505,22 @@ agentsCommand
   .argument("<agent_id>", "Agent ID")
   .argument("<run_id>", "Run ID to cancel")
   .description("Cancel an in-progress agent run")
+  .option(
+    "--dry-run",
+    "Verify the agent exists and emit the plan as JSON without cancelling",
+  )
   .action(async (agentId: string, runId: string, _options, cmd) => {
     try {
       const client = getClient(cmd);
+      if (isDryRun(cmd)) {
+        await client.agents.get(agentId);
+        emitDryRunPlan({
+          action: "agents.cancel",
+          target: agentId,
+          payload: { run_id: runId },
+        });
+        return;
+      }
       await client.agents.cancel(agentId, runId);
       writeSuccess(`Cancelled run ${runId} for agent ${agentId}`);
     } catch (err) {
@@ -501,8 +528,7 @@ agentsCommand
         resource: "Agent",
         identifier: agentId,
         listCommand: "ixora agents list",
-        url: getBaseUrl(cmd),
-        viaOverrideUrl: isUrlOverridden(cmd),
+        ...urlContext(cmd),
       });
     }
   });

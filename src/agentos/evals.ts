@@ -1,8 +1,8 @@
-import { Command } from "commander";
+import { Command, Option } from "commander";
 import {
   getBaseUrl,
   getClient,
-  isUrlOverridden,
+  urlContext,
 } from "../lib/agentos-client.js";
 import { handleError } from "../lib/agentos-errors.js";
 import {
@@ -42,7 +42,9 @@ evalsCommand
   )
   .option("--page <n>", "Page number", (v: string) => Number.parseInt(v, 10), 1)
   .option("--sort-by <field>", "Sort field")
-  .option("--sort-order <order>", "Sort order (asc, desc)")
+  .addOption(
+    new Option("--sort-order <order>", "Sort order").choices(["asc", "desc"]),
+  )
   .option("--db-id <id>", "Database ID")
   .action(async (_options, cmd) => {
     try {
@@ -158,8 +160,7 @@ evalsCommand
         resource: "Eval run",
         identifier: evalRunId,
         listCommand: "ixora evals list",
-        url: getBaseUrl(cmd),
-        viaOverrideUrl: isUrlOverridden(cmd),
+        ...urlContext(cmd),
       });
     }
   });
@@ -353,8 +354,7 @@ evalsCommand
           ? (opts.agentId as string)
           : (opts.teamId as string),
         listCommand: hasAgent ? "ixora agents list" : "ixora teams list",
-        url: getBaseUrl(cmd),
-        viaOverrideUrl: isUrlOverridden(cmd),
+        ...urlContext(cmd),
       });
     }
   });
