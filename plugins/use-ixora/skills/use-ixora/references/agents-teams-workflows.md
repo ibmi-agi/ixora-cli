@@ -2,7 +2,7 @@
 
 > Canonical flag reference: [`../docs/runtime/agents.md`](../docs/runtime/agents.md), [`../docs/runtime/teams.md`](../docs/runtime/teams.md), [`../docs/runtime/workflows.md`](../docs/runtime/workflows.md). This page covers `continue`/`resume` shape differences, the HITL cache, and what `--confirm` actually does.
 
-All three share the same verb set: `list`, `get`, `run`, `continue`, `resume`, `cancel`. Each targets the resolved system (see [system resolution in SKILL.md](../SKILL.md#system-resolution-the-part---help-wont-tell-you) or [`systems.md`](systems.md)).
+All three share the same verb set: `list`, `get`, `run`, `runs`, `continue`, `resume`, `cancel`. Each targets the resolved system (see [system resolution in SKILL.md](../SKILL.md#system-resolution-the-part---help-wont-tell-you) or [`systems.md`](systems.md)).
 
 `--system <id>` picks a specific system. `--url <url>` skips resolution (one-off probe against an unregistered endpoint).
 
@@ -66,6 +66,8 @@ ixora agents run sql-agent "..." -o compact
 
 Quote the message — it's a single positional string. Without `--stream` you get the final response as one payload (table/JSON/compact per `-o`). With `--stream` the CLI prints SSE events incrementally; the final summary still respects `-o`.
 
+`--background` and `--bypass-confirmations` are also `run` flags — see [background runs](#background-runs--run---background--runs) below.
+
 ### Capture IDs for follow-up calls
 
 ```bash
@@ -80,6 +82,63 @@ Or after the fact:
 ```bash
 ixora traces list --limit 1 --json trace_id,run_id,session_id,input
 ```
+
+---
+
+## background runs — `run --background` + `runs`
+
+`run --background` dispatches the run server-side and returns immediately with
+`{run_id, session_id, status}` — fire-and-forget. The run is tracked locally at
+`~/.ixora/agentos-background-runs/<run_id>.json` (7-day TTL) so follow-up
+commands take just the `run_id`. Works for `agents`, `teams`, `workflows`.
+
+```bash
+# dispatch — returns instantly
+ixora agents run sql-agent "audit DB2 perms" --background
+
+# list / poll / watch
+ixora agents runs                       # list this machine's background runs
+ixora agents runs <run_id>              # poll one — status + result
+ixora agents runs <run_id> --watch      # block until terminal
+```
+
+`--background` requires a database on the resource and is mutually exclusive
+with `--stream`.
+
+### exit codes (`runs` poll / `--watch`)
+
+| Code | Status | Meaning |
+|---|---|---|
+| `0` | `COMPLETED` / `RUNNING` / `PENDING` | healthy — a poll of an in-progress run is not an error |
+| `2` | `ERROR` / `FAILED` | run failed |
+| `1` | `CANCELLED` | run cancelled |
+| `4` | `PAUSED` | awaiting tool confirmation |
+
+Fire-and-reconcile pattern: `run --background`, then later `runs <run_id> --watch` and branch on `$?`.
+
+### `--bypass-confirmations` — auto-approve tool calls
+
+A flag on `run` (all three resources) that auto-approves any tool call
+requiring confirmation, so the run never stalls on a human.
+
+- **Foreground** (`run --bypass-confirmations`): the CLI drives it inline — on
+  each pause it approves the tools and continues, until terminal.
+- **Background** (`run --background --bypass-confirmations`): a fire-and-forget
+  run has no client present to auto-confirm, so the intent is recorded with the
+  run and acted on by `runs --watch`:
+
+```bash
+ixora agents run sql-agent "drop temp_* tables" --background --bypass-confirmations
+# the CLI does NOT fork a watcher — background it yourself:
+nohup ixora agents runs <run_id> --watch > <run_id>.log 2>&1 &
+```
+
+`--bypass-confirmations` is a **creation-time** flag — it lives on `run`, not
+on `runs`. `runs --watch` honors the intent recorded on the run but cannot set
+it. Every auto-approved tool is logged to stderr (audit trail). A plain
+`runs <run_id>` poll never auto-confirms — it reports `PAUSED` (exit 4) and
+records the pending tools so `agents continue <run_id> --confirm` can resolve
+them per-tool.
 
 ---
 
