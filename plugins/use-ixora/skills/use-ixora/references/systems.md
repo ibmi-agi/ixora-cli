@@ -19,7 +19,7 @@ Both kinds are valid targets for the runtime commands (`ixora agents`, `ixora tr
 ixora stack system add                                     # fully interactive
 ixora stack system add --kind managed --id dev --name "Development"
 ixora stack system add --kind external --id personal \
-  --url http://localhost:8080 [--key sk-xxx]
+  --agentos-url http://localhost:8080 [--agentos-key sk-xxx]
 ```
 
 Flags (all optional; missing ones get prompted):
@@ -29,8 +29,8 @@ Flags (all optional; missing ones get prompted):
 - `--name <name>` — display name (free text)
 - `--agent-profile <name>` — **managed only**; pre-select agent profile (`full` / `sql-services` / `security` / `knowledge`). See [`profiles.md`](profiles.md).
 - `--mode <full|custom>` — **managed only**; deployment mode
-- `--url <url>` — **external only**; the AgentOS URL
-- `--key <key>` — **external only**; optional API key (stored as `SYSTEM_<ID>_AGENTOS_KEY`)
+- `--agentos-url <url>` — **external only**; the AgentOS URL
+- `--agentos-key <key>` — **external only**; optional API key (stored as `SYSTEM_<ID>_AGENTOS_KEY`)
 
 Managed adds prompt for IBM i host/port/user/password and the agent profile. External adds skip everything except URL + optional key.
 
@@ -210,7 +210,7 @@ ixora --system prod agents list                  # target prod for runtime ops
 ### Register an external local AgentOS
 
 ```bash
-ixora stack system add --kind external --id personal --url http://localhost:8080
+ixora stack system add --kind external --id personal --agentos-url http://localhost:8080
 ixora --system personal agents list              # works
 ixora stack system start personal                # ERROR — externals not managed
 ```

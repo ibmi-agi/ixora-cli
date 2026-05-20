@@ -31,7 +31,7 @@ Interactive by default; pre-fill anything you already know.
 ixora stack system add                                     # interactive
 ixora stack system add --kind managed --id prod --name "Production"
 ixora stack system add --kind external --id personal \
-  --url http://localhost:8080 [--key sk-xxx]
+  --agentos-url http://localhost:8080 [--agentos-key sk-xxx]
 ```
 
 Options:
@@ -41,8 +41,8 @@ Options:
 | `--kind managed\|external` | both | Skip the kind prompt. |
 | `--id <id>` | both | System ID — lowercase, alphanumeric + hyphens. Used in container names. |
 | `--name <name>` | both | Human-readable display name. |
-| `--url <url>` | external only | AgentOS endpoint URL. |
-| `--key <key>` | external only | AgentOS API key. Stored as `SYSTEM_<ID>_AGENTOS_KEY` in `.env`. |
+| `--agentos-url <url>` | external only | AgentOS endpoint URL. |
+| `--agentos-key <key>` | external only | AgentOS API key. Stored as `SYSTEM_<ID>_AGENTOS_KEY` in `.env`. |
 
 For **managed** systems, the installer additionally prompts for IBM i hostname, username, password, port, and agent profile (`full`/`sql-services`/`security`/`knowledge`).
 
@@ -189,7 +189,7 @@ ixora agents list                            # now uses prod
 
 ```bash
 ixora stack system add --kind external --id alice \
-  --url http://10.0.0.42:18000 --key sk-team-xxx
+  --agentos-url http://10.0.0.42:18000 --agentos-key sk-team-xxx
 ixora --system alice agents list
 ```
 

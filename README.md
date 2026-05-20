@@ -59,7 +59,7 @@ Beyond the IBM i stacks ixora provisions ("managed" systems), you can register *
 ```sh
 ixora stack system add                                     # interactive — pick "External"
 ixora stack system add --kind external --id personal \
-  --url http://localhost:8080 [--key sk-xxx]               # non-interactive
+  --agentos-url http://localhost:8080 [--agentos-key sk-xxx] # non-interactive
 
 ixora stack system list                                    # shows KIND + URL columns
 ixora --system personal agents list                        # target the external by name
@@ -119,7 +119,7 @@ By default each IBM i system gets its **own** `ai_<id>` Postgres database (and i
 | `stack config show` | Show current configuration |
 | `stack config set <key> <value>` | Update a config value |
 | `stack config edit` | Open config in your editor |
-| `stack system add` | Add a system: **managed** (provision a new ixora IBM i stack) or **external** (register an existing AgentOS URL — local or remote). Flags: `--kind managed\|external --id ... --name ... --url ... --key ...` |
+| `stack system add` | Add a system: **managed** (provision a new ixora IBM i stack) or **external** (register an existing AgentOS URL — local or remote). Flags: `--kind managed\|external --id ... --name ... --agentos-url ... --agentos-key ...` |
 | `stack system remove <id>` | Remove a system (works for both kinds; cleans up env keys) |
 | `stack system list` | List configured systems with KIND + URL columns (default marked with `*`) |
 | `stack system start\|stop\|restart <id>` | Manage one managed system's containers (errors with a hint if `<id>` is external) |

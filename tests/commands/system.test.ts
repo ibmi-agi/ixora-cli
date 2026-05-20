@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   mkdtempSync,
   writeFileSync,
+  readFileSync,
   rmSync,
   existsSync,
   unlinkSync,
@@ -36,6 +37,20 @@ vi.mock("../../src/lib/compose.js", async () => {
   return {
     ...actual,
     writeComposeFile: writeComposeFileMock,
+  };
+});
+
+// Every interactive prompt throws — the non-interactive `system add` test
+// relies on this to prove flag parsing never falls back to a prompt.
+vi.mock("@inquirer/prompts", () => {
+  const fail = (name: string) => () => {
+    throw new Error(`unexpected interactive prompt: ${name}`);
+  };
+  return {
+    input: fail("input"),
+    password: fail("password"),
+    select: fail("select"),
+    confirm: fail("confirm"),
   };
 });
 
@@ -157,6 +172,49 @@ describe("system commands", () => {
       cmdSystemRemove("cloud");
 
       expect(writeComposeFileMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("cmdSystemAdd — non-interactive external", () => {
+    it("registers an external endpoint from flags without prompting", async () => {
+      if (existsSync(SYSTEMS_CONFIG)) unlinkSync(SYSTEMS_CONFIG);
+      writeFileSync(ENV_FILE, "IXORA_PROFILE='full'\n");
+
+      // The inquirer mock throws on any prompt, so this resolving at all
+      // proves --agentos-url/--agentos-key reached the command and no
+      // interactive fallback ran. Guards the program-global flag collision
+      // that --url/--key would have hit.
+      const { createProgram } = await import("../../src/cli.js");
+      await createProgram().parseAsync([
+        "node",
+        "ixora",
+        "stack",
+        "system",
+        "add",
+        "--kind",
+        "external",
+        "--id",
+        "cloud",
+        "--name",
+        "Cloud AgentOS",
+        "--agentos-url",
+        "https://ixora.up.railway.app/full",
+        "--agentos-key",
+        "ixr_test-key-123",
+      ]);
+
+      const { readSystems } = await import("../../src/lib/systems.js");
+      const cloud = readSystems().find((s) => s.id === "cloud");
+      expect(cloud).toMatchObject({
+        id: "cloud",
+        kind: "external",
+        url: "https://ixora.up.railway.app/full",
+      });
+
+      // The API key is persisted to .env, not the systems YAML.
+      const env = readFileSync(ENV_FILE, "utf-8");
+      expect(env).toContain("SYSTEM_CLOUD_AGENTOS_KEY");
+      expect(env).toContain("ixr_test-key-123");
     });
   });
 

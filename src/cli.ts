@@ -474,12 +474,16 @@ export function createProgram(): Command {
     )
     .option("--id <id>", "Pre-fill the system ID")
     .option("--name <name>", "Pre-fill the display name")
+    // Deliberately NOT `--url`/`--key`: those are program-level globals for
+    // AgentOS endpoint targeting. Commander parses globals from anywhere in
+    // argv, so a colliding name here would be swallowed before reaching this
+    // subcommand. The `agentos-` prefix keeps the registration flags distinct.
     .option(
-      "--url <url>",
+      "--agentos-url <url>",
       "External only: pre-fill the AgentOS URL (e.g. http://localhost:8080)",
     )
     .option(
-      "--key <key>",
+      "--agentos-key <key>",
       "External only: pre-fill the AgentOS API key (optional)",
     )
     .action(
@@ -487,8 +491,8 @@ export function createProgram(): Command {
         kind?: string;
         id?: string;
         name?: string;
-        url?: string;
-        key?: string;
+        agentosUrl?: string;
+        agentosKey?: string;
       }) => {
         const kind =
           opts.kind === "managed" || opts.kind === "external"
@@ -504,8 +508,8 @@ export function createProgram(): Command {
           kind,
           id: opts.id,
           name: opts.name,
-          url: opts.url,
-          key: opts.key,
+          url: opts.agentosUrl,
+          key: opts.agentosKey,
         });
       },
     );

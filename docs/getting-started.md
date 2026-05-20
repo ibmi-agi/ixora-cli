@@ -118,7 +118,7 @@ ixora stack system add
 # Register an external AgentOS endpoint
 ixora stack system add \
   --kind external --id personal \
-  --url http://localhost:8080 [--key sk-xxx]
+  --agentos-url http://localhost:8080 [--agentos-key sk-xxx]
 
 ixora stack system list           # shows KIND + URL columns; default marked with *
 ```
