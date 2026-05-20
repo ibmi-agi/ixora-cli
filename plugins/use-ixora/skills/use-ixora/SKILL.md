@@ -100,6 +100,8 @@ ixora status                                      # AgentOS overview (agents, KB
 ixora health                                      # uptime + latency; exits 1 if unhealthy
 ixora agents list                                 # registered agents
 ixora agents run <id> "<message>" --stream        # one-shot or streamed
+ixora agents run <id> "<message>" --background     # fire-and-forget; returns run_id
+ixora agents runs <run_id> --watch                 # poll a background run to completion
 ixora traces list --limit 5                       # newest traces
 ixora traces list --status error                  # only failures
 ixora sessions runs <session_id>                  # all runs in a session
@@ -180,6 +182,8 @@ See [`docs/configuration.md`](docs/configuration.md) for full file formats.
 - **`ixora agents pending`** lists local paused runs (run_id, agent, age, pending tools); `agents pending <run_id>` pretty-prints the pending tool calls plus the original prompt. Use it to discover what's queued before approving.
 - **`agents continue` can be called with just `<run_id>`** — agent_id is read from the cache. The legacy `<agent_id> <run_id>` form still works.
 - **`agents run --interactive --stream`** drops you into an inline approve / reject / show-details / quit prompt on each pause and continues the same stream — no second invocation, no `--session-id` hunting.
+- **`agents run --background`** dispatches the run server-side and returns immediately with `{run_id, session_id, status}`. Track it with `agents runs` (list) / `agents runs <run_id> [--watch]` (poll). Background runs are cached at `~/.ixora/agentos-background-runs/<run_id>.json` (7-day TTL). `runs` poll/watch exit codes: `0` completed/running, `2` error, `1` cancelled, `4` paused. Works for `teams` and `workflows` too.
+- **`--bypass-confirmations`** is a creation-time flag on `run` (not on `runs`) that auto-approves tool calls needing confirmation. Foreground: the CLI drives it inline. Background: start with `run --background --bypass-confirmations`, then `agents runs <run_id> --watch` honors the recorded intent and drives it — the CLI does not fork a watcher, background it with `nohup … &`.
 
 ## Debugging a failed run
 

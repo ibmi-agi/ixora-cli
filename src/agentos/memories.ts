@@ -1,6 +1,11 @@
-import { Command } from "commander";
-import { getBaseUrl, getClient } from "../lib/agentos-client.js";
+import { Command, Option } from "commander";
+import {
+  getBaseUrl,
+  getClient,
+  urlContext,
+} from "../lib/agentos-client.js";
 import { handleError } from "../lib/agentos-errors.js";
+import { emitDryRunPlan, isDryRun } from "../lib/dry-run.js";
 import {
   getOutputFormat,
   outputDetail,
@@ -29,7 +34,9 @@ memoriesCommand
   )
   .option("--page <n>", "Page number", (v: string) => Number.parseInt(v, 10), 1)
   .option("--sort-by <field>", "Sort field")
-  .option("--sort-order <order>", "Sort order (asc, desc)")
+  .addOption(
+    new Option("--sort-order <order>", "Sort order").choices(["asc", "desc"]),
+  )
   .option("--db-id <id>", "Database ID")
   .action(async (_options, cmd) => {
     try {
@@ -131,7 +138,12 @@ memoriesCommand
         },
       );
     } catch (err) {
-      handleError(err, { resource: "Memory", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Memory",
+        identifier: memoryId,
+        listCommand: "ixora memories list",
+        ...urlContext(cmd),
+      });
     }
   });
 
@@ -208,7 +220,12 @@ memoriesCommand
 
       writeSuccess("Memory updated.");
     } catch (err) {
-      handleError(err, { resource: "Memory", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Memory",
+        identifier: memoryId,
+        listCommand: "ixora memories list",
+        ...urlContext(cmd),
+      });
     }
   });
 
@@ -217,14 +234,28 @@ memoriesCommand
   .argument("<memory_id>", "Memory ID")
   .description("Delete a memory")
   .option("--db-id <id>", "Database ID")
+  .option(
+    "--dry-run",
+    "Verify the memory exists and emit the plan as JSON without deleting",
+  )
   .action(async (memoryId: string, _options, cmd) => {
     try {
       const opts = cmd.optsWithGlobals();
       const client = getClient(cmd);
+      if (isDryRun(cmd)) {
+        await client.memories.get(memoryId, { dbId: opts.dbId });
+        emitDryRunPlan({ action: "memories.delete", target: memoryId });
+        return;
+      }
       await client.memories.delete(memoryId, { dbId: opts.dbId });
       writeSuccess("Memory deleted.");
     } catch (err) {
-      handleError(err, { resource: "Memory", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Memory",
+        identifier: memoryId,
+        listCommand: "ixora memories list",
+        ...urlContext(cmd),
+      });
     }
   });
 

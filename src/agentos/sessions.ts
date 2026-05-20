@@ -1,6 +1,11 @@
-import { Command } from "commander";
-import { getBaseUrl, getClient } from "../lib/agentos-client.js";
+import { Command, Option } from "commander";
+import {
+  getBaseUrl,
+  getClient,
+  urlContext,
+} from "../lib/agentos-client.js";
 import { handleError } from "../lib/agentos-errors.js";
+import { emitDryRunPlan, isDryRun } from "../lib/dry-run.js";
 import {
   getOutputFormat,
   outputDetail,
@@ -28,7 +33,9 @@ sessionsCommand
   )
   .option("--page <n>", "Page number", (v: string) => Number.parseInt(v, 10), 1)
   .option("--sort-by <field>", "Sort field")
-  .option("--sort-order <order>", "Sort order (asc, desc)")
+  .addOption(
+    new Option("--sort-order <order>", "Sort order").choices(["asc", "desc"]),
+  )
   .option("--db-id <id>", "Database ID")
   .action(async (_options, cmd) => {
     try {
@@ -121,7 +128,12 @@ sessionsCommand
         },
       );
     } catch (err) {
-      handleError(err, { resource: "Session", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Session",
+        identifier: sessionId,
+        listCommand: "ixora sessions list",
+        ...urlContext(cmd),
+      });
     }
   });
 
@@ -220,7 +232,12 @@ sessionsCommand
 
       writeSuccess("Session updated.");
     } catch (err) {
-      handleError(err, { resource: "Session", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Session",
+        identifier: sessionId,
+        listCommand: "ixora sessions list",
+        ...urlContext(cmd),
+      });
     }
   });
 
@@ -229,14 +246,31 @@ sessionsCommand
   .argument("<session_id>", "Session ID")
   .description("Delete a session")
   .option("--db-id <id>", "Database ID")
+  .option(
+    "--dry-run",
+    "Verify the session exists and emit the plan as JSON without deleting",
+  )
   .action(async (sessionId: string, _options, cmd) => {
     try {
       const opts = cmd.optsWithGlobals();
       const client = getClient(cmd);
+      // The AgentOS delete endpoint returns 2xx whether or not the session
+      // existed. Pre-check with .get() so a typo doesn't silently exit 0
+      // and mislead any script that grep's for "Success:" or $?==0.
+      await client.sessions.get(sessionId, { dbId: opts.dbId });
+      if (isDryRun(cmd)) {
+        emitDryRunPlan({ action: "sessions.delete", target: sessionId });
+        return;
+      }
       await client.sessions.delete(sessionId, { dbId: opts.dbId });
       writeSuccess("Session deleted.");
     } catch (err) {
-      handleError(err, { resource: "Session", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Session",
+        identifier: sessionId,
+        listCommand: "ixora sessions list",
+        ...urlContext(cmd),
+      });
     }
   });
 
@@ -291,6 +325,11 @@ sessionsCommand
         keys: ["run_id", "status", "created_at"],
       });
     } catch (err) {
-      handleError(err, { resource: "Session", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Session",
+        identifier: sessionId,
+        listCommand: "ixora sessions list",
+        ...urlContext(cmd),
+      });
     }
   });

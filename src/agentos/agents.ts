@@ -2,8 +2,13 @@ import type { AgentOSClient, AgentStream } from "@worksofadam/agentos-sdk";
 import { select } from "@inquirer/prompts";
 import chalk from "chalk";
 import { Command } from "commander";
-import { getBaseUrl, getClient } from "../lib/agentos-client.js";
+import {
+  getBaseUrl,
+  getClient,
+  urlContext,
+} from "../lib/agentos-client.js";
 import { handleError } from "../lib/agentos-errors.js";
+import { emitDryRunPlan, isDryRun } from "../lib/dry-run.js";
 import {
   getOutputFormat,
   outputDetail,
@@ -26,6 +31,18 @@ import {
   handleStreamRun,
   type StreamRunResult,
 } from "../lib/agentos-stream.js";
+import {
+  buildConfirmPayload,
+  buildRejectPayload,
+  startBackgroundRun,
+} from "../lib/agentos-background.js";
+import { writeBackgroundRun } from "../lib/agentos-background-runs.js";
+import {
+  emitBackgroundStart,
+  pausedSummary,
+  runsAction,
+  watchRun,
+} from "../lib/agentos-runs-command.js";
 
 export const agentsCommand = new Command("agents").description("Manage agents");
 
@@ -99,7 +116,12 @@ agentsCommand
         },
       );
     } catch (err) {
-      handleError(err, { resource: "Agent", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Agent",
+        identifier: agentId,
+        listCommand: "ixora agents list",
+        ...urlContext(cmd),
+      });
     }
   });
 
@@ -112,12 +134,79 @@ agentsCommand
   .option("--session-id <id>", "Session ID for conversation context")
   .option("--user-id <id>", "User ID for personalization")
   .option(
+    "--background",
+    "Dispatch the run server-side and return immediately (requires a database)",
+  )
+  .option(
+    "--bypass-confirmations",
+    "Auto-approve any tool calls that require confirmation",
+  )
+  .option(
     "-i, --interactive",
     "Prompt for approve/reject inline when the run pauses (requires --stream and a TTY)",
   )
+  .option(
+    "--dry-run",
+    "Verify the agent exists and emit the request payload as JSON without running",
+  )
   .action(async (agentId: string, message: string, options, cmd) => {
     try {
+      if (options.background && options.stream) {
+        writeError(
+          "--background and --stream are mutually exclusive — background runs are fire-and-forget.",
+        );
+        process.exitCode = 1;
+        return;
+      }
+      if (options.bypassConfirmations && options.interactive) {
+        writeError(
+          "--bypass-confirmations and --interactive cannot be combined — one auto-approves, the other prompts.",
+        );
+        process.exitCode = 1;
+        return;
+      }
       const client = getClient(cmd);
+      if (isDryRun(cmd)) {
+        await client.agents.get(agentId);
+        emitDryRunPlan({
+          action: options.background ? "agents.run.background" : "agents.run",
+          target: agentId,
+          payload: {
+            message,
+            session_id: options.sessionId,
+            user_id: options.userId,
+            stream: options.background ? false : Boolean(options.stream),
+            background: Boolean(options.background),
+            bypass_confirmations: Boolean(options.bypassConfirmations),
+          },
+        });
+        return;
+      }
+
+      if (options.background) {
+        const start = await startBackgroundRun(client, "agent", agentId, {
+          message,
+          sessionId: options.sessionId,
+          userId: options.userId,
+        });
+        writeBackgroundRun({
+          run_id: start.run_id,
+          resource_type: "agent",
+          resource_id: agentId,
+          session_id: start.session_id,
+          status: start.status,
+          prompt: message,
+          started_at: new Date().toISOString(),
+          bypass_confirmations: Boolean(options.bypassConfirmations),
+        });
+        emitBackgroundStart(
+          "agent",
+          start,
+          Boolean(options.bypassConfirmations),
+        );
+        return;
+      }
+
       let result: StreamRunResult | undefined;
       if (options.stream) {
         const stream = await client.agents.runStream(agentId, {
@@ -129,6 +218,19 @@ agentsCommand
           resourceId: agentId,
           prompt: message,
         });
+      } else if (options.bypassConfirmations) {
+        // Capture the result so a paused non-stream run can be auto-driven.
+        const runResult = await client.agents.run(agentId, {
+          message,
+          sessionId: options.sessionId,
+          userId: options.userId,
+        });
+        await handleNonStreamRun(
+          cmd,
+          { result: runResult },
+          { resourceType: "agent", resourceId: agentId, prompt: message },
+        );
+        result = pausedSummary(runResult as Record<string, unknown>);
       } else {
         await handleNonStreamRun(
           cmd,
@@ -141,7 +243,21 @@ agentsCommand
           { resourceType: "agent", resourceId: agentId, prompt: message },
         );
       }
-      if (
+
+      if (result?.paused && result.runId && options.bypassConfirmations) {
+        await watchRun(
+          client,
+          cmd,
+          "agent",
+          {
+            resourceId: agentId,
+            runId: result.runId,
+            sessionId: result.sessionId ?? undefined,
+            prompt: message,
+          },
+          { bypass: true, intervalMs: 3000 },
+        );
+      } else if (
         options.interactive &&
         options.stream &&
         result?.paused &&
@@ -156,29 +272,35 @@ agentsCommand
         });
       }
     } catch (err) {
-      handleError(err, { resource: "Agent", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Agent",
+        identifier: agentId,
+        listCommand: "ixora agents list",
+        ...urlContext(cmd),
+      });
     }
   });
 
-function buildConfirmPayload(tools: Array<Record<string, unknown>>): string {
-  const confirmed = tools.map((tool) => ({
-    ...tool,
-    confirmed: true,
-  }));
-  return JSON.stringify(confirmed);
-}
-
-function buildRejectPayload(
-  tools: Array<Record<string, unknown>>,
-  note?: string,
-): string {
-  const rejected = tools.map((tool) => ({
-    ...tool,
-    confirmed: false,
-    confirmation_note: note ?? "Rejected via CLI",
-  }));
-  return JSON.stringify(rejected);
-}
+agentsCommand
+  .command("runs")
+  .argument(
+    "[run_id]",
+    "Poll one background run; omit to list cached background runs",
+  )
+  .description("List background runs, or poll/watch one")
+  .option("--watch", "Poll until the run reaches a terminal status")
+  .option("--status <status>", "Filter the list by status")
+  .option(
+    "--interval <seconds>",
+    "Poll interval for --watch",
+    (v: string) => Number.parseInt(v, 10),
+    3,
+  )
+  .option(
+    "--session-id <id>",
+    "Session ID override (when the cached run has none)",
+  )
+  .action(runsAction("agent"));
 
 agentsCommand
   .command("continue")
@@ -223,6 +345,9 @@ agentsCommand
       options,
       cmd,
     ) => {
+      // Snapshot of the parsed agent_id so the catch handler can echo it.
+      // The actual destructure below keeps the original narrowed types.
+      let capturedAgentId: string | undefined;
       try {
         const client = getClient(cmd);
 
@@ -235,6 +360,7 @@ agentsCommand
           return;
         }
         let { agentId, runId, toolResults } = parsed;
+        capturedAgentId = agentId;
 
         let cached: PausedRunState | null = null;
         if (!agentId || options.confirm || options.reject !== undefined) {
@@ -347,7 +473,12 @@ agentsCommand
           });
         }
       } catch (err) {
-        handleError(err, { resource: "Agent", url: getBaseUrl(cmd) });
+        handleError(err, {
+          resource: "Agent",
+          identifier: capturedAgentId,
+          listCommand: "ixora agents list",
+          ...urlContext(cmd),
+        });
       }
     },
   );
@@ -415,7 +546,12 @@ agentsCommand
         );
       }
     } catch (err) {
-      handleError(err, { resource: "Agent", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Paused run",
+        identifier: runId,
+        listCommand: "ixora agents pending",
+        ...urlContext(cmd),
+      });
     }
   });
 
@@ -444,7 +580,12 @@ agentsCommand
       });
       await handleStreamRun(cmd, stream, "agent", { resourceId: agentId });
     } catch (err) {
-      handleError(err, { resource: "Agent", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Agent",
+        identifier: agentId,
+        listCommand: "ixora agents list",
+        ...urlContext(cmd),
+      });
     }
   });
 
@@ -453,13 +594,31 @@ agentsCommand
   .argument("<agent_id>", "Agent ID")
   .argument("<run_id>", "Run ID to cancel")
   .description("Cancel an in-progress agent run")
+  .option(
+    "--dry-run",
+    "Verify the agent exists and emit the plan as JSON without cancelling",
+  )
   .action(async (agentId: string, runId: string, _options, cmd) => {
     try {
       const client = getClient(cmd);
+      if (isDryRun(cmd)) {
+        await client.agents.get(agentId);
+        emitDryRunPlan({
+          action: "agents.cancel",
+          target: agentId,
+          payload: { run_id: runId },
+        });
+        return;
+      }
       await client.agents.cancel(agentId, runId);
       writeSuccess(`Cancelled run ${runId} for agent ${agentId}`);
     } catch (err) {
-      handleError(err, { resource: "Agent", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Agent",
+        identifier: agentId,
+        listCommand: "ixora agents list",
+        ...urlContext(cmd),
+      });
     }
   });
 

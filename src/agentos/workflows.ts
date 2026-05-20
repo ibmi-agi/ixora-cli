@@ -1,15 +1,33 @@
 import type { AgentStream } from "@worksofadam/agentos-sdk";
 import { Command } from "commander";
-import { getBaseUrl, getClient } from "../lib/agentos-client.js";
+import {
+  getBaseUrl,
+  getClient,
+  urlContext,
+} from "../lib/agentos-client.js";
 import { handleError } from "../lib/agentos-errors.js";
+import { emitDryRunPlan, isDryRun } from "../lib/dry-run.js";
 import {
   getOutputFormat,
   outputDetail,
   outputList,
+  writeError,
   writeSuccess,
 } from "../lib/agentos-output.js";
 import { requestResumeStream } from "../lib/agentos-resume.js";
-import { handleNonStreamRun, handleStreamRun } from "../lib/agentos-stream.js";
+import {
+  handleNonStreamRun,
+  handleStreamRun,
+  type StreamRunResult,
+} from "../lib/agentos-stream.js";
+import { startBackgroundRun } from "../lib/agentos-background.js";
+import { writeBackgroundRun } from "../lib/agentos-background-runs.js";
+import {
+  emitBackgroundStart,
+  pausedSummary,
+  runsAction,
+  watchRun,
+} from "../lib/agentos-runs-command.js";
 
 export const workflowsCommand = new Command("workflows").description(
   "Manage workflows",
@@ -85,7 +103,12 @@ workflowsCommand
         },
       );
     } catch (err) {
-      handleError(err, { resource: "Workflow", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Workflow",
+        identifier: workflowId,
+        listCommand: "ixora workflows list",
+        ...urlContext(cmd),
+      });
     }
   });
 
@@ -97,18 +120,93 @@ workflowsCommand
   .option("--stream", "Stream the response via SSE")
   .option("--session-id <id>", "Session ID for conversation context")
   .option("--user-id <id>", "User ID for personalization")
+  .option(
+    "--background",
+    "Dispatch the run server-side and return immediately (requires a database)",
+  )
+  .option(
+    "--bypass-confirmations",
+    "Auto-approve any tool calls that require confirmation",
+  )
+  .option(
+    "--dry-run",
+    "Verify the workflow exists and emit the request payload as JSON without running",
+  )
   .action(async (workflowId: string, message: string, options, cmd) => {
     try {
+      if (options.background && options.stream) {
+        writeError(
+          "--background and --stream are mutually exclusive — background runs are fire-and-forget.",
+        );
+        process.exitCode = 1;
+        return;
+      }
       const client = getClient(cmd);
+      if (isDryRun(cmd)) {
+        await client.workflows.get(workflowId);
+        emitDryRunPlan({
+          action: options.background
+            ? "workflows.run.background"
+            : "workflows.run",
+          target: workflowId,
+          payload: {
+            message,
+            session_id: options.sessionId,
+            user_id: options.userId,
+            stream: options.background ? false : Boolean(options.stream),
+            background: Boolean(options.background),
+            bypass_confirmations: Boolean(options.bypassConfirmations),
+          },
+        });
+        return;
+      }
+
+      if (options.background) {
+        const start = await startBackgroundRun(client, "workflow", workflowId, {
+          message,
+          sessionId: options.sessionId,
+          userId: options.userId,
+        });
+        writeBackgroundRun({
+          run_id: start.run_id,
+          resource_type: "workflow",
+          resource_id: workflowId,
+          session_id: start.session_id,
+          status: start.status,
+          prompt: message,
+          started_at: new Date().toISOString(),
+          bypass_confirmations: Boolean(options.bypassConfirmations),
+        });
+        emitBackgroundStart(
+          "workflow",
+          start,
+          Boolean(options.bypassConfirmations),
+        );
+        return;
+      }
+
+      let result: StreamRunResult | undefined;
       if (options.stream) {
         const stream = await client.workflows.runStream(workflowId, {
           message,
           sessionId: options.sessionId,
           userId: options.userId,
         });
-        await handleStreamRun(cmd, stream, "workflow", {
+        result = await handleStreamRun(cmd, stream, "workflow", {
           resourceId: workflowId,
         });
+      } else if (options.bypassConfirmations) {
+        const runResult = await client.workflows.run(workflowId, {
+          message,
+          sessionId: options.sessionId,
+          userId: options.userId,
+        });
+        await handleNonStreamRun(
+          cmd,
+          { result: runResult },
+          { resourceType: "workflow", resourceId: workflowId },
+        );
+        result = pausedSummary(runResult as Record<string, unknown>);
       } else {
         await handleNonStreamRun(
           cmd,
@@ -121,10 +219,50 @@ workflowsCommand
           { resourceType: "workflow", resourceId: workflowId },
         );
       }
+
+      if (result?.paused && result.runId && options.bypassConfirmations) {
+        await watchRun(
+          client,
+          cmd,
+          "workflow",
+          {
+            resourceId: workflowId,
+            runId: result.runId,
+            sessionId: result.sessionId ?? undefined,
+          },
+          { bypass: true, intervalMs: 3000 },
+        );
+      }
     } catch (err) {
-      handleError(err, { resource: "Workflow", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Workflow",
+        identifier: workflowId,
+        listCommand: "ixora workflows list",
+        ...urlContext(cmd),
+      });
     }
   });
+
+workflowsCommand
+  .command("runs")
+  .argument(
+    "[run_id]",
+    "Poll one background run; omit to list cached background runs",
+  )
+  .description("List background runs, or poll/watch one")
+  .option("--watch", "Poll until the run reaches a terminal status")
+  .option("--status <status>", "Filter the list by status")
+  .option(
+    "--interval <seconds>",
+    "Poll interval for --watch",
+    (v: string) => Number.parseInt(v, 10),
+    3,
+  )
+  .option(
+    "--session-id <id>",
+    "Session ID override (when the cached run has none)",
+  )
+  .action(runsAction("workflow"));
 
 workflowsCommand
   .command("continue")
@@ -169,7 +307,12 @@ workflowsCommand
           );
         }
       } catch (err) {
-        handleError(err, { resource: "Workflow", url: getBaseUrl(cmd) });
+        handleError(err, {
+          resource: "Workflow",
+          identifier: workflowId,
+          listCommand: "ixora workflows list",
+          ...urlContext(cmd),
+        });
       }
     },
   );
@@ -207,7 +350,12 @@ workflowsCommand
         resourceId: workflowId,
       });
     } catch (err) {
-      handleError(err, { resource: "Workflow", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Workflow",
+        identifier: workflowId,
+        listCommand: "ixora workflows list",
+        ...urlContext(cmd),
+      });
     }
   });
 
@@ -216,12 +364,30 @@ workflowsCommand
   .argument("<workflow_id>", "Workflow ID")
   .argument("<run_id>", "Run ID to cancel")
   .description("Cancel an in-progress workflow run")
+  .option(
+    "--dry-run",
+    "Verify the workflow exists and emit the plan as JSON without cancelling",
+  )
   .action(async (workflowId: string, runId: string, _options, cmd) => {
     try {
       const client = getClient(cmd);
+      if (isDryRun(cmd)) {
+        await client.workflows.get(workflowId);
+        emitDryRunPlan({
+          action: "workflows.cancel",
+          target: workflowId,
+          payload: { run_id: runId },
+        });
+        return;
+      }
       await client.workflows.cancel(workflowId, runId);
       writeSuccess(`Cancelled run ${runId} for workflow ${workflowId}`);
     } catch (err) {
-      handleError(err, { resource: "Workflow", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Workflow",
+        identifier: workflowId,
+        listCommand: "ixora workflows list",
+        ...urlContext(cmd),
+      });
     }
   });

@@ -1,6 +1,11 @@
-import { Command } from "commander";
-import { getBaseUrl, getClient } from "../lib/agentos-client.js";
+import { Command, Option } from "commander";
+import {
+  getBaseUrl,
+  getClient,
+  urlContext,
+} from "../lib/agentos-client.js";
 import { handleError } from "../lib/agentos-errors.js";
+import { emitDryRunPlan, isDryRun } from "../lib/dry-run.js";
 import {
   getOutputFormat,
   outputDetail,
@@ -124,7 +129,12 @@ schedulesCommand
         },
       );
     } catch (err) {
-      handleError(err, { resource: "Schedule", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Schedule",
+        identifier: id,
+        listCommand: "ixora schedules list",
+        ...urlContext(cmd),
+      });
     }
   });
 
@@ -134,9 +144,10 @@ schedulesCommand
   .requiredOption("--name <name>", "Schedule name (required)")
   .requiredOption("--cron <expr>", "Cron expression (required)")
   .requiredOption("--endpoint <url>", "Endpoint URL (required)")
-  .requiredOption(
-    "--method <method>",
-    "HTTP method: GET, POST, etc. (required)",
+  .addOption(
+    new Option("--method <method>", "HTTP method (required)")
+      .choices(["GET", "POST", "PUT", "PATCH", "DELETE"])
+      .makeOptionMandatory(true),
   )
   .option("--description <desc>", "Schedule description")
   .option("--payload <json>", "Request payload as JSON")
@@ -278,7 +289,12 @@ schedulesCommand
       );
       writeSuccess("Schedule updated.");
     } catch (err) {
-      handleError(err, { resource: "Schedule", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Schedule",
+        identifier: id,
+        listCommand: "ixora schedules list",
+        ...urlContext(cmd),
+      });
     }
   });
 
@@ -286,13 +302,27 @@ schedulesCommand
   .command("delete")
   .argument("<id>", "Schedule ID")
   .description("Delete a schedule")
+  .option(
+    "--dry-run",
+    "Verify the schedule exists and emit the plan as JSON without deleting",
+  )
   .action(async (id: string, _options, cmd) => {
     try {
       const client = getClient(cmd);
+      if (isDryRun(cmd)) {
+        await client.schedules.get(id);
+        emitDryRunPlan({ action: "schedules.delete", target: id });
+        return;
+      }
       await client.schedules.delete(id);
       writeSuccess(`Schedule ${id} deleted.`);
     } catch (err) {
-      handleError(err, { resource: "Schedule", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Schedule",
+        identifier: id,
+        listCommand: "ixora schedules list",
+        ...urlContext(cmd),
+      });
     }
   });
 
@@ -306,7 +336,12 @@ schedulesCommand
       await client.schedules.disable(id);
       writeSuccess("Schedule paused.");
     } catch (err) {
-      handleError(err, { resource: "Schedule", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Schedule",
+        identifier: id,
+        listCommand: "ixora schedules list",
+        ...urlContext(cmd),
+      });
     }
   });
 
@@ -320,7 +355,12 @@ schedulesCommand
       await client.schedules.enable(id);
       writeSuccess("Schedule resumed.");
     } catch (err) {
-      handleError(err, { resource: "Schedule", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Schedule",
+        identifier: id,
+        listCommand: "ixora schedules list",
+        ...urlContext(cmd),
+      });
     }
   });
 
@@ -377,7 +417,12 @@ schedulesCommand
         },
       );
     } catch (err) {
-      handleError(err, { resource: "Schedule", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Schedule",
+        identifier: id,
+        listCommand: "ixora schedules list",
+        ...urlContext(cmd),
+      });
     }
   });
 
@@ -448,9 +493,18 @@ schedulesCommand
   .command("trigger")
   .argument("<id>", "Schedule ID")
   .description("Manually trigger a schedule run now")
+  .option(
+    "--dry-run",
+    "Verify the schedule exists and emit the plan as JSON without triggering",
+  )
   .action(async (id: string, _options, cmd) => {
     try {
       const client = getClient(cmd);
+      if (isDryRun(cmd)) {
+        await client.schedules.get(id);
+        emitDryRunPlan({ action: "schedules.trigger", target: id });
+        return;
+      }
       const result = await client.schedules.trigger(id);
 
       const format = getOutputFormat(cmd);
@@ -491,6 +545,11 @@ schedulesCommand
       );
       writeSuccess("Schedule triggered.");
     } catch (err) {
-      handleError(err, { resource: "Schedule", url: getBaseUrl(cmd) });
+      handleError(err, {
+        resource: "Schedule",
+        identifier: id,
+        listCommand: "ixora schedules list",
+        ...urlContext(cmd),
+      });
     }
   });

@@ -5,7 +5,8 @@ Manage and execute workflows — multi-step pipelines that may include determini
 ```bash
 ixora workflows list
 ixora workflows get <workflow_id>
-ixora workflows run <workflow_id> "<message>"
+ixora workflows run <workflow_id> "<message>" [--background] [--bypass-confirmations]
+ixora workflows runs [<run_id>] [--watch]
 ixora workflows continue <workflow_id> <run_id> "<message>"
 ixora workflows resume <workflow_id> <run_id>
 ixora workflows cancel <workflow_id> <run_id>
@@ -48,15 +49,35 @@ Default fields: `ID`, `Name`, `Description`, `Steps` (count), `Workflow Agent` (
 ixora workflows run security-assessment "audit production"
 ixora workflows run security-assessment "..." --stream
 ixora workflows run security-assessment "..." --session-id audit_2026_05
+ixora workflows run security-assessment "..." --background --bypass-confirmations
 ```
 
 | Flag | Effect |
 |---|---|
 | `--stream` | Stream the response via SSE. |
+| `--background` | Dispatch server-side and return immediately with `{run_id, session_id, status}`; poll later with `workflows runs`. Requires a database. Mutually exclusive with `--stream`. |
+| `--bypass-confirmations` | Auto-approve tool calls that require confirmation. On a `--background` run the intent is honored by `workflows runs --watch`. |
 | `--session-id <id>` | Continue an existing session. |
 | `--user-id <id>` | Tag with a user identifier. |
 
 Workflows often emit a structured per-step result. With `--stream`, each step's progress arrives as it happens.
+
+---
+
+## `runs [<run_id>]`
+
+List background workflow runs, or poll/watch one — identical mechanics to
+[`agents runs`](agents.md#runs-run_id).
+
+```bash
+ixora workflows runs                    # list background workflow runs
+ixora workflows runs <run_id>           # poll one
+ixora workflows runs <run_id> --watch   # poll until terminal
+```
+
+Background runs are tracked at `~/.ixora/agentos-background-runs/<run_id>.json`
+(7-day TTL). See [`agents runs`](agents.md#runs-run_id) for flags, exit codes,
+and the `nohup` watch recipe.
 
 ---
 

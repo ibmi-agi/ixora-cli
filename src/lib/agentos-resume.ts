@@ -1,13 +1,10 @@
 import { AgentStream, type AgentOSClient } from "@worksofadam/agentos-sdk";
+import { PATH_PREFIX } from "./agentos-background.js";
 import type { ResourceType } from "./agentos-stream.js";
 
-// Build the resume-stream endpoint path for the requested resource type.
-// Mirrors the FastAPI routes: /{plural}/{id}/runs/{run_id}/resume
-const PATH_PREFIX: Record<ResourceType, string> = {
-  agent: "agents",
-  team: "teams",
-  workflow: "workflows",
-};
+// PATH_PREFIX maps a ResourceType to its REST path segment — shared with the
+// background-run helpers. Resume endpoint mirrors the FastAPI route:
+// /{plural}/{id}/runs/{run_id}/resume
 
 export interface ResumeStreamOptions {
   /** Index of the last SSE event the client received (0-based). Omit to replay from the start. */
