@@ -5,7 +5,8 @@ Manage and execute teams — coordinated groups of agents.
 ```bash
 ixora teams list
 ixora teams get <team_id>
-ixora teams run <team_id> "<message>"
+ixora teams run <team_id> "<message>" [--background] [--bypass-confirmations]
+ixora teams runs [<run_id>] [--watch]
 ixora teams continue <team_id> <run_id> "<message>"
 ixora teams resume <team_id> <run_id>
 ixora teams cancel <team_id> <run_id>
@@ -48,13 +49,33 @@ Default fields: `ID`, `Name`, `Mode`, `Description`, `Model`.
 ixora teams run security-team "audit job log volumes on QSYS"
 ixora teams run security-team "..." --stream
 ixora teams run security-team "..." --session-id chat_abc --user-id alice
+ixora teams run security-team "..." --background --bypass-confirmations
 ```
 
 | Flag | Effect |
 |---|---|
 | `--stream` | Stream the response via SSE |
+| `--background` | Dispatch server-side and return immediately with `{run_id, session_id, status}`; poll later with `teams runs`. Requires a database. Mutually exclusive with `--stream`. |
+| `--bypass-confirmations` | Auto-approve tool calls that require confirmation. On a `--background` run the intent is honored by `teams runs --watch`. |
 | `--session-id <id>` | Continue an existing session |
 | `--user-id <id>` | Tag the run with a user identifier |
+
+---
+
+## `runs [<run_id>]`
+
+List background team runs, or poll/watch one — identical mechanics to
+[`agents runs`](agents.md#runs-run_id).
+
+```bash
+ixora teams runs                      # list background team runs
+ixora teams runs <run_id>             # poll one
+ixora teams runs <run_id> --watch     # poll until terminal
+```
+
+Background runs are tracked at `~/.ixora/agentos-background-runs/<run_id>.json`
+(7-day TTL). See [`agents runs`](agents.md#runs-run_id) for flags, exit codes,
+and the `nohup` watch recipe.
 
 ---
 

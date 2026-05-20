@@ -5,7 +5,9 @@ Manage and execute agents on the targeted AgentOS.
 ```bash
 ixora agents list
 ixora agents get <agent_id>
-ixora agents run <agent_id> "<message>" [--interactive]
+ixora agents run <agent_id> "<message>" [--interactive | --bypass-confirmations]
+ixora agents run <agent_id> "<message>" --background [--bypass-confirmations]
+ixora agents runs [<run_id>] [--watch]
 ixora agents continue <run_id> [--confirm | --reject [note] | <tool_results>]
 ixora agents continue <agent_id> <run_id> [<tool_results>]   # legacy 2-arg form
 ixora agents pending [<run_id>]
@@ -58,11 +60,15 @@ ixora agents run sql-agent "list the 10 largest tables in QSYS2"
 ixora agents run sql-agent "..." --stream
 ixora agents run sql-agent "..." --session-id chat_abc --user-id alice
 ixora agents run sql-agent "..." -o compact
+ixora agents run sql-agent "..." --background                    # fire-and-forget
+ixora agents run sql-agent "..." --background --bypass-confirmations
 ```
 
 | Flag | Effect |
 |---|---|
 | `--stream` | Stream the response via SSE (real-time tokens, tool calls, etc.) |
+| `--background` | Dispatch the run server-side and return immediately with `{run_id, session_id, status}`. Fire-and-forget — poll it later with [`agents runs`](#runs-run_id). Requires a database on the agent. Mutually exclusive with `--stream`. |
+| `--bypass-confirmations` | Auto-approve any tool call that requires confirmation, so the run never stalls. On a foreground run the CLI drives it to completion inline; on a `--background` run the intent is recorded and honored by `agents runs --watch`. Cannot be combined with `--interactive`. |
 | `-i`, `--interactive` | When the run pauses, prompt **inline** for approve/reject instead of bouncing to a separate `agents continue` invocation. Requires `--stream` and a TTY. |
 | `--session-id <id>` | Continue an existing session (preserves conversation state) |
 | `--user-id <id>` | Tag the run with a user identifier |
@@ -114,6 +120,63 @@ ixora agents continue <run_id> --reject "be more selective"
 ```
 
 See `continue` and `pending` below.
+
+---
+
+## `runs [<run_id>]`
+
+List background runs, or poll/watch one. A background run is one started with
+`agents run … --background`: it executes server-side and is tracked locally at
+`~/.ixora/agentos-background-runs/<run_id>.json` (7-day TTL) so every follow-up
+command takes just the `run_id`.
+
+```bash
+ixora agents runs                       # list this machine's background runs
+ixora agents runs <run_id>              # poll one run's status + result
+ixora agents runs <run_id> --watch      # poll until the run reaches a terminal status
+```
+
+| Flag | Effect |
+|---|---|
+| `--watch` | Poll every few seconds until the run finishes (or pauses). If the run was created with `--bypass-confirmations`, `--watch` auto-approves each pause and drives it to completion. |
+| `--status <status>` | List mode only — filter by status. |
+| `--interval <seconds>` | `--watch` poll interval (default `3`). |
+| `--session-id <id>` | Session ID override (when the cached run has none). |
+
+List output columns: `RUN ID`, `RESOURCE`, `STATUS`, `AGE`, `PROMPT`. The list
+reads the local cache only — run a poll for fresh server status.
+
+### Exit codes (poll / `--watch`)
+
+| Code | Status | Meaning |
+|---|---|---|
+| `0` | `COMPLETED` / `RUNNING` / `PENDING` | Run is healthy — a plain poll of an in-progress run is not an error. |
+| `2` | `ERROR` / `FAILED` | The run failed. |
+| `1` | `CANCELLED` | The run was cancelled. |
+| `4` | `PAUSED` | The run is awaiting tool confirmation. |
+
+### Driving a paused background run
+
+A fire-and-forget run that pauses for a tool confirmation cannot self-resume —
+nothing is connected to it. `agents runs --watch` is the driver.
+
+Whether `--watch` auto-approves depends on how the run was **started**:
+`--bypass-confirmations` is a creation-time flag on `run`; `--watch` honors it
+but cannot set it.
+
+```bash
+# Run created WITH --bypass-confirmations → --watch auto-approves every pause
+ixora agents run <agent_id> "<task>" --background --bypass-confirmations
+ixora agents runs <run_id> --watch
+
+# Background the watcher with the shell — the CLI does not fork one for you
+nohup ixora agents runs <run_id> --watch > <run_id>.log 2>&1 &
+```
+
+If the run was created **without** `--bypass-confirmations`, `--watch` stops at
+the first pause (exit 4); a plain poll records the pending tools to the
+paused-run cache so you can resolve them per-tool with
+`agents continue <run_id> --confirm`.
 
 ---
 
@@ -226,6 +289,30 @@ Cancellation is a request — the server stops emitting new events and marks the
 ---
 
 ## Examples
+
+### Run an agent in the background, then collect the result
+
+```bash
+ixora agents run sql-agent "audit DB2 table permissions" --background
+# → { "run_id": "run-7f3a", "session_id": "sess-91", "status": "PENDING" }
+
+ixora agents runs                       # list background runs
+ixora agents runs run-7f3a              # poll one
+ixora agents runs run-7f3a --watch      # block until terminal, then print the result
+```
+
+### Unattended background run (auto-approve tool confirmations)
+
+```bash
+# --bypass-confirmations is set once, at run creation
+ixora agents run sql-agent "drop the temp_* tables" --background --bypass-confirmations
+# → { "run_id": "run-c2d8", ... }
+
+# Background the watcher with the shell; it auto-confirms every pause
+# because the run was created with --bypass-confirmations:
+nohup ixora agents runs run-c2d8 --watch > run-c2d8.log 2>&1 &
+tail -f run-c2d8.log
+```
 
 ### Capture a run ID for follow-up calls
 
