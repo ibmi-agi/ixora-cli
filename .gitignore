@@ -3,3 +3,8 @@ dist/
 *.tgz
 .DS_Store
 .claude/
+
+# Python tooling artifacts from the bundled build-ibmi-agent skill script
+__pycache__/
+*.pyc
+.ruff_cache/
