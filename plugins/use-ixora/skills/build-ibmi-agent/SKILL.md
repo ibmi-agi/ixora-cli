@@ -20,36 +20,37 @@ Build a custom IBM i agent the way Ixora's in-app agent-builder agent does, but 
 
 The bundled `scripts/agent_builder.py` (`$AB` below) handles the fragile parts — schema validation, the components config contract, and the API calls — so your work is the IBM i design and the confirmations.
 
-## Two CLIs — keep them straight
+## Tooling — keep them straight
 
 | Tool | Role | How you call it |
 |---|---|---|
-| **`ixora`** | platform CLI — stack status, `--db-id` (`ixora status`), and `components`/`agents`/`traces` for verify & run | `ixora …` (host) |
-| **container `ibmi`** | query the IBM i system while designing tools (schemas/tables/columns/validate/sql) | `uv run "$AB" ibmi --system <id> -- …` |
-| **`$AB`** | this script — validate YAML, register/update agents, and the `ibmi` passthrough | `uv run "$AB" <sub> …` |
+| **`ixora`** | host platform CLI — `ixora status` (the `--db-id` source), plus `components` / `agents` / `traces` to verify & run | `ixora …` (host) |
+| **`$AB`** | this script — validate YAML, register/update agents, and the container-`ibmi` passthrough | `uv run "$AB" <sub> …` |
 
-**Reach IBM i through `$AB ibmi`, never the host `ibmi`.** The host `ibmi` has its own `~/.ibmi` registry, independent of Ixora and possibly a different box. `$AB ibmi` execs the `ibmi` binary *inside the stack's `api-<id>` container*, which uses the creds Ixora deploys with — so what you introspect is what the agent queries at run time. (Container `ibmi` exists for **managed** systems only.)
+`$AB`'s `ibmi` subcommand (`uv run "$AB" ibmi --system <id> -- …`) is how you query the IBM i while designing tools — **not a third CLI**: it execs the `ibmi` binary *inside the stack's `api-<id>` container*, which uses the creds Ixora deploys with, so what you introspect is what the agent queries at run time. **Never the host `ibmi`** — its `~/.ibmi` registry is independent of Ixora and may point at a different box. (Container `ibmi` is **managed**-systems only; for external systems introspect via that AgentOS's own agents, or build toolset-only.)
 
 ## Preflight
 
-`scripts/agent_builder.py` sits beside this SKILL.md. Resolve its **absolute path** from where this skill lives and use it as `$AB` — shells don't carry variables between commands, so re-assign `AB=…` per command or paste the path.
+`$AB` is `scripts/agent_builder.py` inside **this skill's own directory** — the folder you loaded this SKILL.md from. You already know that absolute path; set `AB` to `<that dir>/scripts/agent_builder.py`. Re-assign it per command (shell state doesn't persist between calls).
 
 ```bash
-AB="/absolute/path/to/build-ibmi-agent/scripts/agent_builder.py"
-command -v uv || command -v python3        # uv preferred — auto-installs the script's deps
-ixora stack status                         # a stack must be running
-uv run "$AB" --help                        # see every subcommand (then <sub> --help for its flags)
-uv run "$AB" resolve --system <id>         # endpoint, user_tools dir, ibmi_via hint
+ixora stack system list               # <id> below = a configured system id (omit --system when only one managed system exists)
+AB="<this skill's dir>/scripts/agent_builder.py"   # the directory you loaded SKILL.md from
+ls "$AB" || echo "not found"          # missing? the skill isn't fully installed — say so and stop
+command -v uv || command -v python3   # uv preferred — auto-installs the script's deps (pyyaml, jsonschema) via its PEP 723 header
+ixora stack status                    # a stack must be running
+uv run "$AB" --help                   # every subcommand (then `<sub> --help` for its flags)
+uv run "$AB" resolve --system <id>    # confirm endpoint, user_tools dir, ibmi_via hint before mutating
 ```
 
-`uv run` auto-installs the deps (`pyyaml`, `jsonschema`) via the script's PEP 723 header; with plain `python3`, `pip install pyyaml jsonschema` first. Can't locate the script? The skill isn't fully installed — say so and stop.
+With plain `python3` instead of `uv`, `pip install pyyaml jsonschema` first.
 
 ## Build an agent
 
 Design the tools, then fill the config. **Confirm with the user before writing the YAML, and again before registering.**
 
-1. **Clarify** what the agent does and which data it needs. (No custom SQL — only curated toolsets? Skip to step 4 for a toolset-only agent.)
-2. **Introspect** the real schema through the container `ibmi` — don't guess names (`--raw` for JSON):
+1. **Clarify** what the agent does and which data it needs. (No custom SQL — only curated toolsets? Skip steps 2–3; in step 5 add `--toolsets a,b` and no `tools.yaml`.)
+2. **Introspect** the real schema through `$AB ibmi` — don't guess names (append `--raw` to the ibmi args for JSON):
    ```bash
    uv run "$AB" ibmi --system <id> -- schemas
    uv run "$AB" ibmi --system <id> -- tables <SCHEMA>
@@ -60,39 +61,41 @@ Design the tools, then fill the config. **Confirm with the user before writing t
    ```bash
    uv run "$AB" create-tool-yaml --agent-id <agent-id> --yaml-file ./tools.yaml --system <id>
    ```
-   Schema + the gotchas the validator catches: [`references/tool-yaml.md`](references/tool-yaml.md).
-4. **Write the instructions, then assemble the config.** Co-locate the instructions with the agent's tools: `~/.ixora/user_tools/<agent-id>/instructions.md` (the per-agent folder `create-tool-yaml` already creates; `mkdir -p` it for a toolset-only agent). Tell the agent to *prefer its named tools, fall back to `validate_and_run_sql`*. Then gather `--model` (default `anthropic:claude-sonnet-4-6`) and `--db-id` (`ixora status --system <id> --json | jq -r '.databases[]?'`). Before setting anything past the basics (history, memory, session state, overrides), read [`references/agent-config.md`](references/agent-config.md) — field meanings + the owned-keys contract.
-5. **Show the full config, get explicit confirmation, then register:**
+   Shape + the gotchas the validator catches: [`references/tool-yaml.md`](references/tool-yaml.md).
+4. **Write the instructions, then assemble the config.** Co-locate instructions with the tools at `~/.ixora/user_tools/<agent-id>/instructions.md` — `mkdir -p` the folder first (`create-tool-yaml` makes it for a SQL-tool agent, but a toolset-only or external/`--url` agent has none yet). Tell the new agent to *prefer its named YAML tools, fall back to `validate_and_run_sql`*. Capture the registry db id (re-run per Bash call — shell state doesn't persist):
    ```bash
-   uv run "$AB" register --agent-id <agent-id> --name "<Name>" --description "<…>" \
-     --instructions-file ~/.ixora/user_tools/<agent-id>/instructions.md --db-id "$DB_ID" --system <id>
+   DB_ID=$(ixora status --system <id> --json | jq -r '.databases[]?' | head -1)
+   ```
+   Before setting anything past the basics (history, memory, session state, overrides), read [`references/agent-config.md`](references/agent-config.md) — field meanings + the owned-keys contract.
+5. **Show the full config, get explicit confirmation, then register.** `agent_id` is what you choose; `register` returns a server-assigned `component_id` (prefixed by your `agent_id`) in its JSON envelope — that is the runnable handle. Capture it:
+   ```bash
+   CID=$(uv run "$AB" register --agent-id <agent-id> --name "<Name>" --description "<…>" \
+     --instructions-file ~/.ixora/user_tools/<agent-id>/instructions.md \
+     --db-id "$DB_ID" --system <id> [--toolsets a,b] [--model anthropic:claude-sonnet-4-6] | jq -r .component_id)
    ```
 
 ### Verify
 ```bash
 ixora components list --system <id>
-RID=$(ixora agents run "<component_id>" "<a real question>" --bypass-confirmations --json | jq -r .run_id)
-ixora traces get "$RID"          # did the right tools fire?
+RID=$(ixora agents run "$CID" "<a real question>" --bypass-confirmations --json | jq -r .run_id)
+ixora traces get "$RID"          # span tree = ground truth: did the right tools fire?
 ```
+`--bypass-confirmations` is required — the SQL tools gate on confirmation, so a run otherwise pauses (exit 4) instead of finishing.
 
 ## Update / improve
 
-- **Edit a field or toolset:** edit `~/.ixora/user_tools/<agent-id>/instructions.md`, then `uv run "$AB" update <component_id> --agent-id <id> --instructions-file ~/.ixora/user_tools/<agent-id>/instructions.md --system <id>` (or `update-scope … --toolsets a,b`). New config version, no restart; the tool list is never touched. Contract in [`references/agent-config.md`](references/agent-config.md).
-- **Harden it:** the probe → judge → fix loop in [`references/hardening.md`](references/hardening.md) — load it when the user wants the agent tested or improved.
+An agent's editable source is `~/.ixora/user_tools/<agent_id>/` — `tools.yaml` + `instructions.md` together. Only builder-made (DB-backed) agents are editable; find them with `uv run "$AB" list` (agent_ids that have a local `tools.yaml`) or `ixora components list` (the `component_id` you pass below — built-in registry agents have no editable config).
 
-Only builder-made (DB-backed) agents are editable — find them with `uv run "$AB" list` or `ixora components list`.
+- **Edit a field or toolset:** edit `~/.ixora/user_tools/<agent-id>/instructions.md`, then `uv run "$AB" update "$CID" --agent-id <id> --instructions-file …/instructions.md --system <id>` (or `update-scope "$CID" … --toolsets a,b`). New config version, no restart; the tool list is never touched. Contract in [`references/agent-config.md`](references/agent-config.md).
+- **Harden it:** the probe → judge → fix loop in [`references/hardening.md`](references/hardening.md) — load it when the user wants the agent tested or improved.
 
 ## Script subcommands
 
 `uv run "$AB" <sub>` prints a JSON envelope and exits 0/1: `resolve` · `ibmi` (container passthrough) · `create-tool-yaml` · `register` · `update` · `update-scope` · `list`. Run `uv run "$AB" --help` for the list and `uv run "$AB" <sub> --help` for a subcommand's exact flags — prefer that over inferring flags from this doc. Target with `--system <id>` or `--url`; resolution details in [`references/endpoint-resolution.md`](references/endpoint-resolution.md).
 
+The `ixora …` commands above are the **host platform CLI** (not `$AB`); confirm exact names/flags with `ixora --help` / `ixora <group> --help` if one errors. Note `ixora status` (AgentOS JSON config — has `.databases` for `--db-id`) is a different command from `ixora stack status` (local compose liveness).
+
 ## Gotchas
 
-- **Never the host `ibmi`** — go through `$AB ibmi` so introspection hits the stack's IBM i box (see Two CLIs). It's managed-systems only; for external systems, introspect via that AgentOS's own agents or build toolset-only.
-- **`tools` / `dependencies` / `db` are owned by the script** — the rehydration contract the Ixora app relies on. Don't hand-write them; passing them via `config_overrides` strips them (`stripped_overrides`).
-- **`stage: draft` agents aren't served** until published — they won't appear in `ixora agents list`.
-- **External / `--url` systems can't auto-write `tools.yaml`** (host path unknown) — pass `--user-tools-dir`, deliver it out-of-band, or go toolset-only.
-- **`--bypass-confirmations` is required when probing** — the SQL tools gate on confirmation, so a run otherwise pauses (exit 4) instead of finishing.
-- **`agent_id` must be unique on the host** — it's the `tools.yaml` dir and the component-id prefix; `user_tools/` is shared across managed systems.
-- **An agent's editable source is `~/.ixora/user_tools/<agent_id>/`** — `tools.yaml` + `instructions.md` together. `register`/`update` copy the instructions into the component config (the runtime source of truth); the `.md` rides along in the bind-mount but the container only reads `tools.yaml`.
-- **If a registered agent won't run,** suspect contract drift between `$AB` / `assets/sql-tools-config.schema.json` and `ixora/agents/tools/builder.py`: diff a skill-built config (`ixora components get`) against one from the in-app builder. See [`assets/SOURCES.md`](assets/SOURCES.md).
+- **`tools` / `dependencies` / `db` are owned by the script** — the rehydration contract the Ixora app relies on. Don't hand-write them; passing them via `config_overrides` strips them (reported as `stripped_overrides`).
+- **If a registered agent won't run,** suspect contract drift between `$AB` / `assets/sql-tools-config.schema.json` and `ixora/agents/tools/builder.py`: diff a skill-built config (`ixora components get`) against one from the in-app agent-builder agent. See [`assets/SOURCES.md`](assets/SOURCES.md).

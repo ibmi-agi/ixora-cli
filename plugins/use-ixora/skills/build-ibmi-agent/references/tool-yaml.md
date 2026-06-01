@@ -4,8 +4,6 @@
 
 A builder-made agent's custom SQL tools live in one `tools.yaml`: named, parameterized, **read-only** statements the agent calls by name. The agent always also has the fixed IBM i CLI toolkit (`validate_and_run_sql`, `list_schemas`, …; see [`agent-config.md`](agent-config.md)), so `tools.yaml` is for the *domain* queries.
 
-`$AB` is the absolute path to `agent_builder.py` (see [SKILL.md](../SKILL.md#preflight)).
-
 ## Shape
 
 ```yaml
@@ -24,10 +22,11 @@ tools:
       readOnly: true
 ```
 
-You don't write `sources:` — `create-tool-yaml` injects a default block (`${DB2i_HOST}` etc., expanded by the stack at run time) when it's absent.
+You don't write the top-level `sources:` block — `create-tool-yaml` injects a default one (`${DB2i_HOST}` etc., expanded by the stack at run time) when it's absent.
 
 ## Gotchas the validator catches
 
+- **`source: default` is a REQUIRED per-tool key** — distinct from the top-level `sources:` block you don't write. Every tool must set `source`; `default` points at the auto-injected block.
 - **`parameters` is a LIST of objects**, not a mapping; each needs at least `name` + `type`.
 - **Numeric bounds are `min`/`max`** — not `minimum`/`maximum`.
 - **String/array bounds are `minLength`/`maxLength`** (camelCase — yes, inconsistent with `min`/`max`).

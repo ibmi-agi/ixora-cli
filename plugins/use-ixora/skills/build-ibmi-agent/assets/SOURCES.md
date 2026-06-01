@@ -20,6 +20,6 @@ To confirm the schema snapshot is current:
 diff sql-tools-config.schema.json /path/to/ixora/tools/sql-tools-config.schema.json
 ```
 
-The end-to-end **parity check** in `../SKILL.md` (register one agent via this skill and
-one via the in-app `ibmi-agent-builder` agent, then diff the stored configs) is the live
-guard against the `agent_builder.py` contract drifting from `builder.py`.
+`../SKILL.md`'s **contract-drift diagnostic** (the last Gotcha — diff a skill-built config
+via `ixora components get` against one from the in-app agent-builder agent, Ixora's
+`AgentBuilderTools`) is the live guard against `agent_builder.py` drifting from `builder.py`.

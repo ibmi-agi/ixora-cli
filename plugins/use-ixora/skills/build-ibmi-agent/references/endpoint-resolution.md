@@ -2,8 +2,6 @@
 
 > `agent_builder.py` resolves which AgentOS to talk to (and where to write `tools.yaml`) from `~/.ixora/ixora-systems.yaml` + `.env`, mirroring `ixora-cli/src/lib/agentos-resolver.ts` — so it targets the same system your `ixora` commands do. Check a selection before mutating: `uv run "$AB" resolve --system <id>`.
 
-`$AB` is the absolute path to `agent_builder.py` (see [SKILL.md](../SKILL.md#preflight)).
-
 ## Which endpoint
 
 | Inputs | Outcome |
@@ -23,6 +21,8 @@
 ## Container `ibmi` (introspection)
 
 `uv run "$AB" ibmi --system <id> -- <args>` execs the `ibmi` binary inside the managed system's `api-<id>` container (via `docker`/`podman compose`, auto-detected; override with `--compose-cmd`). It connects through the container's `IBMI_*` env — the creds Ixora deploys with — so introspection matches run time. **Managed only**; for external systems it errors (no local container). `resolve` shows `ibmi_via` for managed systems.
+
+**Flag ordering:** target flags (`--system` / `--url` / `--key` / `--timeout`) go **before** the `--`; everything after `--` is passed verbatim to the container `ibmi`. Append `--raw` there for JSON, e.g. `uv run "$AB" ibmi --system <id> -- tables <SCHEMA> --raw` (that's the container ibmi's JSON flag, distinct from `ixora`'s `--json`). A `--system` placed *after* `--` is swallowed into the ibmi args and silently ignored.
 
 ## Where `tools.yaml` is written
 

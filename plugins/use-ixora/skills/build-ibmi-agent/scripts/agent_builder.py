@@ -11,7 +11,7 @@ This is the self-contained, host-side counterpart of Ixora's in-app agent-builde
 agent. It does exactly what `ixora/agents/tools/builder.py` (the `AgentBuilderTools`
 toolkit) does — writes a SQL-tool YAML to the stack's user_tools dir and creates /
 updates an agent **component** via the AgentOS components API — but driven by a coding
-agent (Claude Code) instead of a chat agent inside the stack.
+agent instead of a chat agent inside the stack.
 
 CONTRACT — keep in sync with `ixora/agents/tools/builder.py`:
   * `_IBMI_CLI_TOOLS` (the rehydration tool list — order & contents are load-bearing),
@@ -164,12 +164,29 @@ def _api_port_base(ixora_dir: Path) -> int:
     try:
         n = int(raw)
     except ValueError:
+        sys.stderr.write(
+            f"WARNING: IXORA_API_PORT={raw!r} is not an integer; "
+            f"using {_DEFAULT_API_PORT}.\n"
+        )
         return _DEFAULT_API_PORT
-    return n if 1024 <= n <= 65535 else _DEFAULT_API_PORT
+    if 1024 <= n <= 65535:
+        return n
+    sys.stderr.write(
+        f"WARNING: IXORA_API_PORT={n} out of range (1024-65535); "
+        f"using {_DEFAULT_API_PORT}.\n"
+    )
+    return _DEFAULT_API_PORT
 
 
 def _read_systems(ixora_dir: Path) -> list[dict[str, str]]:
-    """Parse ~/.ixora/ixora-systems.yaml the same line-oriented way the CLI does."""
+    """Parse ~/.ixora/ixora-systems.yaml the same line-oriented way the CLI does.
+
+    Intentionally mirrors ixora-cli/src/lib/systems.ts, which also *writes* this file
+    with fixed 2/4-space indent and single-quote escaping. Do NOT "fix" this into
+    yaml.safe_load — yaml accepts double-quoted / flow / anchor forms the TS reader
+    rejects, which would diverge resolution from the file's own writer. Hand-edits
+    must use exactly that 2/4-space-indent, single-quoted format.
+    """
     cfg = ixora_dir / "ixora-systems.yaml"
     if not cfg.is_file():
         return []
@@ -274,7 +291,8 @@ def _resolve_target(args: argparse.Namespace) -> Target:
     system isn't running, the HTTP call surfaces a clean connection error instead.
     """
     ixora_dir = _ixora_dir(args)
-    timeout = int(getattr(args, "timeout", None) or 30)
+    # 60s matches agentos-resolver.ts DEFAULT_TIMEOUT_SECONDS.
+    timeout = int(getattr(args, "timeout", None) or 60)
     key_flag = getattr(args, "key", None)
     user_tools_override = getattr(args, "user_tools_dir", None)
 
@@ -364,16 +382,34 @@ def _http(method: str, url: str, key: str | None, body: Any, timeout: int) -> An
 # ---------------------------------------------------------------------------
 
 _SCHEMA_PATH = (
-    Path(__file__).resolve().parent.parent / "assets" / ("sql-tools-config.schema.json")
+    Path(__file__).resolve().parent.parent / "assets" / "sql-tools-config.schema.json"
 )
-_TOOLS_SCHEMA: dict[str, Any] = (
-    json.loads(_SCHEMA_PATH.read_text()) if _SCHEMA_PATH.is_file() else {}
-)
+
+
+def _load_schema() -> dict[str, Any]:
+    """Load the bundled SQL-tools schema; degrade to {} on any read/parse error.
+
+    A corrupt/truncated snapshot must NOT crash every subcommand at import time — a
+    missing-or-broken schema degrades to skip+warn (see _validate_tools_yaml), the
+    same graceful path builder.py takes for a missing schema.
+    """
+    try:
+        return json.loads(_SCHEMA_PATH.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+_TOOLS_SCHEMA: dict[str, Any] = _load_schema()
+
+
+def _schema_available() -> bool:
+    """True when create-tool-yaml can actually validate (schema + jsonschema present)."""
+    return bool(_TOOLS_SCHEMA) and jsonschema is not None
 
 
 def _validate_tools_yaml(data: dict[str, Any]) -> list[str]:
     """Validate against the bundled SQL-tools JSON Schema. Empty list == valid."""
-    if not _TOOLS_SCHEMA or jsonschema is None:
+    if not _TOOLS_SCHEMA or jsonschema is None:  # same condition as _schema_available()
         sys.stderr.write(
             "WARNING: schema validation skipped (schema or jsonschema unavailable).\n"
         )
@@ -512,6 +548,58 @@ def _split_toolsets(raw: str | None) -> list[str] | None:
     return [t.strip() for t in raw.split(",") if t.strip()]
 
 
+def _known_db_ids(target: Target) -> list[str] | None:
+    """Best-effort: the database ids /config advertises (the endpoint `ixora status`
+    reads). None if unreachable or the shape is unexpected — the caller then skips
+    the check rather than blocking on a transient or schema-drift issue.
+    """
+    try:
+        cfg = _http(
+            "GET", f"{target.base_url}/config", target.key, None, target.timeout
+        )
+    except BuilderError:
+        return None
+    if not isinstance(cfg, dict):
+        return None
+    dbs = cfg.get("databases")
+    if isinstance(dbs, list) and all(isinstance(x, str) for x in dbs):
+        return dbs
+    return None
+
+
+def _check_db_id(target: Target, db_id: str) -> None:
+    """Hard-error if db_id isn't among the system's known database ids — parity with
+    builder.py, which validates against the live registry. Best-effort: an
+    unreachable / empty / unexpected /config warns and proceeds (the register/update
+    POST still surfaces a clean server error if the id is truly bad).
+    """
+    ids = _known_db_ids(target)
+    if not ids:  # None or empty -> can't meaningfully verify
+        sys.stderr.write(
+            "WARNING: could not verify --db-id against /config; proceeding.\n"
+        )
+        return
+    if db_id not in ids:
+        raise BuilderError(
+            f"db id {db_id!r} is not registered on this system. Available: "
+            f"{', '.join(ids)}. Get it from "
+            "`ixora status --system <id> --json | jq -r '.databases[]?'`."
+        )
+
+
+def _warn_unvalidated_toolsets(toolsets: list[str]) -> None:
+    """No AgentOS HTTP endpoint lists toolsets, so (unlike builder.py) this host-side
+    path can't validate them. Warn loudly so a typo doesn't silently register an agent
+    whose scope resolves to nothing at run time.
+    """
+    if toolsets:
+        sys.stderr.write(
+            f"WARNING: toolset names are NOT validated here ({', '.join(toolsets)}). "
+            "They must match the stack's toolset names exactly (see tools/toolsets.json "
+            "or the in-app builder) or the agent's scope resolves to nothing.\n"
+        )
+
+
 # ---------------------------------------------------------------------------
 # Subcommands
 # ---------------------------------------------------------------------------
@@ -561,6 +649,7 @@ def cmd_create_tool_yaml(args: argparse.Namespace) -> None:
                 else "emit-stdout requested",
                 "agent_id": args.agent_id,
                 "tools": tool_names,
+                "schema_validated": _schema_available(),
                 "yaml": rendered,
             }
         )
@@ -576,6 +665,7 @@ def cmd_create_tool_yaml(args: argparse.Namespace) -> None:
             "path": str(tool_file),
             "agent_id": args.agent_id,
             "tools": tool_names,
+            "schema_validated": _schema_available(),
         }
     )
 
@@ -604,6 +694,8 @@ def cmd_register(args: argparse.Namespace) -> None:
             raise BuilderError(f"{label} must be a JSON object.")
 
     toolsets = _split_toolsets(args.toolsets) or []
+    _warn_unvalidated_toolsets(toolsets)
+    _check_db_id(target, args.db_id)
     extra_tools, inventory = _read_agent_yaml_scope(
         target.user_tools_dir, args.agent_id
     )
@@ -691,6 +783,7 @@ def cmd_update_scope(args: argparse.Namespace) -> None:
     toolsets = _split_toolsets(args.toolsets)
     if toolsets is None:
         raise BuilderError("--toolsets is required for update-scope.")
+    _warn_unvalidated_toolsets(toolsets)
     extra_tools, inventory = _read_agent_yaml_scope(
         target.user_tools_dir, args.agent_id
     )
@@ -736,6 +829,7 @@ def cmd_update(args: argparse.Namespace) -> None:
     if args.model is not None:
         setk("model", _model_dict(args.model))
     if args.db_id is not None:
+        _check_db_id(target, args.db_id)
         setk("db", {"id": args.db_id})
 
     # §2–§5 knobs come through --options-json (only keys present are applied).
@@ -753,6 +847,7 @@ def cmd_update(args: argparse.Namespace) -> None:
 
     toolsets = _split_toolsets(args.toolsets)
     if toolsets is not None:
+        _warn_unvalidated_toolsets(toolsets)
         extra_tools, inventory = _read_agent_yaml_scope(
             target.user_tools_dir, args.agent_id
         )
@@ -865,6 +960,30 @@ def cmd_ibmi(args: argparse.Namespace) -> None:
                 "error": "no ibmi args given — e.g. `ibmi --system <id> -- schemas`.",
             }
         )
+    # argparse REMAINDER swallows everything after the first positional, so a target
+    # flag placed AFTER the `--` lands here and would silently mis-target resolution.
+    # Fail loudly instead — target flags must precede the `--`.
+    _target_flags = {
+        "--system",
+        "--url",
+        "--key",
+        "--timeout",
+        "--user-tools-dir",
+        "--ixora-dir",
+        "--compose-cmd",
+    }
+    leaked = [a for a in ibmi_args if a in _target_flags]
+    if leaked:
+        _emit(
+            {
+                "ok": False,
+                "error": (
+                    f"target flag(s) {leaked} appear after the '--' and would be passed "
+                    "to the container ibmi (silently mis-targeting resolution). Put "
+                    "target flags BEFORE the '--': `ibmi --system <id> -- <ibmi args>`."
+                ),
+            }
+        )
     compose_cmd = _detect_compose_cmd(getattr(args, "compose_cmd", None))
     cmd = [
         *compose_cmd,
@@ -881,6 +1000,14 @@ def cmd_ibmi(args: argparse.Namespace) -> None:
     except FileNotFoundError as exc:
         _emit({"ok": False, "error": f"failed to run {compose_cmd[0]!r}: {exc}"})
         return  # unreachable: _emit raises — present so the type checker sees it
+    if proc.returncode != 0:
+        # Self-describe the layout assumptions (service name `api-<id>` + compose path
+        # track ixora-cli/src/lib/constants.ts) so a mismatch isn't an opaque error.
+        sys.stderr.write(
+            f"(container ibmi exited {proc.returncode}; ran in service "
+            f"'api-{target.system_id}' via {compose_file}. If that service is missing, "
+            "check `ixora stack status`.)\n"
+        )
     raise SystemExit(proc.returncode)
 
 
@@ -893,7 +1020,7 @@ def _add_target_flags(p: argparse.ArgumentParser) -> None:
     p.add_argument("--system", help="Target a configured system by id")
     p.add_argument("--url", help="Target this AgentOS URL directly (escape hatch)")
     p.add_argument("--key", help="Bearer key override (else SYSTEM_<ID>_AGENTOS_KEY)")
-    p.add_argument("--timeout", type=int, default=30, help="HTTP timeout (seconds)")
+    p.add_argument("--timeout", type=int, default=60, help="HTTP timeout (seconds)")
     p.add_argument(
         "--user-tools-dir",
         help="Override the host user_tools dir (required for external targets that "

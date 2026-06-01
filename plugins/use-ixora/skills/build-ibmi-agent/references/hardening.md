@@ -2,7 +2,7 @@
 
 > After registering, harden an agent autonomously: derive probes from its own instructions, run them against the live agent, judge from the trace, and apply **one** surgical edit per round. Borrowed from the workbench `ibmi-agent-builder` skill — it goes beyond what the in-app builder does.
 
-`$AB` is the script (see [SKILL.md](../SKILL.md#preflight)); `$ID` the `component_id`, `$AGENT` the `agent_id`.
+`$ID` is the `component_id`, `$AGENT` the `agent_id`, `$AB` the script (see [SKILL.md](../SKILL.md#preflight)). Every command below is `uv run "$AB" <sub> …`.
 
 ## 1. Probe (8–12, expected behavior noted for each)
 

@@ -2,8 +2,6 @@
 
 > `register` / `update` assemble a config dict and POST it to the AgentOS components API; the stack rebuilds a live `Agent` from it via `IxoraRegistry.rehydrate_function`. Some keys are a **byte-for-byte contract** (mirrored from `ixora/agents/tools/builder.py`) — the script owns them; don't hand-write them.
 
-`$AB` is the absolute path to `agent_builder.py` (see [SKILL.md](../SKILL.md#preflight)).
-
 ## The config the script assembles
 
 ```jsonc
@@ -41,7 +39,7 @@
 - `enable_agentic_memory` and `update_memory_on_run` are mutually exclusive (rejected if both set).
 - `session_state` / `metadata` / `config_overrides` are JSON **objects**.
 - `model` is `provider:model-id` (e.g. `anthropic:claude-sonnet-4-6`), never a bare name.
-- `stage: draft` saves but doesn't serve — won't show in `ixora agents list` until published.
+- **Stage:** `register`/`update` default to `--stage published` (served immediately). `--stage draft` saves without serving — a draft won't appear in `ixora agents list` (served agents only) though it does show in `ixora components list` (all components); re-run with `--stage published` to serve it.
 
 ## Register & update
 
