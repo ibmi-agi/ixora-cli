@@ -83,6 +83,13 @@ ixora traces get "$RID"          # span tree = ground truth: did the right tools
 ```
 `--bypass-confirmations` is required — the SQL tools gate on confirmation, so a run otherwise pauses (exit 4) instead of finishing.
 
+**Then hand the user 2–3 copy-paste commands to try the agent themselves** — inline the real `component_id` (not `$CID`, which only lives in this build shell) and write questions that each exercise a different tool, so the set demos the agent's range:
+```bash
+ixora agents run <component-id> "<question exercising one tool>" --bypass-confirmations
+ixora agents run <component-id> "<question exercising another tool>" --bypass-confirmations
+ixora agents run <component-id> "<a broader question spanning tools>" --bypass-confirmations
+```
+
 ## Update / improve
 
 An agent's editable source is `~/.ixora/user_tools/<agent_id>/` — `tools.yaml` + `instructions.md` together. Only builder-made (DB-backed) agents are editable; find them with `uv run "$AB" list` (agent_ids that have a local `tools.yaml`) or `ixora components list` (the `component_id` you pass below — built-in registry agents have no editable config).
