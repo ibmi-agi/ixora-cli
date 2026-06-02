@@ -26,6 +26,8 @@ You don't write the top-level `sources:` block — `create-tool-yaml` injects a 
 
 ## Gotchas the validator catches
 
+- **`tools:` is a MAPPING keyed by tool name** — `tools:` then `  my_tool:` then its keys; **not** a list of `- name: my_tool` items. (A list fails with the cryptic `… is not of type 'object'`.)
+- **The SQL field is `statement`** — not `sql`.
 - **`source: default` is a REQUIRED per-tool key** — distinct from the top-level `sources:` block you don't write. Every tool must set `source`; `default` points at the auto-injected block.
 - **`parameters` is a LIST of objects**, not a mapping; each needs at least `name` + `type`.
 - **Numeric bounds are `min`/`max`** — not `minimum`/`maximum`.

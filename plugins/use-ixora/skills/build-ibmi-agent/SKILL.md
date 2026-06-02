@@ -58,11 +58,16 @@ Design the tools, then fill the config. **Confirm with the user before writing t
    uv run "$AB" ibmi --system <id> -- schemas                 # only to discover an unknown schema (row-capped — filter via `sql` if missing)
    uv run "$AB" ibmi --system <id> -- validate "<candidate SQL>"
    ```
-3. **Design read-only, parameterized tools** (`:param`, `security.readOnly: true`), show the user a tool table, then **validate & write** — fix what it reports and re-run until it passes:
+3. **Design read-only, parameterized tools** (`:param`, `security.readOnly: true`), then **validate before you write**. Run *every* tool's exact `statement` through `$AB ibmi -- validate` (not just a probe query) and fix until each passes:
+   ```bash
+   uv run "$AB" ibmi --system <id> -- validate "<the tool's exact statement>"
+   ```
+   Show the user a tool table, then write + schema-validate the file — **`create-tool-yaml` must return `"ok": true` before you register**; fix what it reports and re-run until it does:
    ```bash
    uv run "$AB" create-tool-yaml --agent-id <agent-id> --yaml-file ./tools.yaml --system <id>
    ```
-   Shape + the gotchas the validator catches: [`references/tool-yaml.md`](references/tool-yaml.md).
+   **Shape (the validator is strict):** `tools:` is a **mapping keyed by tool name** (not a list); the SQL field is **`statement`** (not `sql`); every tool needs **`source: default`**. Full shape + gotchas: [`references/tool-yaml.md`](references/tool-yaml.md).
+   **Neither check executes the SQL** — `validate` and `create-tool-yaml` cover syntax, objects, and schema only, so parameter-marker / type errors (e.g. Db2 `SQL0418` from a bare `:param` in a select-list or expression) surface *only* at run time. The Verify run below is the real proof, not these.
 4. **Write the instructions, then assemble the config.** Co-locate instructions with the tools at `~/.ixora/user_tools/<agent-id>/instructions.md` — `mkdir -p` the folder first (`create-tool-yaml` makes it for a SQL-tool agent, but a toolset-only or external/`--url` agent has none yet). Tell the new agent to *prefer its named YAML tools, fall back to `validate_and_run_sql`*. Capture the registry db id (re-run per Bash call — shell state doesn't persist):
    ```bash
    DB_ID=$(ixora status --system <id> --json | jq -r '.databases[]?' | head -1)
