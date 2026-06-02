@@ -50,11 +50,12 @@ With plain `python3` instead of `uv`, `pip install pyyaml jsonschema` first.
 Design the tools, then fill the config. **Confirm with the user before writing the YAML, and again before registering.**
 
 1. **Clarify** what the agent does and which data it needs. (No custom SQL — only curated toolsets? Skip steps 2–3; in step 5 add `--toolsets a,b` and no `tools.yaml`.)
-2. **Introspect** the real schema through `$AB ibmi` — don't guess names (append `--raw` to the ibmi args for JSON):
+2. **Introspect** the real schema through `$AB ibmi` — don't guess names (append `--raw` to the ibmi args for JSON). **When the user already names the schema/library, start at `tables <SCHEMA>`** — skip `schemas` (it enumerates the whole system and is row-capped, so a named schema can fall off the page and look absent). **Unsure which subcommand exists? Run `-- --help` first** rather than guessing (e.g. ad-hoc SQL is `sql "<SELECT>"`, not `query`):
    ```bash
-   uv run "$AB" ibmi --system <id> -- schemas
-   uv run "$AB" ibmi --system <id> -- tables <SCHEMA>
+   uv run "$AB" ibmi --system <id> -- --help                  # the command surface — check it before guessing a subcommand
+   uv run "$AB" ibmi --system <id> -- tables <SCHEMA>         # start here when the user named the schema
    uv run "$AB" ibmi --system <id> -- columns <SCHEMA> <TABLE>
+   uv run "$AB" ibmi --system <id> -- schemas                 # only to discover an unknown schema (row-capped — filter via `sql` if missing)
    uv run "$AB" ibmi --system <id> -- validate "<candidate SQL>"
    ```
 3. **Design read-only, parameterized tools** (`:param`, `security.readOnly: true`), show the user a tool table, then **validate & write** — fix what it reports and re-run until it passes:
