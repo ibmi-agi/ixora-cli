@@ -1,7 +1,11 @@
+import { APIError } from "@worksofadam/agentos-sdk";
 import type { AgentOSClient, AgentStream } from "@worksofadam/agentos-sdk";
 import { select } from "@inquirer/prompts";
 import chalk from "chalk";
-import { Command } from "commander";
+import { Command, Option } from "commander";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { parse } from "yaml";
 import {
   getBaseUrl,
   getClient,
@@ -13,6 +17,7 @@ import {
   getOutputFormat,
   outputDetail,
   outputList,
+  printJson,
   writeError,
   writeSuccess,
   writeWarning,
@@ -621,6 +626,561 @@ agentsCommand
       });
     }
   });
+
+const STAGES = ["published", "draft"] as const;
+
+interface ApplyAgentResponse {
+  component_id: string;
+  stage: string;
+  version: number | null;
+  action: string;
+  config_keys?: string[];
+  stripped_overrides?: string[];
+  tools_written?: number;
+}
+
+interface FriendlySpec {
+  kind?: string;
+  id?: string | null;
+  name?: string;
+  description?: string;
+  model?: string;
+  db?: string | null;
+  stage?: string;
+  instructions?: string;
+  toolsets?: string[];
+  ibmiTools?: Record<string, unknown>[];
+  options?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+  mode?: string;
+  [key: string]: unknown;
+}
+
+agentsCommand
+  .command("create")
+  .description("Create a new agent from a manifest, stdin, or flags")
+  .option("-f, --file <file>", "Manifest YAML file (or '-' / stdin if piped)")
+  .option("--name <name>", "Display name")
+  .option("--id <id>", "Stable agent id (slug)")
+  .option("--model <provider:id>", "Model, e.g. anthropic:claude-sonnet-4-6")
+  .option("--instructions <text>", "System prompt / mission")
+  .option("--description <text>", "Description")
+  .option("--toolsets <a,b,c>", "Comma-separated curated toolset names")
+  .option(
+    "--ibmi-tools <path>",
+    "IBM i SQL tools YAML file (repeatable)",
+    collectPaths,
+    [],
+  )
+  .option("--db <id>", "Database id")
+  .addOption(new Option("--stage <stage>", "Component stage").choices(STAGES))
+  .addOption(new Option("--kind <kind>", "Component kind").choices(["Agent"]))
+  .option("--dry-run", "Emit the resolved spec as JSON without creating")
+  .action(async (options, cmd) => {
+    try {
+      const client = getClient(cmd);
+      const spec = await resolveSpec(cmd, options, { allowFlagsOnly: true });
+      if (spec === null) return;
+      spec.mode = "create";
+
+      if (isDryRun(cmd)) {
+        emitDryRunPlan({
+          action: "agents.create",
+          target: spec.id ?? spec.name,
+          payload: spec as Record<string, unknown>,
+        });
+        return;
+      }
+
+      try {
+        const response = await client.request<ApplyAgentResponse>(
+          "POST",
+          "/agents:apply",
+          {
+            // Raw object — the SDK's request() stringifies the body itself
+            // (passing a string double-encodes → server 422; see evals.ts).
+            body: spec as unknown as BodyInit,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+        reportApply(cmd, response);
+      } catch (err) {
+        if (err instanceof APIError && err.status === 409) {
+          const id = spec.id ?? spec.name ?? "";
+          writeError(
+            `Agent '${id}' already exists. Use \`ixora agents apply\` or \`ixora agents update\`.`,
+          );
+          process.exitCode = 1;
+          return;
+        }
+        throw err;
+      }
+    } catch (err) {
+      handleError(err, {
+        resource: "Agent",
+        listCommand: "ixora agents list",
+        ...urlContext(cmd),
+      });
+    }
+  });
+
+agentsCommand
+  .command("apply")
+  .description(
+    "Apply a manifest (upsert). Pass a directory to apply every *.agent.yaml",
+  )
+  .requiredOption("-f, --file <file|dir>", "Manifest file or directory")
+  .option("-R, --recursive", "Recurse into subdirectories (directory input)")
+  .option("--dry-run", "Emit the resolved spec(s) as JSON without applying")
+  .action(async (options, cmd) => {
+    try {
+      const client = getClient(cmd);
+      const filePath = String(options.file);
+
+      let isDir = false;
+      try {
+        isDir = statSync(filePath).isDirectory();
+      } catch {
+        writeError(`Manifest path not found: ${filePath}`);
+        process.exitCode = 1;
+        return;
+      }
+
+      if (!isDir) {
+        const spec = await resolveSpec(cmd, options, { allowFlagsOnly: false });
+        if (spec === null) return;
+        spec.mode = "apply";
+        if (isDryRun(cmd)) {
+          emitDryRunPlan({
+            action: "agents.apply",
+            target: spec.id ?? spec.name,
+            payload: spec as Record<string, unknown>,
+          });
+          return;
+        }
+        const response = await client.request<ApplyAgentResponse>(
+          "POST",
+          "/agents:apply",
+          {
+            // Raw object — the SDK's request() stringifies the body itself
+            // (passing a string double-encodes → server 422; see evals.ts).
+            body: spec as unknown as BodyInit,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+        reportApply(cmd, response);
+        return;
+      }
+
+      const files = listAgentManifests(filePath, Boolean(options.recursive));
+      if (files.length === 0) {
+        writeError(`No *.agent.yaml manifests found under ${filePath}`);
+        process.exitCode = 1;
+        return;
+      }
+
+      const results: ApplyAgentResponse[] = [];
+      for (const file of files) {
+        const spec = parseManifestFile(file);
+        if (spec === null) {
+          process.exitCode = 1;
+          return;
+        }
+        spec.mode = "apply";
+        if (isDryRun(cmd)) {
+          emitDryRunPlan({
+            action: "agents.apply",
+            target: spec.id ?? spec.name,
+            payload: spec as Record<string, unknown>,
+          });
+          continue;
+        }
+        const response = await client.request<ApplyAgentResponse>(
+          "POST",
+          "/agents:apply",
+          {
+            // Raw object — the SDK's request() stringifies the body itself
+            // (passing a string double-encodes → server 422; see evals.ts).
+            body: spec as unknown as BodyInit,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+        results.push(response);
+        if (getOutputFormat(cmd) !== "json") {
+          writeSuccess(applyLine(response));
+        }
+      }
+
+      if (isDryRun(cmd)) return;
+      if (getOutputFormat(cmd) === "json") {
+        printJson(results);
+        return;
+      }
+      writeSuccess(
+        `Applied ${results.length} manifest(s) from ${filePath}.`,
+      );
+    } catch (err) {
+      handleError(err, {
+        resource: "Agent",
+        listCommand: "ixora agents list",
+        ...urlContext(cmd),
+      });
+    }
+  });
+
+agentsCommand
+  .command("update")
+  .argument("<agent_id>", "Agent ID to update")
+  .description("Update an agent with sparse fields (partial edit)")
+  .option("-f, --file <file>", "Manifest YAML file (or stdin if piped)")
+  .option("--name <name>", "Display name")
+  .option("--model <provider:id>", "Model, e.g. anthropic:claude-sonnet-4-6")
+  .option("--instructions <text>", "System prompt / mission")
+  .option("--description <text>", "Description")
+  .option("--toolsets <a,b,c>", "Comma-separated curated toolset names")
+  .option(
+    "--ibmi-tools <path>",
+    "IBM i SQL tools YAML file (repeatable)",
+    collectPaths,
+    [],
+  )
+  .option("--db <id>", "Database id")
+  .addOption(new Option("--stage <stage>", "Component stage").choices(STAGES))
+  .option("--dry-run", "Emit the resolved spec as JSON without updating")
+  .action(async (agentId: string, options, cmd) => {
+    try {
+      const client = getClient(cmd);
+      const spec = await resolveSpec(cmd, options, {
+        allowFlagsOnly: true,
+        skipIdNameValidation: true,
+      });
+      if (spec === null) return;
+      spec.id = agentId;
+      spec.mode = "update";
+
+      if (isDryRun(cmd)) {
+        emitDryRunPlan({
+          action: "agents.update",
+          target: agentId,
+          payload: spec as Record<string, unknown>,
+        });
+        return;
+      }
+
+      try {
+        const response = await client.request<ApplyAgentResponse>(
+          "POST",
+          "/agents:apply",
+          {
+            // Raw object — the SDK's request() stringifies the body itself
+            // (passing a string double-encodes → server 422; see evals.ts).
+            body: spec as unknown as BodyInit,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+        reportApply(cmd, response);
+      } catch (err) {
+        if (err instanceof APIError && err.status === 404) {
+          writeError(
+            `Agent '${agentId}' not found. Run \`ixora agents list\` to see available IDs.`,
+          );
+          process.exitCode = 1;
+          return;
+        }
+        throw err;
+      }
+    } catch (err) {
+      handleError(err, {
+        resource: "Agent",
+        identifier: agentId,
+        listCommand: "ixora agents list",
+        ...urlContext(cmd),
+      });
+    }
+  });
+
+agentsCommand
+  .command("delete")
+  .argument("<agent_id>", "Agent ID to delete")
+  .description("Delete an agent")
+  .option("--dry-run", "Verify the agent exists and emit the plan as JSON")
+  .action(async (agentId: string, _options, cmd) => {
+    try {
+      const client = getClient(cmd);
+
+      if (isDryRun(cmd)) {
+        await client.agents.get(agentId);
+        emitDryRunPlan({ action: "agents.delete", target: agentId });
+        return;
+      }
+
+      try {
+        await client.agents.get(agentId);
+      } catch (err) {
+        if (err instanceof APIError && err.status === 404) {
+          writeError(
+            `Agent '${agentId}' not found. Run \`ixora agents list\` to see available IDs.`,
+          );
+          process.exitCode = 1;
+          return;
+        }
+        throw err;
+      }
+
+      await client.request("DELETE", `/agents/${agentId}`);
+      writeSuccess(`Deleted agent '${agentId}'`);
+    } catch (err) {
+      handleError(err, {
+        resource: "Agent",
+        identifier: agentId,
+        listCommand: "ixora agents list",
+        ...urlContext(cmd),
+      });
+    }
+  });
+
+/**
+ * Collector for repeatable `--ibmi-tools <path>` flags.
+ */
+function collectPaths(value: string, previous: string[]): string[] {
+  return [...previous, value];
+}
+
+/**
+ * Read all of stdin to a string. Returns "" when stdin is a TTY (interactive).
+ */
+async function readStdin(): Promise<string> {
+  if (process.stdin.isTTY) return "";
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+/**
+ * Resolve a FriendlySpec from `-f`/stdin/flags, then overlay flag overrides
+ * (flags win). Performs client-side validation; on a validation failure it
+ * writes the error, sets exit code 1, and returns `null` so the caller can
+ * short-circuit. The `mode` field is set by each verb's action.
+ */
+async function resolveSpec(
+  cmd: Command,
+  options: Record<string, unknown>,
+  opts: { allowFlagsOnly: boolean; skipIdNameValidation?: boolean },
+): Promise<FriendlySpec | null> {
+  let spec: FriendlySpec = {};
+
+  const ibmiToolsPaths = (options.ibmiTools as string[] | undefined) ?? [];
+  // Any manifest-defining flag present? If so, this is a flags-only (or
+  // file+flag-override) invocation and we must NOT block on stdin — reading an
+  // empty, inherited stdin in a non-TTY context (CI, scripts) would hang.
+  const hasManifestFlags =
+    options.name !== undefined ||
+    options.id !== undefined ||
+    options.model !== undefined ||
+    options.instructions !== undefined ||
+    options.description !== undefined ||
+    options.toolsets !== undefined ||
+    options.db !== undefined ||
+    options.stage !== undefined ||
+    options.kind !== undefined ||
+    ibmiToolsPaths.length > 0;
+
+  const filePath = options.file as string | undefined;
+  if (filePath && filePath !== "-") {
+    const parsed = parseManifestFile(filePath);
+    if (parsed === null) return null;
+    spec = parsed;
+  } else if (filePath === "-" || (!filePath && !hasManifestFlags && !process.stdin.isTTY)) {
+    // Explicit `-f -`, or implicit stdin only when no flags were given (a piped
+    // manifest). Never read stdin in flags-only mode → no hang in automation.
+    const raw = await readStdin();
+    if (raw.trim()) {
+      const parsed = parseYamlSpec(raw, "stdin");
+      if (parsed === null) return null;
+      spec = parsed;
+    }
+  } else if (!filePath && !hasManifestFlags && !opts.allowFlagsOnly) {
+    writeError(
+      "Provide a manifest via -f <file>, stdin, or flags (--name, --model, ...).",
+    );
+    process.exitCode = 1;
+    return null;
+  }
+
+  // Overlay flag overrides (flags win over file fields).
+  if (options.kind !== undefined) spec.kind = String(options.kind);
+  if (options.id !== undefined) spec.id = String(options.id);
+  if (options.name !== undefined) spec.name = String(options.name);
+  if (options.description !== undefined)
+    spec.description = String(options.description);
+  if (options.model !== undefined) spec.model = String(options.model);
+  if (options.instructions !== undefined)
+    spec.instructions = String(options.instructions);
+  if (options.db !== undefined) spec.db = String(options.db);
+  if (options.stage !== undefined) spec.stage = String(options.stage);
+  if (options.toolsets !== undefined) {
+    spec.toolsets = String(options.toolsets)
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
+  if (ibmiToolsPaths.length > 0) {
+    const collected = [...(spec.ibmiTools ?? [])];
+    for (const path of ibmiToolsPaths) {
+      const tool = readIbmiToolFile(path);
+      if (tool === null) return null;
+      collected.push(tool);
+    }
+    spec.ibmiTools = collected;
+  }
+
+  // Client-side validation.
+  if (spec.kind !== undefined && spec.kind !== "Agent") {
+    writeError(`Unsupported kind '${spec.kind}'. Only 'Agent' is supported.`);
+    process.exitCode = 1;
+    return null;
+  }
+  if (spec.stage !== undefined && !STAGES.includes(spec.stage as never)) {
+    writeError(`Invalid --stage '${spec.stage}'. Use published or draft.`);
+    process.exitCode = 1;
+    return null;
+  }
+  if (spec.model !== undefined && !String(spec.model).includes(":")) {
+    writeError(
+      `Invalid --model '${spec.model}'. Use 'provider:id', e.g. anthropic:claude-sonnet-4-6.`,
+    );
+    process.exitCode = 1;
+    return null;
+  }
+  if (!opts.skipIdNameValidation) {
+    const hasId = typeof spec.id === "string" && spec.id.trim() !== "";
+    const hasName = typeof spec.name === "string" && spec.name.trim() !== "";
+    if (!hasId && !hasName) {
+      writeError(
+        "Provide a manifest via -f <file>, stdin, or flags (--name, --model, ...).",
+      );
+      process.exitCode = 1;
+      return null;
+    }
+  }
+
+  return spec;
+}
+
+/**
+ * Read + parse a manifest file. Returns null (after writing an error and
+ * setting exit code 1) on a read or YAML parse failure.
+ */
+function parseManifestFile(filePath: string): FriendlySpec | null {
+  let raw: string;
+  try {
+    raw = readFileSync(filePath, "utf8");
+  } catch {
+    writeError(`Cannot read manifest file: ${filePath}`);
+    process.exitCode = 1;
+    return null;
+  }
+  return parseYamlSpec(raw, filePath);
+}
+
+function parseYamlSpec(raw: string, source: string): FriendlySpec | null {
+  try {
+    const parsed = parse(raw);
+    if (parsed === null || parsed === undefined) return {};
+    if (typeof parsed !== "object" || Array.isArray(parsed)) {
+      writeError(`Manifest ${source} must be a YAML mapping.`);
+      process.exitCode = 1;
+      return null;
+    }
+    return parsed as FriendlySpec;
+  } catch {
+    writeError(`Invalid YAML in ${source}.`);
+    process.exitCode = 1;
+    return null;
+  }
+}
+
+/**
+ * Read + parse a single `--ibmi-tools` file into an object. Returns null
+ * (after writing an error) when the path is not a readable file or the YAML
+ * is invalid.
+ */
+function readIbmiToolFile(path: string): Record<string, unknown> | null {
+  try {
+    if (!statSync(path).isFile()) {
+      writeError(`--ibmi-tools path is not a file: ${path}`);
+      process.exitCode = 1;
+      return null;
+    }
+  } catch {
+    writeError(`--ibmi-tools path not found: ${path}`);
+    process.exitCode = 1;
+    return null;
+  }
+  let raw: string;
+  try {
+    raw = readFileSync(path, "utf8");
+  } catch {
+    writeError(`Cannot read --ibmi-tools file: ${path}`);
+    process.exitCode = 1;
+    return null;
+  }
+  try {
+    const parsed = parse(raw);
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      writeError(`--ibmi-tools file ${path} must be a YAML mapping.`);
+      process.exitCode = 1;
+      return null;
+    }
+    return parsed as Record<string, unknown>;
+  } catch {
+    writeError(`Invalid YAML in --ibmi-tools file ${path}.`);
+    process.exitCode = 1;
+    return null;
+  }
+}
+
+/**
+ * Collect `*.agent.yaml` manifests under a directory, sorted. Recurses into
+ * subdirectories when `recursive` is set.
+ */
+function listAgentManifests(dir: string, recursive: boolean): string[] {
+  const found: string[] = [];
+  const walk = (current: string): void => {
+    const entries = readdirSync(current, { withFileTypes: true });
+    for (const entry of entries) {
+      const full = join(current, entry.name);
+      if (entry.isDirectory()) {
+        if (recursive) walk(full);
+      } else if (entry.isFile() && entry.name.endsWith(".agent.yaml")) {
+        found.push(full);
+      }
+    }
+  };
+  walk(dir);
+  return found.sort();
+}
+
+function applyLine(response: ApplyAgentResponse): string {
+  const verb =
+    response.action === "created"
+      ? "Created"
+      : response.action === "updated"
+        ? "Updated"
+        : "Unchanged";
+  return `${verb} agent '${response.component_id}' (stage=${response.stage}, version=${response.version})`;
+}
+
+function reportApply(cmd: Command, response: ApplyAgentResponse): void {
+  if (getOutputFormat(cmd) === "json") {
+    printJson(response);
+    return;
+  }
+  writeSuccess(applyLine(response));
+}
 
 /**
  * Disambiguate the variadic positional shape on `agents continue`. Returns
