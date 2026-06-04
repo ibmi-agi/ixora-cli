@@ -39,7 +39,7 @@ See [`../global-options.md`](../global-options.md) and [`../stack/systems.md`](.
 
 ### Agent execution
 
-- [`agents`](agents.md) — list, get, run, continue (with `--confirm`/`--reject`), resume SSE, cancel
+- [`agents`](agents.md) — list, get, run, continue (with `--confirm`/`--reject`), resume SSE, cancel; plus create / apply / update / delete (manage the agent definition itself)
 - [`teams`](teams.md) — list, get, run, continue, resume, cancel
 - [`workflows`](workflows.md) — list, get, run, continue, resume, cancel
 

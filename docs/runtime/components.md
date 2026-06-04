@@ -3,6 +3,8 @@
 Manage components — agents, teams, and workflows — as data objects on the AgentOS server.
 
 > Distinct from [`ixora stack components list`](../stack/config.md#stack-components-list), which inspects the static manifest baked into the deployed image. This page covers the **runtime** component API.
+>
+> For agents specifically, prefer the higher-level [`ixora agents create|apply|update|delete`](agents.md#create--apply--update--delete) verbs — they take a friendly YAML manifest, validate it client-side, and manage attached IBM i SQL tools. Use the generic `components` verbs below for teams/workflows or raw config-version control.
 
 ```bash
 ixora components list
