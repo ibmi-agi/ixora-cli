@@ -50,33 +50,22 @@ And tests connectivity before continuing.
 
 Human-readable label for this system — shown in the UI and `ixora stack system list`. Defaults to the hostname.
 
-### 5. Agent profile
-
-Which agents the API loads:
-
-| Profile | What's in it |
-|---|---|
-| `full` | 3 agents + 2 teams + 1 workflow — everything |
-| `sql-services` | SQL Services agent (Db2 for i querying, performance monitoring) |
-| `security` | Security agent + multi-system security team + assessment workflow |
-| `knowledge` | Knowledge retrieval agent only — lightest footprint |
-
-Pick `knowledge` for the fastest startup. Pre-select with `--agent-profile <name>` to skip the prompt.
-
-> **Agent profile ≠ stack profile.** This selects which *agents* the API loads. `--profile full|mcp|cli` selects which *containers* run. See [`profiles.md`](profiles.md).
-
-### 6. Image version
+### 5. Image version
 
 Lists available release tags from `ghcr.io`. Defaults to the latest semver. If the registry can't be reached, falls back to `latest`. Override with `--image-version v0.1.2`.
 
-### 7. Deployment mode (per system)
+### 6. Deployment mode (per system)
+
+Which components the API loads:
 
 | Mode | Effect |
 |---|---|
-| `full` (default) | The system enables every component the image declares. |
-| `custom` | Interactive picker writes `~/.ixora/profiles/<id>.yaml` listing the chosen agents/teams/workflows. |
+| `full` (default) | The system enables every component the image declares — all agents, teams, workflows, and knowledge bases. |
+| `custom` | Opens an interactive multi-select picker over the image's components (agents/teams/workflows/knowledge, pre-checked all-on) and writes the picks to `~/.ixora/profiles/<id>.yaml`. |
 
 Skip the prompt with `--mode full` or `--mode custom`.
+
+> **Deployment mode ≠ stack profile.** This selects which *components* the API loads. `--profile full|mcp|cli` selects which *containers* run. See [`profiles.md`](profiles.md).
 
 ---
 
@@ -98,7 +87,7 @@ See [`../configuration.md`](../configuration.md) for the file formats.
 
 1. Detect / verify the container runtime.
 2. Detect existing `~/.ixora/` → offer Reconfigure / Cancel.
-3. Collect answers (steps 2–7 above).
+3. Collect answers (steps 2–6 above).
 4. Write `~/.ixora/.env` (mode `0600`) and `ixora-systems.yaml`.
 5. Generate `docker-compose.yml` from the chosen `--profile` and systems list.
 6. `docker pull` images (skip with `--no-pull`).
@@ -115,7 +104,7 @@ On success:
   UI:      http://localhost:13000
   API:     http://localhost:18000
   MCP:     http://localhost:18000/mcp
-  Agent:   full
+  Mode:    full
 
   Manage with: ixora stack start|stop|restart|status|upgrade|config|logs
   Talk to AgentOS: ixora agents|teams|workflows|traces|sessions|knowledge ...

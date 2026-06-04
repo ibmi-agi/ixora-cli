@@ -44,7 +44,7 @@ Options:
 | `--agentos-url <url>` | external only | AgentOS endpoint URL. |
 | `--agentos-key <key>` | external only | AgentOS API key. Stored as `SYSTEM_<ID>_AGENTOS_KEY` in `.env`. |
 
-For **managed** systems, the installer additionally prompts for IBM i hostname, username, password, port, and agent profile (`full`/`sql-services`/`security`/`knowledge`).
+For **managed** systems, the installer additionally prompts for IBM i hostname, username, password, port, and a deployment mode (Full | Custom — Custom opens the component picker).
 
 When adding a 2nd system to an existing per-system-DB deployment, the next `ixora stack restart` adds a one-shot `db-init` container that creates the new `ai_<id>` database and enables pgvector.
 
@@ -67,9 +67,9 @@ The containers for that system stop on the next `ixora stack restart` (because t
 ```
 $ ixora stack system list
 
-  ID         KIND       URL                            NAME              PROFILE
+  ID         KIND       URL                            NAME              MODE
 * default    managed    http://localhost:18000         Development       full
-  prod       managed    http://localhost:18001         Production        security
+  prod       managed    http://localhost:18001         Production        custom
   personal   external   http://localhost:8080          Personal AgentOS  —
 ```
 
@@ -203,6 +203,6 @@ ixora --url http://localhost:18099 agents list      # skips system resolution en
 
 ## See also
 
-- [`profiles.md`](profiles.md) — stack shapes (`full` / `mcp` / `cli`) and agent profiles
+- [`profiles.md`](profiles.md) — stack shapes (`full` / `mcp` / `cli`) and deployment modes (full / custom)
 - [`config.md`](config.md) — switch a system between full and custom modes
 - [`../runtime/README.md`](../runtime/README.md) — how runtime commands choose a target
