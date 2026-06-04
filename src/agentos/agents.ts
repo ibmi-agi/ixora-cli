@@ -779,22 +779,30 @@ agentsCommand
         return;
       }
 
-      const results: ApplyAgentResponse[] = [];
+      // Two-phase: parse AND validate every manifest before any POST, so a
+      // single bad file can't leave the deployment half-applied (some agents
+      // created, the rest silently skipped on the first parse/validation error).
+      const specs: FriendlySpec[] = [];
       for (const file of files) {
         const spec = parseManifestFile(file);
-        if (spec === null) {
-          process.exitCode = 1;
-          return;
-        }
+        if (spec === null) return; // parseManifestFile set the error + exitCode 1
+        if (!validateSpec(spec)) return; // validateSpec set the error + exitCode 1
         spec.mode = "apply";
-        if (isDryRun(cmd)) {
-          emitDryRunPlan({
-            action: "agents.apply",
-            target: spec.id ?? spec.name,
-            payload: spec as Record<string, unknown>,
-          });
-          continue;
-        }
+        specs.push(spec);
+      }
+
+      if (isDryRun(cmd)) {
+        const plans = specs.map((spec) => ({
+          action: "agents.apply",
+          target: spec.id ?? spec.name,
+          payload: spec as Record<string, unknown>,
+        }));
+        printJson({ dry_run: true, action: "agents.apply", plans });
+        return;
+      }
+
+      const results: ApplyAgentResponse[] = [];
+      for (const spec of specs) {
         const response = await client.request<ApplyAgentResponse>(
           "POST",
           "/agents:apply",
@@ -807,11 +815,11 @@ agentsCommand
         );
         results.push(response);
         if (getOutputFormat(cmd) !== "json") {
+          warnStrippedOverrides(response);
           writeSuccess(applyLine(response));
         }
       }
 
-      if (isDryRun(cmd)) return;
       if (getOutputFormat(cmd) === "json") {
         printJson(results);
         return;
@@ -857,6 +865,29 @@ agentsCommand
       if (spec === null) return;
       spec.id = agentId;
       spec.mode = "update";
+
+      // The server has no unchanged-detection on the update path, so an empty
+      // update would silently bump the version. Require at least one editable
+      // field client-side.
+      const editable = [
+        "name",
+        "description",
+        "model",
+        "instructions",
+        "db",
+        "stage",
+        "toolsets",
+        "ibmiTools",
+        "options",
+        "metadata",
+      ];
+      if (!editable.some((k) => spec[k] !== undefined)) {
+        writeError(
+          "Provide at least one field to update (--name, --model, --instructions, --description, --toolsets, --ibmi-tools, --db, --stage).",
+        );
+        process.exitCode = 1;
+        return;
+      }
 
       if (isDryRun(cmd)) {
         emitDryRunPlan({
@@ -1037,23 +1068,47 @@ async function resolveSpec(
     spec.ibmiTools = collected;
   }
 
-  // Client-side validation.
+  // Client-side validation (shared with directory apply via validateSpec).
+  if (!validateSpec(spec, { skipIdNameValidation: opts.skipIdNameValidation })) {
+    return null;
+  }
+
+  return spec;
+}
+
+/**
+ * Client-side spec validation: kind, stage enum, model 'provider:id' shape,
+ * and (unless skipped) id/name presence. Writes the error + sets exit code 1
+ * and returns false on the first failure; returns true when the spec passes.
+ * Shared by resolveSpec and the directory-apply path so both enforce the same
+ * checks before anything is POSTed.
+ */
+function validateSpec(
+  spec: FriendlySpec,
+  opts: { skipIdNameValidation?: boolean } = {},
+): boolean {
   if (spec.kind !== undefined && spec.kind !== "Agent") {
     writeError(`Unsupported kind '${spec.kind}'. Only 'Agent' is supported.`);
     process.exitCode = 1;
-    return null;
+    return false;
   }
   if (spec.stage !== undefined && !STAGES.includes(spec.stage as never)) {
     writeError(`Invalid --stage '${spec.stage}'. Use published or draft.`);
     process.exitCode = 1;
-    return null;
+    return false;
   }
-  if (spec.model !== undefined && !String(spec.model).includes(":")) {
-    writeError(
-      `Invalid --model '${spec.model}'. Use 'provider:id', e.g. anthropic:claude-sonnet-4-6.`,
-    );
-    process.exitCode = 1;
-    return null;
+  if (spec.model !== undefined) {
+    const m = String(spec.model);
+    const idx = m.indexOf(":");
+    const provider = idx >= 0 ? m.slice(0, idx).trim() : "";
+    const id = idx >= 0 ? m.slice(idx + 1).trim() : "";
+    if (!provider || !id) {
+      writeError(
+        `Invalid --model '${spec.model}'. Use 'provider:id', e.g. anthropic:claude-sonnet-4-6.`,
+      );
+      process.exitCode = 1;
+      return false;
+    }
   }
   if (!opts.skipIdNameValidation) {
     const hasId = typeof spec.id === "string" && spec.id.trim() !== "";
@@ -1063,11 +1118,10 @@ async function resolveSpec(
         "Provide a manifest via -f <file>, stdin, or flags (--name, --model, ...).",
       );
       process.exitCode = 1;
-      return null;
+      return false;
     }
   }
-
-  return spec;
+  return true;
 }
 
 /**
@@ -1171,7 +1225,25 @@ function applyLine(response: ApplyAgentResponse): string {
       : response.action === "updated"
         ? "Updated"
         : "Unchanged";
-  return `${verb} agent '${response.component_id}' (stage=${response.stage}, version=${response.version})`;
+  const ver = response.version != null ? `, version=${response.version}` : "";
+  const tools =
+    response.tools_written && response.tools_written > 0
+      ? ` (${response.tools_written} IBM i tool(s) written)`
+      : "";
+  return `${verb} agent '${response.component_id}' (stage=${response.stage}${ver})${tools}`;
+}
+
+/**
+ * Surface override keys the server stripped (e.g. tools/dependencies/db, which
+ * are managed and cannot be overridden) so the user isn't left thinking they
+ * took effect. stderr-only via writeWarning, so JSON output stays clean.
+ */
+function warnStrippedOverrides(response: ApplyAgentResponse): void {
+  if (response.stripped_overrides && response.stripped_overrides.length > 0) {
+    writeWarning(
+      `Ignored protected override key(s): ${response.stripped_overrides.join(", ")}`,
+    );
+  }
 }
 
 function reportApply(cmd: Command, response: ApplyAgentResponse): void {
@@ -1179,6 +1251,7 @@ function reportApply(cmd: Command, response: ApplyAgentResponse): void {
     printJson(response);
     return;
   }
+  warnStrippedOverrides(response);
   writeSuccess(applyLine(response));
 }
 

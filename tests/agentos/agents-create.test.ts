@@ -315,4 +315,208 @@ describe("agents create/apply/update/delete", () => {
     expect(stderr).toMatch(/not found/i);
     expect(process.exitCode).toBe(1);
   });
+
+  it("delete issues DELETE and reports success when the agent exists", async () => {
+    const program = createProgram();
+    await program.parseAsync([
+      "node",
+      "ixora",
+      "agents",
+      "delete",
+      "demo-agent",
+      ...BASE,
+    ]);
+
+    expect(agentsGetFn).toHaveBeenCalledTimes(1);
+    expect(requestFn).toHaveBeenCalledTimes(1);
+    const [method, path] = requestFn.mock.calls[0] ?? [];
+    expect(method).toBe("DELETE");
+    expect(path).toBe("/agents/demo-agent");
+    const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+    expect(stderr).toMatch(/Deleted agent 'demo-agent'/);
+    expect(process.exitCode).toBe(0);
+  });
+
+  it("create rejects a model missing a side of 'provider:id'", async () => {
+    const program = createProgram();
+    await program.parseAsync([
+      "node",
+      "ixora",
+      "agents",
+      "create",
+      "--name",
+      "X",
+      "--model",
+      "anthropic:",
+      ...BASE,
+    ]);
+
+    expect(requestFn).not.toHaveBeenCalled();
+    const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+    expect(stderr).toMatch(/Invalid --model/);
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("update with no fields errors and does not POST", async () => {
+    const program = createProgram();
+    await program.parseAsync([
+      "node",
+      "ixora",
+      "agents",
+      "update",
+      "demo-agent",
+      ...BASE,
+    ]);
+
+    expect(requestFn).not.toHaveBeenCalled();
+    const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+    expect(stderr).toMatch(/at least one field/i);
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("--ibmi-tools missing path errors before any POST", async () => {
+    const program = createProgram();
+    await program.parseAsync([
+      "node",
+      "ixora",
+      "agents",
+      "create",
+      "--name",
+      "X",
+      "--ibmi-tools",
+      join(tmpDir, "does-not-exist.yaml"),
+      ...BASE,
+    ]);
+
+    expect(requestFn).not.toHaveBeenCalled();
+    const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+    expect(stderr).toMatch(/ibmi-tools path not found/);
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("apply <dir> aborts before any POST when a manifest is malformed", async () => {
+    // a-good sorts first, so the OLD one-by-one loop would have POSTed it
+    // before hitting z-bad. The two-phase parse must catch z-bad first and
+    // POST nothing — no partial, half-applied deployment.
+    tmpFile("a-good.agent.yaml", ["name: Good One", "model: anthropic:x"].join("\n"));
+    tmpFile("z-bad.agent.yaml", "name: [unterminated");
+
+    const program = createProgram();
+    await program.parseAsync([
+      "node",
+      "ixora",
+      "agents",
+      "apply",
+      "-f",
+      tmpDir,
+      ...BASE,
+    ]);
+
+    expect(requestFn).not.toHaveBeenCalled();
+    const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+    expect(stderr).toMatch(/Invalid YAML/);
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("apply <dir> enforces client-side validation (bad model) before any POST", async () => {
+    tmpFile(
+      "bad-model.agent.yaml",
+      ["name: Bad Model", "model: nocolon"].join("\n"),
+    );
+
+    const program = createProgram();
+    await program.parseAsync([
+      "node",
+      "ixora",
+      "agents",
+      "apply",
+      "-f",
+      tmpDir,
+      ...BASE,
+    ]);
+
+    expect(requestFn).not.toHaveBeenCalled();
+    const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+    expect(stderr).toMatch(/Invalid --model/);
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("apply <dir> --dry-run emits one JSON document with a plans array", async () => {
+    tmpFile("one.agent.yaml", ["name: One", "model: anthropic:x"].join("\n"));
+    tmpFile("two.agent.yaml", ["name: Two", "model: anthropic:y"].join("\n"));
+
+    const program = createProgram();
+    await program.parseAsync([
+      "node",
+      "ixora",
+      "agents",
+      "apply",
+      "-f",
+      tmpDir,
+      "--dry-run",
+      ...BASE,
+    ]);
+
+    expect(requestFn).not.toHaveBeenCalled();
+    const stdout = stdoutSpy.mock.calls.map((c) => String(c[0])).join("");
+    const parsed = JSON.parse(stdout);
+    expect(parsed.dry_run).toBe(true);
+    expect(Array.isArray(parsed.plans)).toBe(true);
+    expect(parsed.plans).toHaveLength(2);
+  });
+
+  it("apply surfaces tools_written and stripped_overrides in table output", async () => {
+    requestFn.mockResolvedValueOnce({
+      component_id: "demo-agent",
+      stage: "published",
+      version: 2,
+      action: "updated",
+      config_keys: [],
+      stripped_overrides: ["tools", "db"],
+      tools_written: 2,
+    });
+    const file = tmpFile(
+      "agent.yaml",
+      ["name: Demo", "model: anthropic:claude-sonnet-4-6"].join("\n"),
+    );
+
+    const program = createProgram();
+    await program.parseAsync([
+      "node",
+      "ixora",
+      "agents",
+      "apply",
+      "-f",
+      file,
+      "-o",
+      "table",
+      ...BASE,
+    ]);
+
+    const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+    expect(stderr).toMatch(/2 IBM i tool\(s\) written/);
+    expect(stderr).toMatch(/Ignored protected override key\(s\): tools, db/);
+  });
+
+  it("create -o json emits uncolorized, parseable JSON", async () => {
+    const program = createProgram();
+    await program.parseAsync([
+      "node",
+      "ixora",
+      "agents",
+      "create",
+      "--name",
+      "Demo",
+      "-o",
+      "json",
+      ...BASE,
+    ]);
+
+    const stdout = stdoutSpy.mock.calls.map((c) => String(c[0])).join("");
+    // No ANSI escape sequences in JSON output.
+    expect(stdout).not.toMatch(/\x1b\[/);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.component_id).toBe("demo-agent");
+    expect(parsed.action).toBe("created");
+  });
 });
