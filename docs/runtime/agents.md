@@ -17,6 +17,8 @@ ixora agents create [-f <file> | --name … --model …] [--dry-run]
 ixora agents apply -f <file|dir> [-R] [--dry-run]
 ixora agents update <agent_id> [-f <file> | --name … …] [--dry-run]
 ixora agents delete <agent_id> [--dry-run]
+ixora agents toolsets list
+ixora agents toolsets get <name>
 ```
 
 All subcommands accept the [global flags](../global-options.md) (`--system`, `--url`, `--json`, `-o`, …).
@@ -430,6 +432,43 @@ Error: --ibmi-tools file ./tool.yaml must be a YAML mapping.
 A mapping missing `source`/`description`, or carrying an unknown field, is
 rejected by the server with a precise path (e.g. `tools.t: 'source' is a
 required property`).
+
+---
+
+## `toolsets list` / `toolsets get <name>`
+
+Browse the curated IBM i toolset catalog — the names you pass to `--toolsets`
+(or the `toolsets:` manifest key) when creating an agent. **Both commands always
+emit raw JSON**, regardless of `-o`/`--json`/TTY.
+
+```bash
+ixora agents toolsets list             # catalog of every toolset
+ixora agents toolsets get performance  # one toolset's tools + parameters
+```
+
+`list` returns one object per toolset:
+
+```json
+[
+  { "name": "daily_health", "title": "Daily Health", "description": "…", "tool_count": 7 }
+]
+```
+
+`get <name>` returns the toolset's raw entry — its tools, per-tool descriptions,
+and parameters:
+
+```json
+{
+  "tools": ["system_status", "active_job_info"],
+  "source": "performance.yaml",
+  "tool_metadata": {
+    "system_status": { "description": "First-call system health check…", "parameters": [] }
+  }
+}
+```
+
+An unknown name exits 1 with `Error: Toolset '<name>' not found. Run \`ixora
+agents toolsets list\` …` on stderr.
 
 ---
 
