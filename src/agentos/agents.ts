@@ -993,6 +993,46 @@ agentsCommand
     }
   });
 
+// `agents toolsets ...` — browse the curated IBM i toolset catalog used by
+// `--toolsets` / the `toolsets:` manifest key. Always emits raw JSON.
+const toolsetsSubCommand = new Command("toolsets").description(
+  "Browse the curated IBM i toolset catalog (always outputs JSON)",
+);
+
+toolsetsSubCommand
+  .command("list")
+  .description("List all curated IBM i toolsets (always JSON)")
+  .action(async (_options, cmd) => {
+    try {
+      const client = getClient(cmd);
+      printJson(await client.request("GET", "/toolsets"));
+    } catch (err) {
+      handleError(err, { ...urlContext(cmd) });
+    }
+  });
+
+toolsetsSubCommand
+  .command("get")
+  .argument("<name>", "Toolset name")
+  .description("Show a toolset's tools, descriptions, and parameters (always JSON)")
+  .action(async (name: string, _options, cmd) => {
+    try {
+      const client = getClient(cmd);
+      printJson(
+        await client.request("GET", `/toolsets/${encodeURIComponent(name)}`),
+      );
+    } catch (err) {
+      handleError(err, {
+        resource: "Toolset",
+        identifier: name,
+        listCommand: "ixora agents toolsets list",
+        ...urlContext(cmd),
+      });
+    }
+  });
+
+agentsCommand.addCommand(toolsetsSubCommand);
+
 /**
  * Collector for repeatable `--ibmi-tools <path>` flags.
  */
