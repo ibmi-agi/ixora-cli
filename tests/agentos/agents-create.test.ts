@@ -239,6 +239,97 @@ describe("agents create/apply/update/delete", () => {
     expect(tools).toHaveProperty("active_jobs");
   });
 
+  it("--options JSON lands in the options of the body (agno passthrough)", async () => {
+    const program = createProgram();
+    await program.parseAsync([
+      "node",
+      "ixora",
+      "agents",
+      "create",
+      "--name",
+      "Configured Agent",
+      "--options",
+      '{"markdown": true, "num_history_runs": 5}',
+      ...BASE,
+    ]);
+
+    expect(requestFn).toHaveBeenCalledTimes(1);
+    const body = bodyOf(requestFn.mock.calls[0]?.[2]);
+    const options = body.options as Record<string, unknown>;
+    expect(options).toEqual({ markdown: true, num_history_runs: 5 });
+  });
+
+  it("--options merges over file options, flag keys winning", async () => {
+    const file = tmpFile(
+      "agent.yaml",
+      [
+        "name: Demo Agent",
+        "options:",
+        "  markdown: false",
+        "  reasoning: true",
+      ].join("\n"),
+    );
+
+    const program = createProgram();
+    await program.parseAsync([
+      "node",
+      "ixora",
+      "agents",
+      "create",
+      "-f",
+      file,
+      "--options",
+      '{"markdown": true}',
+      ...BASE,
+    ]);
+
+    expect(requestFn).toHaveBeenCalledTimes(1);
+    const body = bodyOf(requestFn.mock.calls[0]?.[2]);
+    const options = body.options as Record<string, unknown>;
+    // Flag key overrides the file value; the file-only key is preserved.
+    expect(options).toEqual({ markdown: true, reasoning: true });
+  });
+
+  it("--options rejects invalid JSON before any POST", async () => {
+    const program = createProgram();
+    await program.parseAsync([
+      "node",
+      "ixora",
+      "agents",
+      "create",
+      "--name",
+      "X",
+      "--options",
+      "{not json}",
+      ...BASE,
+    ]);
+
+    expect(requestFn).not.toHaveBeenCalled();
+    const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+    expect(stderr).toMatch(/Invalid JSON for --options/);
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("--options rejects a non-object JSON value before any POST", async () => {
+    const program = createProgram();
+    await program.parseAsync([
+      "node",
+      "ixora",
+      "agents",
+      "create",
+      "--name",
+      "X",
+      "--options",
+      "[1, 2, 3]",
+      ...BASE,
+    ]);
+
+    expect(requestFn).not.toHaveBeenCalled();
+    const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+    expect(stderr).toMatch(/--options must be a JSON object/);
+    expect(process.exitCode).toBe(1);
+  });
+
   it("create maps a 409 to an actionable already-exists error", async () => {
     requestFn.mockRejectedValueOnce(new APIError(409, "exists"));
 
