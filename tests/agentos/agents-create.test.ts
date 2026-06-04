@@ -498,6 +498,56 @@ describe("agents create/apply/update/delete", () => {
     expect(stderr).toMatch(/Ignored protected override key\(s\): tools, db/);
   });
 
+  it("create rejects a manifest with an unknown key (typo) before any POST", async () => {
+    const file = tmpFile(
+      "agent.yaml",
+      [
+        "name: Demo",
+        "model: anthropic:claude-sonnet-4-6",
+        "instructionz: typo for instructions",
+      ].join("\n"),
+    );
+
+    const program = createProgram();
+    await program.parseAsync([
+      "node",
+      "ixora",
+      "agents",
+      "create",
+      "-f",
+      file,
+      ...BASE,
+    ]);
+
+    expect(requestFn).not.toHaveBeenCalled();
+    const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+    expect(stderr).toMatch(/Unknown field\(s\) in manifest: instructionz/);
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("apply <dir> rejects a manifest with an unknown key before any POST", async () => {
+    tmpFile(
+      "typo.agent.yaml",
+      ["name: Typo", "model: anthropic:x", "bogus_key: 1"].join("\n"),
+    );
+
+    const program = createProgram();
+    await program.parseAsync([
+      "node",
+      "ixora",
+      "agents",
+      "apply",
+      "-f",
+      tmpDir,
+      ...BASE,
+    ]);
+
+    expect(requestFn).not.toHaveBeenCalled();
+    const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+    expect(stderr).toMatch(/Unknown field\(s\) in manifest: bogus_key/);
+    expect(process.exitCode).toBe(1);
+  });
+
   it("create -o json emits uncolorized, parseable JSON", async () => {
     const program = createProgram();
     await program.parseAsync([

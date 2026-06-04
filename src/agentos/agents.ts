@@ -629,6 +629,29 @@ agentsCommand
 
 const STAGES = ["published", "draft"] as const;
 
+// Recognized manifest keys. A manifest with any other top-level key is almost
+// always a typo (e.g. `instructionz`) and is rejected rather than silently
+// dropped — the server ignores unknown keys, so a typo would otherwise produce
+// a misconfigured agent with no warning. `mode` is accepted (the verb sets it)
+// but not advertised in the hint.
+const MANIFEST_KEYS = new Set([
+  "kind",
+  "id",
+  "name",
+  "description",
+  "model",
+  "db",
+  "stage",
+  "instructions",
+  "toolsets",
+  "ibmiTools",
+  "options",
+  "metadata",
+  "mode",
+]);
+const MANIFEST_KEYS_HINT =
+  "kind, id, name, description, model, db, stage, instructions, toolsets, ibmiTools, options, metadata";
+
 interface ApplyAgentResponse {
   component_id: string;
   stage: string;
@@ -1087,6 +1110,14 @@ function validateSpec(
   spec: FriendlySpec,
   opts: { skipIdNameValidation?: boolean } = {},
 ): boolean {
+  const unknown = Object.keys(spec).filter((k) => !MANIFEST_KEYS.has(k));
+  if (unknown.length > 0) {
+    writeError(
+      `Unknown field(s) in manifest: ${unknown.join(", ")}. Valid keys: ${MANIFEST_KEYS_HINT}.`,
+    );
+    process.exitCode = 1;
+    return false;
+  }
   if (spec.kind !== undefined && spec.kind !== "Agent") {
     writeError(`Unsupported kind '${spec.kind}'. Only 'Agent' is supported.`);
     process.exitCode = 1;
