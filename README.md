@@ -132,7 +132,7 @@ By default each IBM i system gets its **own** `ai_<id>` Postgres database (and i
 
 | Command | Description |
 |---------|-------------|
-| `agents list\|get\|run\|continue\|cancel` | Manage agents |
+| `agents list\|get\|run\|continue\|cancel\|create\|apply\|update\|delete` | Manage agents (including the agent definition itself) |
 | `teams list\|get\|run\|continue\|cancel` | Manage teams |
 | `workflows list\|get\|run\|continue\|cancel` | Manage workflows |
 | `traces list\|get\|stats\|search` | Inspect traces |

@@ -13,6 +13,10 @@ ixora agents continue <agent_id> <run_id> [<tool_results>]   # legacy 2-arg form
 ixora agents pending [<run_id>]
 ixora agents resume <agent_id> <run_id>
 ixora agents cancel <agent_id> <run_id>
+ixora agents create [-f <file> | --name … --model …] [--dry-run]
+ixora agents apply -f <file|dir> [-R] [--dry-run]
+ixora agents update <agent_id> [-f <file> | --name … …] [--dry-run]
+ixora agents delete <agent_id> [--dry-run]
 ```
 
 All subcommands accept the [global flags](../global-options.md) (`--system`, `--url`, `--json`, `-o`, …).
@@ -352,6 +356,80 @@ ixora traces list --status running --json run_id \
       ixora agents cancel sql-agent "$id"
     done
 ```
+
+---
+
+## `create` / `apply` / `update` / `delete`
+
+Manage an agent's **definition** (not its runs). Each verb takes a *friendly
+manifest* — a YAML mapping (`-f <file>`, or `-f -` for stdin) or `--flag`
+overrides — and POSTs to `/agents:apply`; `delete` calls `DELETE /agents/{id}`.
+
+Manifest keys: `kind`, `id`, `name`, `description`, `model`, `db`, `stage`,
+`instructions`, `toolsets`, `ibmiTools`, `options`, `metadata`. **Any other
+top-level key is rejected** (not silently dropped):
+
+```text
+Error: Unknown field(s) in manifest: instructionz. Valid keys: kind, id, name, description, model, db, stage, instructions, toolsets, ibmiTools, options, metadata.
+```
+
+`--model` must be `provider:id` with both halves non-empty (e.g.
+`anthropic:claude-sonnet-4-6`).
+
+| Verb | Behavior |
+|---|---|
+| `create` | Fail (exit 1) if the agent already exists. Accepts a manifest, stdin (`-f -`), or flags-only. |
+| `apply` | Upsert. Reports `created` / `updated` / `unchanged` (`unchanged` only when **both** the config bytes and the stage match). Pass a **directory** to apply every `*.agent.yaml` (`-R` recurses). |
+| `update` | Sparse merge onto an existing agent; fail (exit 1) if absent. Requires at least one editable field. |
+| `delete` | Hard-delete — frees the id and removes `user_tools/<id>/` on disk. Pre-checks existence (errors on a missing id). |
+
+```bash
+# Flags-only create
+ixora agents create --name "QSYS Auditor" --id qsys-auditor \
+  --model anthropic:claude-sonnet-4-6 --instructions "Audit job logs."
+
+# Manifest file (or '-' for stdin)
+ixora agents apply -f qsys-auditor.agent.yaml
+cat qsys-auditor.agent.yaml | ixora agents create -f -
+
+# Apply a whole directory (atomic — every manifest is validated before any POST)
+ixora agents apply -f ./agents/ -R
+
+# Sparse update — only the supplied fields change
+ixora agents update qsys-auditor --model anthropic:claude-haiku-4-5
+ixora agents update qsys-auditor --stage published
+
+ixora agents delete qsys-auditor
+```
+
+The success line surfaces what the server did, including IBM i tools written and
+any protected override keys it stripped (both on stderr, so `-o json` stdout
+stays clean):
+
+```text
+Success: Created agent 'qsys-auditor' (stage=draft, version=1) (2 IBM i tool(s) written)
+Warning: Ignored protected override key(s): tools, db
+```
+
+`--dry-run` emits the resolved spec as JSON without contacting the server. A
+**directory** apply emits one combined document:
+
+```json
+{ "dry_run": true, "action": "agents.apply", "plans": [ { "action": "agents.apply", "target": "qsys-auditor", "payload": { } } ] }
+```
+
+### Attaching IBM i SQL tools — `--ibmi-tools <path>`
+
+Repeatable. Each path is a SQL-tools-config YAML mapping (the same schema the
+platform validates). Malformed YAML or a non-mapping is rejected client-side:
+
+```text
+Error: --ibmi-tools file ./tool.yaml must be a YAML mapping.
+```
+
+A mapping missing `source`/`description`, or carrying an unknown field, is
+rejected by the server with a precise path (e.g. `tools.t: 'source' is a
+required property`).
 
 ---
 

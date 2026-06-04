@@ -2,7 +2,7 @@
 
 > Canonical flag reference: [`../docs/runtime/agents.md`](../docs/runtime/agents.md), [`../docs/runtime/teams.md`](../docs/runtime/teams.md), [`../docs/runtime/workflows.md`](../docs/runtime/workflows.md). This page covers `continue`/`resume` shape differences, the HITL cache, and what `--confirm` actually does.
 
-All three share the same verb set: `list`, `get`, `run`, `runs`, `continue`, `resume`, `cancel`. Each targets the resolved system (see [system resolution in SKILL.md](../SKILL.md#system-resolution-the-part---help-wont-tell-you) or [`systems.md`](systems.md)).
+All three share the run-time verb set: `list`, `get`, `run`, `runs`, `continue`, `resume`, `cancel`. **`agents` additionally has lifecycle verbs** — `create`, `apply` (upsert; accepts a directory of `*.agent.yaml`), `update` (sparse edit), and `delete` — which manage the agent definition via a friendly YAML manifest (`-f`) or flags; see [`../docs/runtime/agents.md`](../docs/runtime/agents.md). Each targets the resolved system (see [system resolution in SKILL.md](../SKILL.md#system-resolution-the-part---help-wont-tell-you) or [`systems.md`](systems.md)).
 
 `--system <id>` picks a specific system. `--url <url>` skips resolution (one-off probe against an unregistered endpoint).
 
