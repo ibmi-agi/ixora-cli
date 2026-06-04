@@ -696,6 +696,10 @@ agentsCommand
     [],
   )
   .option("--db <id>", "Database id")
+  .option(
+    "--options <json>",
+    "Agno agent config as a JSON object, e.g. '{\"markdown\":true,\"num_history_runs\":5}'",
+  )
   .addOption(new Option("--stage <stage>", "Component stage").choices(STAGES))
   .addOption(new Option("--kind <kind>", "Component kind").choices(["Agent"]))
   .option("--dry-run", "Emit the resolved spec as JSON without creating")
@@ -1079,6 +1083,7 @@ async function resolveSpec(
     options.db !== undefined ||
     options.stage !== undefined ||
     options.kind !== undefined ||
+    options.options !== undefined ||
     ibmiToolsPaths.length > 0;
 
   const filePath = options.file as string | undefined;
@@ -1129,6 +1134,13 @@ async function resolveSpec(
       collected.push(tool);
     }
     spec.ibmiTools = collected;
+  }
+
+  if (options.options !== undefined) {
+    const parsed = parseOptionsFlag(String(options.options));
+    if (parsed === null) return null;
+    // Merge over any options from the file (flag keys win, file keys kept).
+    spec.options = { ...(spec.options ?? {}), ...parsed };
   }
 
   // Client-side validation (shared with directory apply via validateSpec).
@@ -1226,6 +1238,28 @@ function parseYamlSpec(raw: string, source: string): FriendlySpec | null {
     process.exitCode = 1;
     return null;
   }
+}
+
+/**
+ * Parse the `--options <json>` flag into a config object for agno Agent config
+ * passthrough. Must be a JSON object. Returns null (after writing an error and
+ * setting exit code 1) on invalid JSON or a non-object value.
+ */
+function parseOptionsFlag(raw: string): Record<string, unknown> | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    writeError("Invalid JSON for --options.");
+    process.exitCode = 1;
+    return null;
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    writeError('--options must be a JSON object, e.g. \'{"markdown": true}\'.');
+    process.exitCode = 1;
+    return null;
+  }
+  return parsed as Record<string, unknown>;
 }
 
 /**
