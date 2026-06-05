@@ -39,7 +39,16 @@ ixora agents list      # List registered agents
 ixora agents run <id> "what's running on QSYS?"
 ixora traces list      # See recent runs
 ixora sessions list    # Browse sessions
+ixora knowledge bases  # List knowledge bases (e.g. "User Documents")
 ixora knowledge search "..."
+```
+
+Attach a knowledge base to an agent by its display name when you create or
+update it:
+
+```sh
+ixora agents create --name "Docs Helper" --id docs-helper \
+  --model anthropic:claude-sonnet-4-6 --knowledge "User Documents"
 ```
 
 If only one system is available, those commands target it implicitly. With 2+ systems available you have two options:
@@ -138,7 +147,7 @@ By default each IBM i system gets its **own** `ai_<id>` Postgres database (and i
 | `traces list\|get\|stats\|search` | Inspect traces |
 | `sessions list\|get\|create\|update\|delete\|delete-all\|runs` | Manage sessions |
 | `memories list\|get\|create\|update\|delete\|delete-all\|topics\|stats\|optimize` | Manage memories |
-| `knowledge upload\|list\|get\|search\|status\|delete\|delete-all\|config` | Manage knowledge base |
+| `knowledge bases\|upload\|list\|get\|search\|status\|delete\|delete-all\|config` | Manage knowledge bases (`bases` lists them; upload/search/etc. target one) |
 | `evals list\|get\|delete` | Manage eval runs |
 | `approvals list\|get\|resolve` | Manage approvals |
 | `schedules list\|get\|create\|update\|delete\|pause\|resume\|runs` | Manage schedules |

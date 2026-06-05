@@ -368,11 +368,11 @@ manifest* — a YAML mapping (`-f <file>`, or `-f -` for stdin) or `--flag`
 overrides — and POSTs to `/agents:apply`; `delete` calls `DELETE /agents/{id}`.
 
 Manifest keys: `kind`, `id`, `name`, `description`, `model`, `db`, `stage`,
-`instructions`, `toolsets`, `ibmiTools`, `options`, `metadata`. **Any other
-top-level key is rejected** (not silently dropped):
+`instructions`, `toolsets`, `ibmiTools`, `knowledge`, `options`, `metadata`.
+**Any other top-level key is rejected** (not silently dropped):
 
 ```text
-Error: Unknown field(s) in manifest: instructionz. Valid keys: kind, id, name, description, model, db, stage, instructions, toolsets, ibmiTools, options, metadata.
+Error: Unknown field(s) in manifest: instructionz. Valid keys: kind, id, name, description, model, db, stage, instructions, toolsets, ibmiTools, knowledge, options, metadata.
 ```
 
 `--model` must be `provider:id` with both halves non-empty (e.g.
@@ -432,6 +432,39 @@ Error: --ibmi-tools file ./tool.yaml must be a YAML mapping.
 A mapping missing `source`/`description`, or carrying an unknown field, is
 rejected by the server with a precise path (e.g. `tools.t: 'source' is a
 required property`).
+
+### Attaching a knowledge base — `--knowledge "<name>"`
+
+Bind the agent to a knowledge base **by its display name** (the `knowledge`
+manifest key does the same). Quote names that contain spaces. Resolution is by
+name, not the registry slug — pass `"User Documents"`, not `user-knowledge`.
+
+```bash
+# Flag form (create / apply / update)
+ixora agents create --name "Docs Helper" --id docs-helper \
+  --model anthropic:claude-sonnet-4-6 --knowledge "User Documents"
+ixora agents update docs-helper --knowledge "IBM i Security Knowledge"
+```
+
+```yaml
+# Manifest form
+kind: agent
+id: docs-helper
+name: Docs Helper
+model: anthropic:claude-sonnet-4-6
+knowledge: "User Documents"
+```
+
+Discover valid names with [`ixora knowledge bases`](knowledge.md#bases). An empty
+value is rejected client-side; an unknown name is rejected by the server (400)
+with the list of available bases:
+
+```text
+Error: Knowledge base 'User Docs' not found. Run `ixora knowledge bases` to list available bases.
+```
+
+The server stores the display name in the agent config; agno resolves it to the
+live base at run time.
 
 ---
 
