@@ -3,6 +3,7 @@
 Manage the knowledge base — upload documents, search them, inspect processing status.
 
 ```bash
+ixora knowledge bases
 ixora knowledge upload [file_path] | --from-url <url>
 ixora knowledge list
 ixora knowledge get <content_id>
@@ -13,12 +14,44 @@ ixora knowledge delete-all
 ixora knowledge config
 ```
 
+A stack ships with three knowledge bases: **IBM i Learned Knowledge** (the
+agent self-learning store), **IBM i Security Knowledge** (curated security RAG),
+and **User Documents** (a general-purpose, initially-empty destination for
+user-uploaded documents). List them with [`bases`](#bases).
+
 All subcommands accept:
 
 | Flag | Purpose |
 |---|---|
 | `--db-id <id>` | Database ID |
-| `--knowledge-id <id>` | Knowledge base ID (when the system has more than one) |
+| `--knowledge-id <id>` | Knowledge base ID (the `knowledge_id` shown by `ixora knowledge bases`; **required when the system has more than one base**) |
+
+---
+
+## `bases`
+
+List the knowledge bases the AgentOS exposes (read from its `/config`
+endpoint). Use it to discover the `knowledge_id` you pass to `--knowledge-id`
+on a multi-base system, and the display name you pass to `ixora agents create
+--knowledge`.
+
+```bash
+ixora knowledge bases
+ixora knowledge bases -o json
+```
+
+Output columns: `ID` (the `knowledge_id`), `NAME` (display name), `DB`, `TABLE`.
+A default stack lists:
+
+```text
+ID            NAME                       DB            TABLE
+kb_...        IBM i Learned Knowledge    ai_default    learned_knowledge
+kb_...        IBM i Security Knowledge   ai_default    security_knowledge
+kb_...        User Documents             ai_default    user_knowledge
+```
+
+This closes the old discovery gap where a multi-base system only echoed bare
+base IDs (no names) in errors.
 
 ---
 
@@ -30,8 +63,12 @@ Upload from a local file or a URL. Exactly one source is required.
 ixora knowledge upload ./docs/db2-tuning.pdf
 ixora knowledge upload ./notes.md --name "Indexing notes" --description "Internal tips"
 ixora knowledge upload --from-url https://example.com/spec.pdf
-ixora knowledge upload ./big.pdf --knowledge-id kb_main
+ixora knowledge upload ./big.pdf --name "User Docs" --knowledge-id kb_main
 ```
+
+On a multi-base system, target the destination explicitly with `--knowledge-id`
+(or `--db-id`) — discover the id with [`ixora knowledge bases`](#bases). To send
+a document to the **User Documents** base, pass that base's `knowledge_id`.
 
 | Flag | Purpose |
 |---|---|
@@ -39,7 +76,7 @@ ixora knowledge upload ./big.pdf --knowledge-id kb_main
 | `--name <name>` | Content display name |
 | `--description <desc>` | Content description |
 | `--db-id <id>` | Database ID |
-| `--knowledge-id <id>` | Knowledge base ID |
+| `--knowledge-id <id>` | Knowledge base ID — **required on a multi-base system** |
 
 Processing is asynchronous. After upload, the CLI prints the content ID and hints how to poll:
 
@@ -179,4 +216,6 @@ ixora agents run sql-agent "Summarize this context: $top"
 ## See also
 
 - [`memories.md`](memories.md) — short-form facts (the knowledge base is for documents)
+- [`bases`](#bases) — list the available knowledge bases (id, name, db, table)
 - [`status.md`](status.md) — see which knowledge bases the AgentOS exposes (`KNOWLEDGE` section)
+- [`agents.md`](agents.md) — attach a knowledge base to an agent with `--knowledge "<name>"`
