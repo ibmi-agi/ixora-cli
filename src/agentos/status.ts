@@ -17,7 +17,7 @@ interface DomainConfig {
   dbs?: DbRef[];
 }
 
-interface KnowledgeInstance {
+export interface KnowledgeInstance {
   id?: string;
   name?: string;
   db_id?: string;
@@ -45,7 +45,7 @@ interface InterfaceSummary {
   route?: string;
 }
 
-interface ConfigShape {
+export interface ConfigShape {
   os_id?: string;
   name?: string;
   description?: string;

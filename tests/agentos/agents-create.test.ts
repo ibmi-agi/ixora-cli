@@ -639,6 +639,46 @@ describe("agents create/apply/update/delete", () => {
     expect(process.exitCode).toBe(1);
   });
 
+  it("create --knowledge puts the display name on the posted spec", async () => {
+    const program = createProgram();
+    await program.parseAsync([
+      "node",
+      "ixora",
+      "agents",
+      "create",
+      "--name",
+      "Doc Agent",
+      "--knowledge",
+      "User Documents",
+      ...BASE,
+    ]);
+
+    expect(requestFn).toHaveBeenCalledTimes(1);
+    const body = bodyOf(requestFn.mock.calls[0]?.[2]);
+    expect(body.knowledge).toBe("User Documents");
+  });
+
+  it("create rejects an empty --knowledge before any POST", async () => {
+    const program = createProgram();
+    await program.parseAsync([
+      "node",
+      "ixora",
+      "agents",
+      "create",
+      "--name",
+      "X",
+      "--knowledge",
+      "",
+      ...BASE,
+    ]);
+
+    expect(requestFn).not.toHaveBeenCalled();
+    const stderr = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+    expect(stderr).toMatch(/Error:/);
+    expect(stderr).toMatch(/Invalid --knowledge/);
+    expect(process.exitCode).toBe(1);
+  });
+
   it("create -o json emits uncolorized, parseable JSON", async () => {
     const program = createProgram();
     await program.parseAsync([

@@ -641,6 +641,7 @@ const MANIFEST_KEYS = new Set([
   "description",
   "model",
   "db",
+  "knowledge",
   "stage",
   "instructions",
   "toolsets",
@@ -650,7 +651,7 @@ const MANIFEST_KEYS = new Set([
   "mode",
 ]);
 const MANIFEST_KEYS_HINT =
-  "kind, id, name, description, model, db, stage, instructions, toolsets, ibmiTools, options, metadata";
+  "kind, id, name, description, model, db, knowledge, stage, instructions, toolsets, ibmiTools, options, metadata";
 
 interface ApplyAgentResponse {
   component_id: string;
@@ -669,6 +670,7 @@ interface FriendlySpec {
   description?: string;
   model?: string;
   db?: string | null;
+  knowledge?: string;
   stage?: string;
   instructions?: string;
   toolsets?: string[];
@@ -696,6 +698,7 @@ agentsCommand
     [],
   )
   .option("--db <id>", "Database id")
+  .option("--knowledge <name>", "Knowledge base name (display name)")
   .option(
     "--options <json>",
     "Agno agent config as a JSON object, e.g. '{\"markdown\":true,\"num_history_runs\":5}'",
@@ -880,6 +883,7 @@ agentsCommand
     [],
   )
   .option("--db <id>", "Database id")
+  .option("--knowledge <name>", "Knowledge base name (display name)")
   .addOption(new Option("--stage <stage>", "Component stage").choices(STAGES))
   .option("--dry-run", "Emit the resolved spec as JSON without updating")
   .action(async (agentId: string, options, cmd) => {
@@ -902,6 +906,7 @@ agentsCommand
         "model",
         "instructions",
         "db",
+        "knowledge",
         "stage",
         "toolsets",
         "ibmiTools",
@@ -910,7 +915,7 @@ agentsCommand
       ];
       if (!editable.some((k) => spec[k] !== undefined)) {
         writeError(
-          "Provide at least one field to update (--name, --model, --instructions, --description, --toolsets, --ibmi-tools, --db, --stage).",
+          "Provide at least one field to update (--name, --model, --instructions, --description, --toolsets, --ibmi-tools, --db, --knowledge, --stage).",
         );
         process.exitCode = 1;
         return;
@@ -1081,6 +1086,7 @@ async function resolveSpec(
     options.description !== undefined ||
     options.toolsets !== undefined ||
     options.db !== undefined ||
+    options.knowledge !== undefined ||
     options.stage !== undefined ||
     options.kind !== undefined ||
     options.options !== undefined ||
@@ -1118,6 +1124,8 @@ async function resolveSpec(
   if (options.instructions !== undefined)
     spec.instructions = String(options.instructions);
   if (options.db !== undefined) spec.db = String(options.db);
+  if (options.knowledge !== undefined)
+    spec.knowledge = String(options.knowledge);
   if (options.stage !== undefined) spec.stage = String(options.stage);
   if (options.toolsets !== undefined) {
     spec.toolsets = String(options.toolsets)
@@ -1192,6 +1200,13 @@ function validateSpec(
       process.exitCode = 1;
       return false;
     }
+  }
+  if (spec.knowledge !== undefined && String(spec.knowledge).trim() === "") {
+    writeError(
+      "Invalid --knowledge. Provide a knowledge base name. Run `ixora knowledge bases` to see available names.",
+    );
+    process.exitCode = 1;
+    return false;
   }
   if (!opts.skipIdNameValidation) {
     const hasId = typeof spec.id === "string" && spec.id.trim() !== "";

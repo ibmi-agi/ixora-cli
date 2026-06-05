@@ -11,6 +11,7 @@ import {
   writeError,
   writeSuccess,
 } from "../lib/agentos-output.js";
+import type { ConfigShape, KnowledgeInstance } from "./status.js";
 
 export const knowledgeCommand = new Command("knowledge").description(
   "Manage knowledge base",
@@ -377,6 +378,40 @@ knowledgeCommand
         {
           labels: ["Readers", "Chunkers", "Vector DBs"],
           keys: ["readers", "chunkers", "vector_dbs"],
+        },
+      );
+    } catch (err) {
+      handleError(err, { resource: "Knowledge base", url: getBaseUrl(cmd) });
+    }
+  });
+
+knowledgeCommand
+  .command("bases")
+  .description("List available knowledge bases")
+  .action(async (_options, cmd) => {
+    try {
+      const client = getClient(cmd);
+      const config = (await client.getConfig()) as unknown as ConfigShape;
+      const instances: KnowledgeInstance[] =
+        config.knowledge?.knowledge_instances ?? [];
+
+      const format = getOutputFormat(cmd);
+      if (format === "json") {
+        printJson(instances);
+        return;
+      }
+
+      outputList(
+        cmd,
+        instances.map((k) => ({
+          id: k.id ?? "",
+          name: k.name ?? "",
+          db_id: k.db_id ?? "",
+          table: k.table ?? "",
+        })),
+        {
+          columns: ["ID", "NAME", "DB", "TABLE"],
+          keys: ["id", "name", "db_id", "table"],
         },
       );
     } catch (err) {
