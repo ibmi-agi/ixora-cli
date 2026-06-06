@@ -176,7 +176,16 @@ export function handleError(err: unknown, ctx?: ErrorContext): never {
       process.exitCode = 2;
     }
   } else if (err instanceof RemoteServerUnavailableError) {
-    writeErr("Server unavailable. Is the system running? `ixora stack status`");
+    // A 503 means the server responded but a subsystem is unavailable (e.g. a
+    // missing optional dependency). Surface the backend detail instead of
+    // masking every 503 as a generic outage — a truly-down server surfaces as
+    // a connection error in the next branch, not a 503.
+    const detail = err.message?.trim();
+    writeErr(
+      detail
+        ? `Server unavailable: ${detail}`
+        : "Server unavailable. Is the system running? `ixora stack status`",
+    );
     process.exitCode = 2;
   } else if (isConnectionError(err) || isNetworkAPIError(err)) {
     writeErr(formatConnectionError(ctx));
