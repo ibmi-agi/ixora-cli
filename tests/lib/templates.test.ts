@@ -117,6 +117,13 @@ describe("templates", () => {
       // RAG tools unless the user sets RAG_API_URL in ~/.ixora/.env
       expect(content).toContain("RAG_API_URL: ${RAG_API_URL:-}");
       expect(content).toContain("RAG_API_TIMEOUT: ${RAG_API_TIMEOUT:-120}");
+      // Embedding model/provider passthrough — empty defaults let the API fall
+      // back to text-embedding-3-small/openai unless the user overrides via
+      // `ixora stack config set IXORA_EMBEDDING_MODEL <id> && ixora stack restart`
+      expect(content).toContain("IXORA_EMBEDDING_MODEL: ${IXORA_EMBEDDING_MODEL:-}");
+      expect(content).toContain(
+        "IXORA_EMBEDDING_PROVIDER: ${IXORA_EMBEDDING_PROVIDER:-}",
+      );
       // Per-system creds still resolve via compose interpolation
       expect(content).toContain("DB2i_HOST: ${SYSTEM_DEFAULT_HOST}");
       expect(content).toContain("DB2i_HOST: ${SYSTEM_DEV_HOST}");

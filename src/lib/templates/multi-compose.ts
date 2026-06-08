@@ -202,6 +202,8 @@ ${extensionLines}
       IXORA_AGENT_MODEL: \${IXORA_AGENT_MODEL:-anthropic:claude-sonnet-4-6}
       IXORA_TEAM_MODEL: \${IXORA_TEAM_MODEL:-anthropic:claude-haiku-4-5}
       IXORA_CONTEXT_PROVIDER_MODEL: \${IXORA_CONTEXT_PROVIDER_MODEL:-}
+      IXORA_EMBEDDING_MODEL: \${IXORA_EMBEDDING_MODEL:-}
+      IXORA_EMBEDDING_PROVIDER: \${IXORA_EMBEDDING_PROVIDER:-}
       DB_HOST: agentos-db
       DB_PORT: "5432"
       DB_USER: \${DB_USER:-ai}
