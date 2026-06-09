@@ -13,6 +13,21 @@ import {
 } from "../lib/agentos-output.js";
 import type { ConfigShape, KnowledgeInstance } from "./status.js";
 
+/**
+ * Build the discovery command that points a user at the content in their
+ * knowledge base when a lookup by content_id fails, scoped to whichever
+ * KB/DB they targeted so the suggestion is runnable as-is.
+ */
+function knowledgeListHint(opts: {
+  knowledgeId?: string;
+  dbId?: string;
+}): string {
+  if (opts.knowledgeId)
+    return `ixora knowledge list --knowledge-id ${opts.knowledgeId}`;
+  if (opts.dbId) return `ixora knowledge list --db-id ${opts.dbId}`;
+  return "ixora knowledge list";
+}
+
 export const knowledgeCommand = new Command("knowledge").description(
   "Manage knowledge base",
 );
@@ -155,8 +170,8 @@ knowledgeCommand
   .option("--db-id <id>", "Database ID")
   .option("--knowledge-id <id>", "Knowledge base ID")
   .action(async (contentId: string, _options, cmd) => {
+    const opts = cmd.optsWithGlobals();
     try {
-      const opts = cmd.optsWithGlobals();
       const client = getClient(cmd);
       const result = await client.knowledge.get(contentId, {
         dbId: opts.dbId,
@@ -194,7 +209,15 @@ knowledgeCommand
         },
       );
     } catch (err) {
-      handleError(err, { resource: "Knowledge base", url: getBaseUrl(cmd) });
+      // A 404 here is overwhelmingly a bad content_id (the positional arg);
+      // the backend conflates it with a missing KB, so label it for the
+      // common case and echo the id + a scoped discovery command.
+      handleError(err, {
+        resource: "Knowledge content",
+        identifier: contentId,
+        listCommand: knowledgeListHint(opts),
+        url: getBaseUrl(cmd),
+      });
     }
   });
 
@@ -283,26 +306,43 @@ knowledgeCommand
         knowledgeId: opts.knowledgeId,
       });
 
+      const s = result as Record<string, unknown>;
       const format = getOutputFormat(cmd);
       if (format === "json") {
         printJson(result);
-        return;
+      } else {
+        outputDetail(
+          cmd,
+          {
+            content_id: s.content_id ?? s.id ?? "",
+            status: s.status ?? "",
+            progress: s.progress ?? "",
+            error: s.error ?? s.status_message ?? "",
+          },
+          {
+            labels: ["Content ID", "Status", "Progress", "Error"],
+            keys: ["content_id", "status", "progress", "error"],
+          },
+        );
       }
 
-      const s = result as Record<string, unknown>;
-      outputDetail(
-        cmd,
-        {
-          content_id: s.content_id ?? "",
-          status: s.status ?? "",
-          progress: s.progress ?? "",
-          error: s.error ?? "",
-        },
-        {
-          labels: ["Content ID", "Status", "Progress", "Error"],
-          keys: ["content_id", "status", "progress", "error"],
-        },
-      );
+      // The status endpoint returns 200 even when processing terminally failed
+      // -- and a missing content reports status:"failed"/"Content not found"
+      // rather than a 404. Never exit 0 on a failure the user asked about.
+      const statusVal = String(s.status ?? "").toLowerCase();
+      if (statusVal === "failed" || statusVal === "error") {
+        const detail = String(s.status_message ?? s.error ?? "");
+        if (/not found/i.test(detail)) {
+          writeError(
+            `Knowledge content '${contentId}' not found. Run \`${knowledgeListHint(opts)}\` to see available IDs.`,
+          );
+        } else {
+          writeError(
+            `Content processing ${statusVal}${detail ? `: ${detail}` : "."}`,
+          );
+        }
+        process.exitCode = 1;
+      }
     } catch (err) {
       handleError(err, { resource: "Knowledge base", url: getBaseUrl(cmd) });
     }
