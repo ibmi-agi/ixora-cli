@@ -2,17 +2,9 @@ import { existsSync } from "node:fs";
 import chalk from "chalk";
 import { SCRIPT_VERSION, ENV_FILE, COMPOSE_FILE } from "../lib/constants.js";
 import { envGet } from "../lib/env.js";
-import { runComposeCapture } from "../lib/compose.js";
+import { parseComposeImages, runComposeCapture } from "../lib/compose.js";
 import { detectComposeCmd } from "../lib/platform.js";
 import { dim } from "../lib/ui.js";
-
-interface ComposeImage {
-  Service?: string;
-  Repository?: string;
-  Tag?: string;
-  ID?: string;
-  Size?: number;
-}
 
 export async function cmdVersion(opts?: { runtime?: string }): Promise<void> {
   console.log(`ixora ${SCRIPT_VERSION}`);
@@ -37,7 +29,11 @@ export async function cmdVersion(opts?: { runtime?: string }): Promise<void> {
       ]);
 
       if (output.trim()) {
-        const images = parseComposeImages(output);
+        // Repository/Tag only exist in docker compose v2 images JSON —
+        // skip the section when a podman-compose box returns podman's schema.
+        const images = parseComposeImages(output).filter(
+          (img) => img.Repository,
+        );
         if (images.length > 0) {
           console.log();
           console.log(`  ${chalk.bold("Running containers:")}`);
@@ -54,28 +50,5 @@ export async function cmdVersion(opts?: { runtime?: string }): Promise<void> {
     } catch {
       // Docker not running or compose not available — skip silently
     }
-  }
-}
-
-function parseComposeImages(output: string): ComposeImage[] {
-  const trimmed = output.trim();
-  if (!trimmed) return [];
-
-  try {
-    const parsed = JSON.parse(trimmed);
-    if (Array.isArray(parsed)) return parsed;
-    return [parsed];
-  } catch {
-    return trimmed
-      .split("\n")
-      .filter((line) => line.trim())
-      .map((line) => {
-        try {
-          return JSON.parse(line);
-        } catch {
-          return null;
-        }
-      })
-      .filter(Boolean) as ComposeImage[];
   }
 }

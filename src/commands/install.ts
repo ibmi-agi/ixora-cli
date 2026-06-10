@@ -229,7 +229,10 @@ export async function cmdInstall(opts: InstallOptions): Promise<void> {
   if (deploymentMode === "custom") {
     info("Fetching component manifest from image...");
     const imageRef = `ghcr.io/ibmi-agi/ixora-api:${version}`;
-    const manifest = await ensureManifest(imageRef, { force: true });
+    const manifest = await ensureManifest(imageRef, {
+      force: true,
+      composeCmd,
+    });
     const picker: ComponentPickerResult = await promptComponentPicker(
       manifest,
       profileFromManifest(manifest),

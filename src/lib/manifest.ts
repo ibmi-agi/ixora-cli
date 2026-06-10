@@ -2,6 +2,11 @@ import { execa } from "execa";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { IXORA_DIR } from "./constants.js";
+import {
+  type ComposeCmd,
+  detectComposeCmd,
+  getRuntimeBin,
+} from "./platform.js";
 
 /**
  * Component manifest baked into the API image at build time.
@@ -36,12 +41,18 @@ export const MANIFEST_CACHE = join(IXORA_DIR, "manifest.cache.json");
 /**
  * Read the manifest out of a built image without starting a container.
  *
- * Uses `docker run --rm --entrypoint cat <image> /app/.../manifest.json`
- * — cheaper than `docker create` + `docker cp`, and the image is already
- * pulled by the time `install`/`upgrade` calls us.
+ * Uses `<runtime> run --rm --entrypoint cat <image> /app/.../manifest.json`
+ * — cheaper than `create` + `cp`, and the image is already pulled by the
+ * time `install`/`upgrade` calls us. Callers that resolved a composeCmd
+ * (e.g. via --runtime) should pass it; otherwise the runtime is detected,
+ * so pure-podman boxes (no docker shim) work too.
  */
-export async function fetchManifest(image: string): Promise<Manifest> {
-  const { stdout } = await execa("docker", [
+export async function fetchManifest(
+  image: string,
+  composeCmd?: ComposeCmd,
+): Promise<Manifest> {
+  const runtime = getRuntimeBin(composeCmd ?? (await detectComposeCmd()));
+  const { stdout } = await execa(runtime, [
     "run",
     "--rm",
     "--entrypoint",
@@ -86,13 +97,16 @@ export function cacheManifest(manifest: Manifest): void {
  */
 export async function ensureManifest(
   image: string,
-  { force = false }: { force?: boolean } = {},
+  {
+    force = false,
+    composeCmd,
+  }: { force?: boolean; composeCmd?: ComposeCmd } = {},
 ): Promise<Manifest> {
   if (!force) {
     const cached = readCachedManifest();
     if (cached) return cached;
   }
-  const fresh = await fetchManifest(image);
+  const fresh = await fetchManifest(image, composeCmd);
   cacheManifest(fresh);
   return fresh;
 }

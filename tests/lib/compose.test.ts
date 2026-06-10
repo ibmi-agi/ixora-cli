@@ -2,9 +2,16 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { resolveService, runCompose } from "../../src/lib/compose.js";
+import {
+  parseComposeImages,
+  parseComposePs,
+  resolveService,
+  runCompose,
+} from "../../src/lib/compose.js";
 import { generateMultiCompose } from "../../src/lib/templates/multi-compose.js";
 import {
+  DOCKER_PS_NDJSON,
+  PODMAN_PS_JSON,
   SAMPLE_ENV_WITH_SYSTEM,
   SAMPLE_SYSTEMS_YAML_SINGLE,
 } from "../helpers/fixtures.js";
@@ -42,6 +49,81 @@ describe("compose", () => {
 
     it("strips both prefix and suffix from full container name", () => {
       expect(resolveService("ixora-ibmi-mcp-server-1")).toBe("ibmi-mcp-server");
+    });
+
+    it("strips podman-compose underscore prefix and suffix", () => {
+      expect(resolveService("ixora_api-default_1")).toBe("api-default");
+      expect(resolveService("ixora_ui_1")).toBe("ui");
+    });
+  });
+
+  describe("parseComposePs", () => {
+    it("parses docker compose v2 NDJSON with top-level Service/Name", () => {
+      const entries = parseComposePs(DOCKER_PS_NDJSON);
+      expect(entries).toHaveLength(4);
+      const api = entries.find((e) => e.Service === "api-default");
+      expect(api?.Name).toBe("ixora-api-default-1");
+      expect(api?.State).toBe("running");
+    });
+
+    it("parses docker compose v2 JSON-array output (older versions)", () => {
+      const arr = JSON.stringify([
+        { Name: "ixora-api-default-1", Service: "api-default", State: "running" },
+      ]);
+      const entries = parseComposePs(arr);
+      expect(entries).toHaveLength(1);
+      expect(entries[0]?.Service).toBe("api-default");
+    });
+
+    it("normalizes podman ps JSON: Service from labels, Name from Names[0]", () => {
+      const entries = parseComposePs(PODMAN_PS_JSON);
+      expect(entries).toHaveLength(4);
+      const api = entries.find((e) => e.Service === "api-default");
+      expect(api?.Name).toBe("ixora_api-default_1");
+      expect(api?.State).toBe("running");
+      expect(entries.map((e) => e.Service)).toEqual([
+        "agentos-db",
+        "mcp-default",
+        "api-default",
+        "ui",
+      ]);
+    });
+
+    it("extracts the service from a docker-style labels string", () => {
+      const out = JSON.stringify([
+        {
+          Names: ["ixora_api-default_1"],
+          State: "running",
+          Labels:
+            "com.docker.compose.project=ixora,com.docker.compose.service=api-default",
+        },
+      ]);
+      expect(parseComposePs(out)[0]?.Service).toBe("api-default");
+    });
+
+    it("returns empty array for empty or garbage output", () => {
+      expect(parseComposePs("")).toEqual([]);
+      expect(parseComposePs("   \n  ")).toEqual([]);
+      expect(parseComposePs("not json at all")).toEqual([]);
+    });
+  });
+
+  describe("parseComposeImages", () => {
+    it("parses docker compose v2 images NDJSON", () => {
+      const out = `{"Service":"api-default","Repository":"ghcr.io/ibmi-agi/ixora-api","Tag":"v0.0.27","ID":"sha256:abc"}
+{"Service":"ui","Repository":"ghcr.io/ibmi-agi/ixora-ui","Tag":"v0.0.27","ID":"sha256:def"}`;
+      const images = parseComposeImages(out);
+      expect(images).toHaveLength(2);
+      expect(images[0]?.Repository).toBe("ghcr.io/ibmi-agi/ixora-api");
+    });
+
+    it("returns entries without Repository for podman images JSON (callers filter)", () => {
+      const out = JSON.stringify([
+        { Id: "abc", Names: ["ghcr.io/ibmi-agi/ixora-api:v0.0.27"] },
+      ]);
+      const images = parseComposeImages(out);
+      expect(images).toHaveLength(1);
+      expect(images[0]?.Repository).toBeUndefined();
     });
   });
 
