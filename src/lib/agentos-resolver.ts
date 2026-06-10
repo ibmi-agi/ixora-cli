@@ -19,7 +19,7 @@
 
 import chalk from "chalk";
 import { existsSync } from "node:fs";
-import { runComposeCapture } from "./compose.js";
+import { parseComposePs, runComposeCapture } from "./compose.js";
 import { COMPOSE_FILE } from "./constants.js";
 import { envGet, getApiPortBase } from "./env.js";
 import { detectComposeCmd } from "./platform.js";
@@ -46,9 +46,10 @@ const DEFAULT_TIMEOUT_SECONDS = 60;
 /**
  * Discover which `api-<id>` services are running.
  *
- * Mirrors the parsing approach in commands/status.ts (both NDJSON and JSON-array
- * outputs from `docker compose ps --format json`). Returns an empty set when
- * the stack hasn't been installed yet or the compose call fails.
+ * Parsing is shared with commands/status.ts via lib/compose.ts, which
+ * normalizes both docker compose v2 and podman-compose `ps --format json`
+ * dialects. Returns an empty set when the stack hasn't been installed yet
+ * or the compose call fails.
  */
 export async function discoverRunningSystems(): Promise<Set<string>> {
   if (!existsSync(COMPOSE_FILE)) return new Set();
@@ -61,42 +62,18 @@ export async function discoverRunningSystems(): Promise<Set<string>> {
     return new Set();
   }
 
-  const trimmed = psJson.trim();
-  if (!trimmed) return new Set();
+  return runningSystemsFromPsJson(psJson);
+}
 
-  const entries = parseComposePs(trimmed);
+/** Extract the running `api-<id>` system ids from `compose ps --format json` output. */
+export function runningSystemsFromPsJson(psJson: string): Set<string> {
   const running = new Set<string>();
-  for (const entry of entries) {
+  for (const entry of parseComposePs(psJson)) {
     if (entry.State !== "running" || !entry.Service) continue;
     const m = /^api-(.+)$/.exec(entry.Service);
     if (m) running.add(m[1]);
   }
   return running;
-}
-
-interface ComposePsEntry {
-  Service?: string;
-  State?: string;
-}
-
-function parseComposePs(output: string): ComposePsEntry[] {
-  try {
-    const parsed = JSON.parse(output);
-    if (Array.isArray(parsed)) return parsed as ComposePsEntry[];
-    return [parsed as ComposePsEntry];
-  } catch {
-    return output
-      .split("\n")
-      .filter((line) => line.trim())
-      .map((line) => {
-        try {
-          return JSON.parse(line) as ComposePsEntry;
-        } catch {
-          return null;
-        }
-      })
-      .filter((x): x is ComposePsEntry => x !== null);
-  }
 }
 
 /**

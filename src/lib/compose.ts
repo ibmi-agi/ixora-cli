@@ -97,6 +97,96 @@ export function requireComposeFile(): void {
 }
 
 export function resolveService(input: string): string {
-  // Strip "ixora-" prefix and trailing "-N" replica suffix if present
-  return input.replace(/^ixora-/, "").replace(/-\d+$/, "");
+  // Strip "ixora-" prefix and trailing "-N" replica suffix if present.
+  // docker compose v2 separates with dashes (ixora-api-1); podman-compose
+  // uses underscores (ixora_api_1) — accept both.
+  return input.replace(/^ixora[-_]/, "").replace(/[-_]\d+$/, "");
+}
+
+/**
+ * One normalized entry from `compose ps --format json`.
+ *
+ * Docker Compose v2 emits NDJSON (or, in older versions, a JSON array) with
+ * top-level `Service` and `Name` keys. podman-compose delegates to
+ * `podman ps`, whose JSON array entries have neither — the service is only
+ * in Labels["com.docker.compose.service"] and the container name in the
+ * `Names` array. parseComposePs normalizes both dialects to this shape.
+ */
+export interface ComposePsEntry {
+  Service?: string;
+  State?: string;
+  Name?: string;
+}
+
+interface RawPsEntry {
+  Service?: string;
+  State?: string;
+  Name?: string;
+  Names?: string[] | string;
+  Labels?: Record<string, string> | string;
+}
+
+const SERVICE_LABEL = "com.docker.compose.service";
+
+export function parseComposePs(output: string): ComposePsEntry[] {
+  return parseJsonEntries<RawPsEntry>(output).map((entry) => ({
+    Service: entry.Service ?? serviceFromLabels(entry.Labels),
+    State: entry.State,
+    Name:
+      entry.Name ?? (Array.isArray(entry.Names) ? entry.Names[0] : entry.Names),
+  }));
+}
+
+function serviceFromLabels(
+  labels: RawPsEntry["Labels"],
+): string | undefined {
+  if (!labels) return undefined;
+  if (typeof labels === "string") {
+    // docker-style "key=value,key=value" label string
+    for (const pair of labels.split(",")) {
+      const eq = pair.indexOf("=");
+      if (eq > 0 && pair.slice(0, eq) === SERVICE_LABEL) {
+        return pair.slice(eq + 1);
+      }
+    }
+    return undefined;
+  }
+  return labels[SERVICE_LABEL];
+}
+
+/** One entry from `compose images --format json` (docker compose v2 schema). */
+export interface ComposeImage {
+  Service?: string;
+  Repository?: string;
+  Tag?: string;
+  ID?: string;
+  Size?: number;
+}
+
+export function parseComposeImages(output: string): ComposeImage[] {
+  return parseJsonEntries<ComposeImage>(output);
+}
+
+/** Parse a JSON array, single JSON object, or NDJSON lines. */
+function parseJsonEntries<T>(output: string): T[] {
+  const trimmed = output.trim();
+  if (!trimmed) return [];
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (Array.isArray(parsed)) return parsed as T[];
+    return [parsed as T];
+  } catch {
+    return trimmed
+      .split("\n")
+      .filter((line) => line.trim())
+      .map((line) => {
+        try {
+          return JSON.parse(line) as T;
+        } catch {
+          return null;
+        }
+      })
+      .filter((x): x is T => x !== null);
+  }
 }

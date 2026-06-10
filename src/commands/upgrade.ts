@@ -121,7 +121,10 @@ export async function cmdUpgrade(opts: UpgradeOptions): Promise<void> {
     // truly-missing IDs at boot, surfacing the same error loudly.
     try {
       const imageRef = `ghcr.io/ibmi-agi/ixora-api:${targetVersion}`;
-      const manifest = await ensureManifest(imageRef, { force: true });
+      const manifest = await ensureManifest(imageRef, {
+        force: true,
+        composeCmd,
+      });
       await reconcileCustomProfiles(manifest);
     } catch (e) {
       warn(

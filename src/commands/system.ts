@@ -369,7 +369,7 @@ export async function cmdSystemStart(id: string): Promise<void> {
   const services = systemServices(id);
   info(`Starting system '${id}' (${services.join(", ")})...`);
   await runCompose(composeCmd, ["up", "-d", ...services]);
-  await waitForHealthy(composeCmd);
+  await waitForHealthy(composeCmd, { service: `api-${id}` });
   success(`System '${id}' started`);
 }
 
@@ -477,7 +477,7 @@ export async function cmdSystemRestart(id: string): Promise<void> {
   const services = systemServices(id);
   info(`Restarting system '${id}' (${services.join(", ")})...`);
   await runCompose(composeCmd, ["up", "-d", "--force-recreate", ...services]);
-  await waitForHealthy(composeCmd);
+  await waitForHealthy(composeCmd, { service: `api-${id}` });
   success(`System '${id}' restarted`);
 }
 

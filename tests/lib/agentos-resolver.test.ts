@@ -25,13 +25,42 @@ vi.mock("../../src/lib/constants.js", async (importOriginal) => {
   };
 });
 
-const { resolveAgentOSTarget } = await import(
+const { resolveAgentOSTarget, runningSystemsFromPsJson } = await import(
   "../../src/lib/agentos-resolver.js"
+);
+const { DOCKER_PS_NDJSON, PODMAN_PS_JSON } = await import(
+  "../helpers/fixtures.js"
 );
 
 function runningOf(...ids: string[]): () => Promise<Set<string>> {
   return async () => new Set(ids);
 }
+
+describe("runningSystemsFromPsJson", () => {
+  it("extracts api-<id> systems from docker compose v2 NDJSON", () => {
+    expect(runningSystemsFromPsJson(DOCKER_PS_NDJSON)).toEqual(
+      new Set(["default"]),
+    );
+  });
+
+  it("extracts api-<id> systems from podman-compose ps JSON (service in labels)", () => {
+    expect(runningSystemsFromPsJson(PODMAN_PS_JSON)).toEqual(
+      new Set(["default"]),
+    );
+  });
+
+  it("ignores non-running and non-api services", () => {
+    const out = JSON.stringify([
+      { Service: "api-dev", State: "exited" },
+      { Service: "ui", State: "running" },
+    ]);
+    expect(runningSystemsFromPsJson(out)).toEqual(new Set());
+  });
+
+  it("returns empty set for empty output", () => {
+    expect(runningSystemsFromPsJson("")).toEqual(new Set());
+  });
+});
 
 describe("resolveAgentOSTarget", () => {
   beforeEach(() => {

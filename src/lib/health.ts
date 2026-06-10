@@ -1,14 +1,37 @@
 import { execa } from "execa";
 import ora from "ora";
 import { type ComposeCmd, getRuntimeBin } from "./platform.js";
-import { runComposeCapture } from "./compose.js";
+import { parseComposePs, runComposeCapture } from "./compose.js";
 import { success, warn, error, bold } from "./ui.js";
 import { HEALTH_TIMEOUT } from "./constants.js";
 
+export interface WaitForHealthyOptions {
+  timeout?: number;
+  /** Specific api service to wait on (e.g. "api-default"). Default: first api-* service. */
+  service?: string;
+}
+
+/**
+ * Find the API container name in `compose ps --format json` output.
+ *
+ * Uses the normalized parser so it works for both docker compose v2
+ * (ixora-api-default-1) and podman-compose (ixora_api-default_1) naming.
+ */
+export function findApiContainerName(
+  psJson: string,
+  service?: string,
+): string {
+  const entry = parseComposePs(psJson).find((e) =>
+    service ? e.Service === service : /^api-/.test(e.Service ?? ""),
+  );
+  return entry?.Name ?? "";
+}
+
 export async function waitForHealthy(
   composeCmd: ComposeCmd,
-  timeout: number = HEALTH_TIMEOUT,
+  options: WaitForHealthyOptions = {},
 ): Promise<boolean> {
+  const timeout = options.timeout ?? HEALTH_TIMEOUT;
   const spinner = ora("Waiting for services to become healthy...").start();
   const runtime = getRuntimeBin(composeCmd);
 
@@ -18,10 +41,9 @@ export async function waitForHealthy(
     const output = await runComposeCapture(composeCmd, [
       "ps",
       "--format",
-      "{{.Name}}",
+      "json",
     ]);
-    const containers = output.split("\n").filter(Boolean);
-    apiContainer = containers.find((c) => c.includes("ixora-api-")) ?? "";
+    apiContainer = findApiContainerName(output, options.service);
   } catch {
     // Ignore errors finding container
   }
