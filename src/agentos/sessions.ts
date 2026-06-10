@@ -67,7 +67,7 @@ sessionsCommand
 
       outputList(cmd, data, {
         columns: ["SESSION_ID", "NAME", "TYPE", "CREATED_AT"],
-        keys: ["session_id", "session_name", "type", "created_at"],
+        keys: ["session_id", "session_name", "session_type", "created_at"],
         meta,
       });
     } catch (err) {

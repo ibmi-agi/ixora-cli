@@ -36,7 +36,9 @@ ixora agents list --json id,name
 ixora traces list --json trace_id,status,duration
 ```
 
-This works on **list** commands. On **detail** commands the full object is emitted.
+Field projection works on both **list** and **detail** commands. Note the shape difference: projected output is a flat array (list) or flat object (detail) with no `{data, meta}` envelope.
+
+Without a field projection, list JSON rows contain the same fields as the table columns — not the raw API payload. For the full object, use the matching detail command (`ixora agents get <id> --json`) or project the fields you need explicitly (projection selects from the raw rows, so any API field is reachable).
 
 ---
 
@@ -77,7 +79,7 @@ sql-agent · run_abc123 · ✓ completed · 4s · 1,240 tokens
 ### Pipe IDs into another command
 
 ```bash
-ixora agents list --json id | jq -r '.data[].id' \
+ixora agents list --json id | jq -r '.[].id' \
   | while read id; do
       ixora agents get "$id" --json model
     done
@@ -87,7 +89,7 @@ ixora agents list --json id | jq -r '.data[].id' \
 
 ```bash
 ixora traces list --json trace_id,status,duration | jq -r '
-  .data[] | select(.status != "ok")
+  .[] | select(.status != "ok")
   | "\(.trace_id)\t\(.status)\t\(.duration)"
 ' | column -t
 ```
@@ -123,7 +125,7 @@ See [`runtime/agents.md`](runtime/agents.md) for details on streaming, pausing, 
 
 ## Pagination
 
-List commands paginate locally with `--page` and `--limit` (defaults: page 1, limit 20). Meta is included in JSON output:
+List commands paginate locally with `--page` and `--limit` (defaults: page 1, limit 20). Meta is included in enveloped JSON output (bare `--json` / `-o json` / piped); a `--json <fields>` projection emits a flat array without meta:
 
 ```bash
 ixora traces list --page 2 --limit 50

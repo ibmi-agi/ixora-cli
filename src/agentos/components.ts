@@ -47,8 +47,8 @@ componentsCommand
         | undefined;
 
       outputList(cmd, data, {
-        columns: ["ID", "NAME", "TYPE", "STAGE"],
-        keys: ["id", "name", "component_type", "stage"],
+        columns: ["ID", "NAME", "TYPE", "VERSION"],
+        keys: ["component_id", "name", "component_type", "current_version"],
         meta,
       });
     } catch (err) {

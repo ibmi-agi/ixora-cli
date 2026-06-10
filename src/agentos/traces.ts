@@ -230,10 +230,33 @@ tracesCommand
 
       const r = result as Record<string, unknown>;
       if (Array.isArray(r.data)) {
-        outputList(cmd, r.data as Record<string, unknown>[], {
-          columns: ["TRACE_ID", "NAME", "STATUS", "DURATION"],
-          keys: ["trace_id", "name", "status", "duration"],
-        });
+        // `--group-by session` returns TraceSessionStats rows, not traces —
+        // shaped like `traces stats`, so reuse those columns.
+        if (opts.groupBy === "session") {
+          outputList(cmd, r.data as Record<string, unknown>[], {
+            columns: [
+              "SESSION_ID",
+              "USER_ID",
+              "AGENT_ID",
+              "TOTAL_TRACES",
+              "FIRST_TRACE",
+              "LAST_TRACE",
+            ],
+            keys: [
+              "session_id",
+              "user_id",
+              "agent_id",
+              "total_traces",
+              "first_trace_at",
+              "last_trace_at",
+            ],
+          });
+        } else {
+          outputList(cmd, r.data as Record<string, unknown>[], {
+            columns: ["TRACE_ID", "NAME", "STATUS", "DURATION"],
+            keys: ["trace_id", "name", "status", "duration"],
+          });
+        }
       } else {
         outputDetail(cmd, r, { labels: [], keys: [] });
       }

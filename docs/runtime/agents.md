@@ -353,7 +353,7 @@ esac
 
 ```bash
 ixora traces list --status running --json run_id \
-  | jq -r '.data[].run_id' \
+  | jq -r '.[].run_id' \
   | while read id; do
       ixora agents cancel sql-agent "$id"
     done
