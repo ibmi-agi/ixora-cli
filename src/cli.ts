@@ -8,6 +8,7 @@ import {
 import chalk from "chalk";
 import { agentsCommand } from "./agentos/agents.js";
 import { approvalsCommand } from "./agentos/approvals.js";
+import { chatCommand } from "./agentos/chat.js";
 import { componentsCommand as agnoComponentsCommand } from "./agentos/components.js";
 import { databasesCommand } from "./agentos/databases.js";
 import { docsCommand } from "./agentos/docs.js";
@@ -601,6 +602,7 @@ export function createProgram(): Command {
 
   // ── Mount the ported agno tree at top level ────────────────────────────
   program.addCommand(agentsCommand);
+  program.addCommand(chatCommand);
   program.addCommand(teamsCommand);
   program.addCommand(workflowsCommand);
   program.addCommand(tracesCommand);
