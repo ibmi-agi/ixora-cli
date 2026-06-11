@@ -67,13 +67,16 @@ The containers for that system stop on the next `ixora stack restart` (because t
 ```
 $ ixora stack system list
 
-  ID         KIND       URL                            NAME              MODE
-* default    managed    http://localhost:18000         Development       full
-  prod       managed    http://localhost:18001         Production        custom
-  personal   external   http://localhost:8080          Personal AgentOS  —
+  Systems
+
+     ID            URL                                     KIND        NOTE
+  *  default       http://localhost:18000                  managed     full
+     prod          http://localhost:18001                  managed     custom
+     personal      http://localhost:8080                   external    -
 ```
 
 - `*` marks the configured default.
+- `NOTE` shows the deployment mode for managed systems (`-` for external).
 - Managed systems' URLs are derived from their assigned API port.
 - External systems show the URL you provided.
 
