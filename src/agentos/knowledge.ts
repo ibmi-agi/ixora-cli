@@ -243,6 +243,10 @@ knowledgeCommand
           }
         | undefined;
 
+      // Truncate content for table display only. JSON output is for
+      // scripts and carries the full chunk text — the content record from
+      // `knowledge get` is metadata-only, so search is the only path to it.
+      const truncateForTable = getOutputFormat(cmd) === "table";
       outputList(
         cmd,
         data.map((item) => {
@@ -250,7 +254,7 @@ knowledgeCommand
           return {
             id: item.id ?? "",
             content:
-              rawContent.length > 80
+              truncateForTable && rawContent.length > 80
                 ? `${rawContent.substring(0, 77)}...`
                 : rawContent,
             name: item.name ?? "",
