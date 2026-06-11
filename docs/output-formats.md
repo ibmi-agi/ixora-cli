@@ -38,7 +38,7 @@ ixora traces list --json trace_id,status,duration
 
 Field projection works on both **list** and **detail** commands. Note the shape difference: projected output is a flat array (list) or flat object (detail) with no `{data, meta}` envelope.
 
-Without a field projection, list JSON rows contain the same fields as the table columns — not the raw API payload. For the full object, use the matching detail command (`ixora agents get <id> --json`) or project the fields you need explicitly (projection selects from the raw rows, so any API field is reachable).
+Without a field projection, JSON output is the **full payload**, wrapped in the `{data, meta}` envelope. For most list commands the rows carry every field the API returns — often more than the table view shows. A few verbs (`evals list`, `approvals list`, `schedules list`/`runs`, `registries list`, `knowledge search`) emit the same display-shaped rows as their tables. Use `--json <fields>` when you only want specific fields.
 
 ---
 
@@ -89,7 +89,7 @@ ixora agents list --json id | jq -r '.[].id' \
 
 ```bash
 ixora traces list --json trace_id,status,duration | jq -r '
-  .[] | select(.status != "ok")
+  .[] | select(.status != "OK")
   | "\(.trace_id)\t\(.status)\t\(.duration)"
 ' | column -t
 ```

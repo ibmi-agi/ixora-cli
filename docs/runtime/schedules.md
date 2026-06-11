@@ -183,7 +183,7 @@ ixora schedules list --enabled --json id \
   | jq -r '.[].id' \
   | while read id; do
       ixora schedules runs "$id" --json \
-        | jq --arg id "$id" -r '.data[] | select(.status != "ok") | "\($id) \(.id) \(.status)"'
+        | jq --arg id "$id" -r '.data[] | select(.status == "failed") | "\($id) \(.id) \(.status)"'
     done
 ```
 

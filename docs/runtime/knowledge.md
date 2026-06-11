@@ -81,7 +81,7 @@ a document to the **User Documents** base, pass that base's `knowledge_id`.
 Processing is asynchronous. After upload, the CLI prints the content ID and hints how to poll:
 
 ```
-✓ Content uploaded: kn_abc123  (status: queued)
+✓ Content uploaded: kn_abc123  (status: processing)
   Check status: ixora knowledge status kn_abc123
 ```
 
@@ -151,7 +151,7 @@ ixora knowledge status kn_abc
 ixora knowledge status kn_abc --json
 ```
 
-Default fields: `Content ID`, `Status`, `Progress`, `Error`. Typical statuses: `queued`, `processing`, `ready`, `error`.
+Default fields: `Content ID`, `Status`, `Progress`, `Error`. Statuses: `processing`, `completed`, `failed`.
 
 ---
 
@@ -197,10 +197,10 @@ Output fields: `Readers`, `Chunkers`, `Vector DBs`. Useful when debugging "why d
 for f in ./docs/*.md; do
   id=$(ixora knowledge upload "$f" --json | jq -r '.id')
   echo "uploaded $f as $id"
-  until [ "$(ixora knowledge status "$id" --json | jq -r '.status')" = "ready" ]; do
+  until [ "$(ixora knowledge status "$id" --json | jq -r '.status')" != "processing" ]; do
     sleep 2
   done
-  echo "ready: $id"
+  echo "$(ixora knowledge status "$id" --json | jq -r '.status'): $id"
 done
 ```
 

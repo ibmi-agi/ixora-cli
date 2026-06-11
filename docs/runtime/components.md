@@ -27,7 +27,7 @@ ixora components config delete <component_id> <version>
 ```bash
 ixora components list
 ixora components list --type agent
-ixora components list --json id,name,component_type,stage
+ixora components list --json component_id,name,component_type,current_version
 ```
 
 | Flag | Purpose |
@@ -36,9 +36,9 @@ ixora components list --json id,name,component_type,stage
 | `--limit <n>` | Default `20` |
 | `--page <n>` | Default `1` |
 
-Output columns: `ID`, `NAME`, `TYPE`, `STAGE`.
+Output columns: `ID`, `NAME`, `TYPE`, `VERSION`.
 
-`STAGE` reflects publishing state — typically `draft` or `published`.
+`VERSION` is the component's current configuration version (`current_version` in the payload).
 
 ---
 
