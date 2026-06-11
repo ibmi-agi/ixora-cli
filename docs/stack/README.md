@@ -9,7 +9,7 @@
 - [Install](install.md) — `ixora stack install` walkthrough
 - [Lifecycle](lifecycle.md) — `start`, `stop`, `restart`, `status`, `logs`, `upgrade`, `uninstall`, `version`
 - [Systems](systems.md) — `stack system add | remove | list | default | start | stop | restart`
-- [Profiles & deployment shapes](profiles.md) — `--profile full|mcp|cli`, agent profiles, CLI mode, DB isolation
+- [Profiles & deployment shapes](profiles.md) — `--profile full|mcp|cli`, deployment modes (full/custom), CLI mode, DB isolation
 - [Configuration](config.md) — `stack config show | set | edit | reset | show-system`, `stack agents`, `stack components`
 - [Model provider](models.md) — `stack models show | set`
 

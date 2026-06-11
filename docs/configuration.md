@@ -81,22 +81,20 @@ Declarative list of IBM i systems. Managed via `ixora stack system add|remove|li
 systems:
   - id: default
     name: 'Development'
-    profile: full
-    agents: []
+    kind: managed
+    mode: full
   - id: prod
     name: 'Production'
-    profile: security
-    agents: []
+    kind: managed
+    mode: custom
 ```
 
 | Field | Type | Meaning |
 |---|---|---|
 | `id` | string | Lowercase + hyphenated identifier. Used in container names (`api-<id>`, `mcp-<id>`) and credential env keys (`SYSTEM_<ID>_*`). |
 | `name` | string | Human-readable display name shown in lists and UI. |
-| `profile` | string | Agent profile loaded by the API: `full`, `sql-services`, `security`, `knowledge`. |
-| `agents` | array | Optional list of agent IDs. Empty = use the profile default. |
-| `mode` | string | (Optional) `full` or `custom`. `custom` reads `~/.ixora/profiles/<id>.yaml`. |
 | `kind` | string | `managed` (default — ixora lifecycles it) or `external` (AgentOS URL ixora only routes to). |
+| `mode` | string | Managed systems only: `full` (every component the image declares) or `custom` (the picked component IDs are read from `~/.ixora/profiles/<id>.yaml`). |
 | `url` | string | External systems only — AgentOS endpoint URL. |
 
 ---

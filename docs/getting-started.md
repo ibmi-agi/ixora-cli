@@ -45,8 +45,8 @@ The installer collects:
 2. Model provider (Anthropic recommended) and API key.
 3. IBM i hostname, username, password, and Mapepire port (default `8076`).
 4. A human-readable system display name.
-5. An **agent profile** — which agents the API loads (`full`, `sql-services`, `security`, `knowledge`).
-6. An image version tag.
+5. An image version tag.
+6. A **deployment mode** — `full` (every component the image declares) or `custom` (an interactive picker over the image's agents/teams/workflows/knowledge).
 
 Everything is written to `~/.ixora/`:
 
@@ -67,7 +67,7 @@ When the health check passes, you see:
   UI:      http://localhost:13000
   API:     http://localhost:18000
   MCP:     http://localhost:18000/mcp
-  Agent:   full
+  Mode:    full
 ```
 
 ---

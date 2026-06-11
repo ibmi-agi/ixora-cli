@@ -5,7 +5,7 @@ ixora has **two unrelated** notions of "profile":
 | | What it controls | Set by |
 |---|---|---|
 | **Stack profile** (`--profile`) | Which *containers* run on your machine | `--profile full\|mcp\|cli` |
-| **Agent profile** | Which *agents* the API loads inside its container | Install prompt; per-system in `ixora-systems.yaml` |
+| **Deployment mode** (`--mode`) | Which *components* the API loads inside its container | Install prompt; per-system `mode:` in `ixora-systems.yaml`, picks in `profiles/<id>.yaml` |
 
 This page covers both.
 
@@ -65,7 +65,7 @@ Error: mcp-default is not started in the 'cli' stack profile.
 ### Migration notes
 
 - `--profile api` was renamed to `--profile mcp`. The old name still works (with a one-line warning), and `IXORA_PROFILE=api` is treated as `mcp`.
-- Older versions used `--profile sql-services|security|knowledge` for the **agent** profile. Those values now belong to `--agent-profile` (install-only); passing them to `--profile` produces an error pointing at the new flag.
+- Older versions used `--profile sql-services|security|knowledge` for a named **agent** profile. Named agent profiles are gone — component selection is now the `--mode full|custom` deployment mode (install-only). A stale `IXORA_PROFILE=sql-services|security|knowledge` in `.env` is coerced to the default stack profile `full` (one-line warning unless it already equals `full`).
 
 ---
 
@@ -103,30 +103,26 @@ ixora stack restart
 
 ---
 
-## Agent profile
+## Deployment mode (per system)
 
-Selected during `ixora stack install` (or `ixora stack system add` for additional systems). Persisted per-system in `~/.ixora/ixora-systems.yaml`:
+Selected during `ixora stack install` (or `ixora stack system add` for additional systems). Persisted per-system as `mode:` in `~/.ixora/ixora-systems.yaml`:
 
 ```yaml
 systems:
   - id: default
     name: 'Development'
-    profile: full           # ← agent profile
-    agents: []
+    kind: managed
+    mode: full           # ← deployment mode (full | custom)
 ```
 
-| Agent profile | What's enabled |
+| Deployment mode | What's enabled |
 |---|---|
-| `full` | Every agent / team / workflow the image declares (3 + 2 + 1 by default) |
-| `sql-services` | SQL Services agent: Db2 for i querying, performance monitoring |
-| `security` | Security agent + multi-system security team + assessment workflow |
-| `knowledge` | Knowledge retrieval agent only — lightest footprint, fastest start |
+| `full` | Every agent / team / workflow / knowledge base the image declares |
+| `custom` | Exactly the components you picked in the installer's multi-select, stored in `~/.ixora/profiles/<id>.yaml` |
 
-### Switching a system's agent profile
+### Switching a system's deployment mode
 
-The simplest path: edit `~/.ixora/ixora-systems.yaml`, change the `profile:` line, then `ixora stack restart`.
-
-To pick individual components instead of using a named profile, switch the system to **custom** mode:
+Use the config commands — `mode:` is managed by the CLI and the custom picks live in a separate `profiles/<id>.yaml`, so hand-editing `ixora-systems.yaml` alone is not enough. To pick individual components, switch the system to **custom** mode:
 
 ```bash
 ixora stack config edit <system_id>       # opens the Full / Custom picker

@@ -36,8 +36,8 @@ $ ixora stack config show
     IXORA_DB_ISOLATION          per-system
 
   Systems
-    default   managed   profile=full
-    prod      managed   profile=security
+    default   managed   mode=full
+    prod      managed   mode=custom
 
   Files
     .env                ~/.ixora/.env

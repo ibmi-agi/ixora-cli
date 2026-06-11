@@ -104,18 +104,16 @@ For **Custom**, enter the `provider:model` strings for agent and team models, pl
 
 Enter a human-readable name for this system. Defaults to the hostname you entered. This label appears in the UI and configuration files.
 
-### 3.6 Select an agent profile
+### 3.6 Choose a deployment mode
 
-| Profile | Description |
+| Mode | Description |
 |---|---|
-| `full` | All agents, teams, and workflows (3 agents, 2 teams, 1 workflow) |
-| `sql-services` | SQL Services agent for database queries and performance monitoring |
-| `security` | Security agent, multi-system security team, and assessment workflow |
-| `knowledge` | Knowledge agent only — documentation retrieval (lightest footprint) |
+| `full` (default) | Enables every component the image declares — all agents, teams, workflows, and knowledge bases. |
+| `custom` | Opens an interactive multi-select picker over the image's components (agents/teams/workflows/knowledge, pre-checked all-on). Uncheck what you don't want; your picks are written to `~/.ixora/profiles/<id>.yaml`. |
 
-Start with `knowledge` if you want the fastest startup and smallest resource footprint.
+Start with `full` for everything, or pick `custom` to trim the footprint to just the components you need.
 
-> **Agent profile vs stack profile.** This prompt selects the **agent profile** — which agents the API loads. It is separate from the **stack profile** (`--profile full|mcp|cli`), which controls _which containers_ run. See [section 8](#8-stack-profiles---profile-fullmcpcli) for the stack profile. You can skip this prompt by passing `--agent-profile <name>` to `ixora stack install`.
+> **Deployment mode vs stack profile.** This prompt selects the **deployment mode** (`full` or `custom`) — which *components* the API loads. It is separate from the **stack profile** (`--profile full|mcp|cli`), which controls _which containers_ run. See [section 8](#8-stack-profiles---profile-fullmcpcli) for the stack profile. You can skip this prompt by passing `--mode full` or `--mode custom` to `ixora stack install`.
 
 ### 3.7 Select an image version
 
@@ -139,14 +137,14 @@ On success, you see:
   UI:      http://localhost:13000
   API:     http://localhost:18000
   MCP:     http://localhost:18000/mcp
-  Agent:   full
+  Mode:    full
 
   Manage with: ixora stack start|stop|restart|status|upgrade|config|logs
   Talk to AgentOS: ixora agents|teams|workflows|traces|sessions|knowledge ...
   Config dir:  ~/.ixora
 ```
 
-`Stack` is the deployment shape (`full` includes the UI; `mcp` is backend-only; `cli` drops the MCP container — see [section 8](#8-stack-profiles---profile-fullmcpcli)). `Agent` is the agent profile from `~/.ixora/ixora-systems.yaml`.
+`Stack` is the deployment shape (`full` includes the UI; `mcp` is backend-only; `cli` drops the MCP container — see [section 8](#8-stack-profiles---profile-fullmcpcli)). `Mode` is the per-system deployment mode (`full` or `custom`) from `~/.ixora/ixora-systems.yaml`.
 
 ---
 
@@ -217,8 +215,8 @@ Single system:
 systems:
   - id: default
     name: 'myibmi.example.com'
-    profile: full
-    agents: []
+    kind: managed
+    mode: full
 ```
 
 Multiple systems:
@@ -227,21 +225,22 @@ Multiple systems:
 systems:
   - id: default
     name: 'Development'
-    profile: full
-    agents: []
+    kind: managed
+    mode: full
 
   - id: prod
     name: 'Production'
-    profile: security
-    agents: []
+    kind: managed
+    mode: custom
 ```
 
 | Field | Type | Description |
 |---|---|---|
 | `id` | string | System identifier (lowercase, alphanumeric + hyphens) |
 | `name` | string | Human-readable display name |
-| `profile` | string | Agent profile: `full`, `sql-services`, `security`, or `knowledge` |
-| `agents` | array | Agent IDs to deploy (empty = profile default) |
+| `kind` | string | `managed` (ixora lifecycles it) or `external` (an AgentOS URL ixora only routes to) |
+| `mode` | string | Managed systems only: `full` (every component the image declares) or `custom` (picks read from `~/.ixora/profiles/<id>.yaml`) |
+| `url` | string | External systems only — the AgentOS endpoint URL |
 
 Add systems with `ixora stack system add`. Each system gets its own MCP server, API instance, and Postgres database (`ai_<id>`). The optional AgentOS API key prompt is stored as `SYSTEM_<ID>_AGENTOS_KEY` in `.env` and consumed by `ixora <runtime>` commands targeting that system.
 
@@ -342,10 +341,10 @@ The UI connects to the API at `http://localhost:18000` and provides:
 
 - **Agent interaction** — chat with IBM i agents to run queries, inspect configurations, and analyze system health
 - **SQL Services** — run SQL queries against Db2 for i through the SQL Services agent
-- **Security assessments** — run security audits and review findings (with the `security` or `full` profile)
+- **Security assessments** — run security audits and review findings (when the security components are enabled)
 - **Knowledge retrieval** — search IBM i documentation and best practices
 
-The available features depend on your selected agent profile.
+The available features depend on which components your deployment mode enabled (full = everything; custom = your selection).
 
 ---
 
@@ -454,7 +453,7 @@ ixora stack logs mcp-default --profile cli
 
 **Migration.**
 - `--profile api` was renamed to `--profile mcp` — the old value still works (one-line warning) and a stored `IXORA_PROFILE=api` is treated as `mcp`.
-- Older versions also accepted `--profile sql-services|security|knowledge` for the *agent* profile. Those values now belong to `--agent-profile` (install-only); passing them to `--profile` produces a clear error pointing at the new flag.
+- Older versions also accepted `--profile sql-services|security|knowledge` for a named *agent* profile. Named agent profiles have been removed entirely — component selection is now the `--mode full|custom` deployment mode (install-only). A stale `IXORA_PROFILE=sql-services|security|knowledge` left in `.env` is coerced to the default stack profile `full` (with a one-line warning unless it already equals `full`).
 
 ---
 

@@ -29,7 +29,7 @@ Local-machine operations: provisioning, lifecycle, configuration.
 - [Install](stack/install.md) — first-time setup walkthrough
 - [Lifecycle](stack/lifecycle.md) — `start`, `stop`, `restart`, `status`, `logs`, `upgrade`, `uninstall`, `version`
 - [Systems](stack/systems.md) — manage multiple IBM i targets (`stack system add|remove|list|default|start|stop|restart`)
-- [Profiles & deployment shapes](stack/profiles.md) — `--profile full|mcp|cli`, agent profiles, CLI mode, DB isolation
+- [Profiles & deployment shapes](stack/profiles.md) — `--profile full|mcp|cli`, deployment modes (full/custom), CLI mode, DB isolation
 - [Configuration commands](stack/config.md) — `stack config`, `stack agents`, `stack components`
 - [Model provider](stack/models.md) — `stack models show|set`
 
