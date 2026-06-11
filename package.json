@@ -32,7 +32,7 @@
   ],
   "license": "MIT",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "dependencies": {
     "@inquirer/prompts": "^7.0.0",

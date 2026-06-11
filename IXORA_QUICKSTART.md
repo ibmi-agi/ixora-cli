@@ -22,7 +22,7 @@ Deploy AI agents for IBM i in minutes. This guide walks you through installing t
 
 | Requirement | How to verify |
 |---|---|
-| **Node.js >= 20** | `node --version` |
+| **Node.js >= 22** | `node --version` |
 | **Docker Desktop or Podman** | `docker compose version` or `podman compose version` |
 | **Docker/Podman running** | `docker info` (must not error) |
 | **IBM i with Mapepire service** | Port 8076 reachable from your workstation |

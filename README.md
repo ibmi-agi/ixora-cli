@@ -19,7 +19,7 @@ npx @ibm/ixora stack install
 
 ### Requirements
 
-- Node.js >= 20
+- Node.js >= 22
 - Docker Desktop (or Podman)
 - An IBM i system with Db2 for i
 - An API key for your chosen model provider (Anthropic, OpenAI, Google, or Ollama for local)

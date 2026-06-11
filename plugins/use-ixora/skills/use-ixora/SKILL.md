@@ -49,7 +49,7 @@ ixora stack status                                # is a stack actually running?
 ixora stack system list                           # what systems are registered?
 ```
 
-If the CLI is missing, install with `npm install -g @ibm/ixora` (Node ≥ 20 required). If `stack status` shows no services running, the runtime commands have no AgentOS to talk to — run `ixora stack install` (first time) or `ixora stack start` (existing install). See [`docs/stack/install.md`](docs/stack/install.md) and [`docs/troubleshooting.md`](docs/troubleshooting.md).
+If the CLI is missing, install with `npm install -g @ibm/ixora` (Node ≥ 22 required). If `stack status` shows no services running, the runtime commands have no AgentOS to talk to — run `ixora stack install` (first time) or `ixora stack start` (existing install). See [`docs/stack/install.md`](docs/stack/install.md) and [`docs/troubleshooting.md`](docs/troubleshooting.md).
 
 ## System resolution (the part `--help` won't tell you)
 
@@ -133,7 +133,7 @@ For anything else, `ixora <group> --help` and `ixora <group> <verb> --help` are 
 
 ## Local deployment shape
 
-- **Prereqs:** Node ≥ 20 and a running Docker (or Podman) daemon.
+- **Prereqs:** Node ≥ 22 and a running Docker (or Podman) daemon.
 - **Default ports** for the first managed system: API `18000`, DB `15432`, UI `13000`. Each additional managed system shifts the API port by `+1` (system index 1 → `18001`, index 2 → `18002`, …). DB and UI ports are shared.
 - **Service names** (pass to `stack logs|restart|stop|start <service>`):
   - `agentos-db` — shared Postgres (per-system DBs live inside this single container)
