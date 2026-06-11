@@ -8,6 +8,8 @@ Every command supports three output formats — selected automatically from the 
 | `json`  | Default when piped (non-TTY), or explicit `--json` / `-o json` | Pretty-printed JSON to stdout |
 | `compact` | Explicit `-o compact` (only for `agents run` / `agents continue`) | Single-line condensed output |
 
+One exception: [`ixora chat`](runtime/chat.md) is a full-screen TUI — it requires an interactive terminal on both stdin and stdout (exits 1 otherwise) and **ignores `-o` / `--json` entirely**. It honors `--no-color` for its own rendering.
+
 ---
 
 ## `--json` vs `-o <format>`

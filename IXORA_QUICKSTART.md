@@ -393,6 +393,7 @@ Consult the [Agno documentation](https://docs.agno.com) for detailed setup instr
 | Command | Description |
 |---|---|
 | `ixora status` | AgentOS server overview (resources, agents, teams, knowledge) |
+| `ixora chat` | Interactive chat TUI for agents, teams, and workflows (TTY only) |
 | `ixora agents list\|run <id> "msg"` | List or run an agent |
 | `ixora teams list\|run <id> "msg"` | List or run a team |
 | `ixora workflows list\|run <id> "msg"` | List or run a workflow |

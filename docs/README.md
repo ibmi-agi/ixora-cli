@@ -40,6 +40,7 @@ Local-machine operations: provisioning, lifecycle, configuration.
 Direct calls into the AgentOS API on the targeted system.
 
 - [Runtime overview](runtime/README.md) — system targeting (`--system`, `--url`), default system, externals
+- [`chat`](runtime/chat.md) — interactive chat TUI (REPL) for agents, teams, and workflows, with inline confirmations (TTY only)
 - [`agents`](runtime/agents.md) — list, get, run (streaming or one-shot), continue paused runs, resume SSE, cancel
 - [`teams`](runtime/teams.md) — list, get, run, continue, resume, cancel
 - [`workflows`](runtime/workflows.md) — list, get, run, continue, resume, cancel

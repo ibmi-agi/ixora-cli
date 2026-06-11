@@ -79,6 +79,8 @@ ixora agents run sql-agent "..." --background --bypass-confirmations
 | `--session-id <id>` | Continue an existing session (preserves conversation state) |
 | `--user-id <id>` | Tag the run with a user identifier |
 
+> For a full interactive experience — a persistent conversation with streaming, tool rendering, per-tool confirmations, and session threading — use [`ixora chat`](chat.md) instead of `run --interactive`.
+
 ### Output
 
 - Without `--stream`: prints the final response. Uses the table/JSON/compact format selected via [`-o` / `--json`](../output-formats.md).
@@ -507,6 +509,7 @@ agents toolsets list\` …` on stderr.
 
 ## See also
 
+- [`chat.md`](chat.md) — interactive chat TUI (the richer alternative to `run --interactive`)
 - [`teams.md`](teams.md), [`workflows.md`](workflows.md) — the same pattern for teams and workflows
 - [`traces.md`](traces.md) — inspect a run after it completes
 - [`sessions.md`](sessions.md) — manage the conversation context shared across runs
