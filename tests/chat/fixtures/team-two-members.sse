@@ -1,0 +1,38 @@
+data: {"event":"TeamRunStarted","created_at":1781179200,"run_id":"run-R6","session_id":"sess-S6","team_id":"team-one","team_name":"Team One","model":"claude-sonnet-4-6","model_provider":"Anthropic"}
+
+data: {"event":"TeamRunContent","created_at":1781179201,"run_id":"run-R6","session_id":"sess-S6","team_id":"team-one","content":"I will delegate this to two members.","content_type":"str"}
+
+data: {"event":"TeamToolCallStarted","created_at":1781179201,"run_id":"run-R6","session_id":"sess-S6","team_id":"team-one","tool":{"tool_call_id":"tc-d1","tool_name":"delegate_task_to_member","tool_args":{"member_id":"member-one","task":"Check system status"},"created_at":1781179201}}
+
+data: {"event":"RunStarted","created_at":1781179202,"run_id":"run-M1","session_id":"sess-S6","agent_id":"agent-one","agent_name":"Agent One"}
+
+data: {"event":"RunContent","created_at":1781179202,"run_id":"run-M1","session_id":"sess-S6","agent_id":"agent-one","agent_name":"Agent One","content":"Checking the system","content_type":"str"}
+
+data: {"event":"RunContent","created_at":1781179203,"run_id":"run-M1","session_id":"sess-S6","agent_id":"agent-one","agent_name":"Agent One","content":" status now.","content_type":"str"}
+
+data: {"event":"ToolCallStarted","created_at":1781179203,"run_id":"run-M1","session_id":"sess-S6","agent_id":"agent-one","agent_name":"Agent One","tool":{"tool_call_id":"tc-m1","tool_name":"get_system_status","tool_args":{"system":"DEV1"},"created_at":1781179203}}
+
+data: {"event":"ToolCallCompleted","created_at":1781179204,"run_id":"run-M1","session_id":"sess-S6","agent_id":"agent-one","agent_name":"Agent One","tool":{"tool_call_id":"tc-m1","tool_name":"get_system_status","tool_args":{"system":"DEV1"},"result":"CPU 12%, 3 active jobs","tool_call_error":false,"metrics":{"duration":0.62},"created_at":1781179203}}
+
+data: {"event":"RunContent","created_at":1781179205,"run_id":"run-M1","session_id":"sess-S6","agent_id":"agent-one","agent_name":"Agent One","content":" DEV1 is healthy.","content_type":"str"}
+
+data: {"event":"RunCompleted","created_at":1781179205,"run_id":"run-M1","session_id":"sess-S6","agent_id":"agent-one","agent_name":"Agent One","content":"Checking the system status now. DEV1 is healthy.","content_type":"str","metrics":{"input_tokens":90,"output_tokens":22,"total_tokens":112}}
+
+data: {"event":"TeamToolCallCompleted","created_at":1781179206,"run_id":"run-R6","session_id":"sess-S6","team_id":"team-one","tool":{"tool_call_id":"tc-d1","tool_name":"delegate_task_to_member","tool_args":{"member_id":"member-one","task":"Check system status"},"result":"Checking the system status now. DEV1 is healthy.","tool_call_error":false,"metrics":{"duration":4.1},"created_at":1781179201}}
+
+data: {"event":"TeamToolCallStarted","created_at":1781179206,"run_id":"run-R6","session_id":"sess-S6","team_id":"team-one","tool":{"tool_call_id":"tc-d2","tool_name":"delegate_task_to_member","tool_args":{"member_id":"member-two","task":"Summarize recent jobs"},"created_at":1781179206}}
+
+data: {"event":"RunStarted","created_at":1781179207,"run_id":"run-M2","session_id":"sess-S6","agent_id":"agent-two","agent_name":"Agent Two"}
+
+data: {"event":"RunContent","created_at":1781179207,"run_id":"run-M2","session_id":"sess-S6","agent_id":"agent-two","agent_name":"Agent Two","content":"Recent jobs: 3 batch jobs completed without errors.","content_type":"str"}
+
+data: {"event":"RunCompleted","created_at":1781179208,"run_id":"run-M2","session_id":"sess-S6","agent_id":"agent-two","agent_name":"Agent Two","content":"Recent jobs: 3 batch jobs completed without errors.","content_type":"str","metrics":{"input_tokens":75,"output_tokens":18,"total_tokens":93}}
+
+data: {"event":"TeamToolCallCompleted","created_at":1781179209,"run_id":"run-R6","session_id":"sess-S6","team_id":"team-one","tool":{"tool_call_id":"tc-d2","tool_name":"delegate_task_to_member","tool_args":{"member_id":"member-two","task":"Summarize recent jobs"},"result":"Recent jobs: 3 batch jobs completed without errors.","tool_call_error":false,"metrics":{"duration":2.3},"created_at":1781179206}}
+
+data: {"event":"TeamRunContent","created_at":1781179210,"run_id":"run-R6","session_id":"sess-S6","team_id":"team-one","content":" Summary: DEV1 is healthy and recent jobs are clean.","content_type":"str"}
+
+data: {"event":"TeamRunContentCompleted","created_at":1781179210,"run_id":"run-R6","session_id":"sess-S6","team_id":"team-one"}
+
+data: {"event":"TeamRunCompleted","created_at":1781179211,"run_id":"run-R6","session_id":"sess-S6","team_id":"team-one","content":"I will delegate this to two members. Summary: DEV1 is healthy and recent jobs are clean.","content_type":"str","member_responses":[{"agent_id":"agent-one","content":"Checking the system status now. DEV1 is healthy."},{"agent_id":"agent-two","content":"Recent jobs: 3 batch jobs completed without errors."}],"metrics":{"input_tokens":880,"output_tokens":140,"total_tokens":1020,"duration":11.4,"time_to_first_token":0.66}}
+

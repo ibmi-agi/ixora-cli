@@ -1,0 +1,6 @@
+data: {"event":"RunStarted","created_at":1781179200,"run_id":"run-R8","session_id":"sess-S8","agent_id":"agent-one","agent_name":"Agent One","model":"claude-sonnet-4-6","model_provider":"Anthropic"}
+
+data: {"event":"RunContent","created_at":1781179201,"run_id":"run-R8","session_id":"sess-S8","agent_id":"agent-one","content":"Starting the operation","content_type":"str"}
+
+data: {"event":"RunError","created_at":1781179202,"run_id":"run-R8","session_id":"sess-S8","agent_id":"agent-one","content":"Tool execution failed: connection to DEV1 timed out"}
+

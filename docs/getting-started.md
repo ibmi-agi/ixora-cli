@@ -8,7 +8,7 @@ This page takes you from zero to a running ixora stack and your first agent run.
 
 | Requirement | Verify with |
 |---|---|
-| Node.js >= 20 | `node --version` |
+| Node.js >= 22 | `node --version` |
 | Docker Desktop or Podman | `docker compose version` or `podman compose version` |
 | Container runtime running | `docker info` (must not error) |
 | IBM i with Mapepire service on port 8076 | reachable from your workstation |

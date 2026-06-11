@@ -43,6 +43,46 @@ export interface ResolverFlags {
 
 const DEFAULT_TIMEOUT_SECONDS = 60;
 
+/** Discriminant for each resolution-failure site. */
+export type ResolverFailReason =
+  | "no-systems"
+  | "unknown-system"
+  | "not-running"
+  | "none-available"
+  | "ambiguous"
+  | "internal";
+
+/**
+ * Typed resolution failure. Carries enough context for callers that want to
+ * recover (e.g. `ixora chat` prompting the user on ambiguity) instead of
+ * exiting. Default CLI behavior (print + exit 1) lives in
+ * {@link resolveAgentOSTargetOrExit}.
+ */
+export class ResolverError extends Error {
+  /** Which fail site produced this error. */
+  readonly reason: ResolverFailReason;
+  /** For "ambiguous": the systems the user could pick between. */
+  readonly available?: SystemConfig[];
+  /**
+   * For "ambiguous": the configured IXORA_DEFAULT_SYSTEM, when set. It was
+   * not available (otherwise resolution would have picked it), but pickers
+   * should honor the same default-first ordering the resolver does.
+   */
+  readonly defaultSystemId?: string;
+
+  constructor(
+    reason: ResolverFailReason,
+    message: string,
+    extras: { available?: SystemConfig[]; defaultSystemId?: string } = {},
+  ) {
+    super(message);
+    this.name = "ResolverError";
+    this.reason = reason;
+    this.available = extras.available;
+    this.defaultSystemId = extras.defaultSystemId;
+  }
+}
+
 /**
  * Discover which `api-<id>` services are running.
  *
@@ -88,8 +128,9 @@ function isAvailable(sys: SystemConfig, running: Set<string>): boolean {
 /**
  * Resolve the AgentOS target for a single CLI invocation.
  *
- * Exits the process with a clear error message when no valid target can be
- * determined. Returns the resolved context on success.
+ * Throws a typed {@link ResolverError} when no valid target can be
+ * determined. Returns the resolved context on success. Callers that want the
+ * historical print-and-exit behavior use {@link resolveAgentOSTargetOrExit}.
  *
  * `opts.discoverRunning` is injected for testability; production callers
  * omit it and the live docker-compose discovery is used.
@@ -114,6 +155,7 @@ export async function resolveAgentOSTarget(
   const systems = readSystems();
   if (systems.length === 0) {
     fail(
+      "no-systems",
       "No systems configured. Add one with `ixora stack system add` (or `ixora stack install` for first-time setup).",
     );
   }
@@ -128,11 +170,13 @@ export async function resolveAgentOSTarget(
     const sys = systems.find((s) => s.id === flags.system);
     if (!sys) {
       fail(
+        "unknown-system",
         `No such system '${flags.system}'. Configured: ${describeSystems(systems)}`,
       );
     }
     if (sys.kind === "managed" && !running.has(sys.id)) {
       fail(
+        "not-running",
         `System '${sys.id}' is not running. Start it with: ixora stack system start ${sys.id}`,
       );
     }
@@ -141,6 +185,7 @@ export async function resolveAgentOSTarget(
     const available = systems.filter((s) => isAvailable(s, running));
     if (available.length === 0) {
       fail(
+        "none-available",
         `No systems are available. Start a managed system with \`ixora stack system start <id>\` or register an external one with \`ixora stack system add\`.\nConfigured: ${describeSystems(systems)}`,
       );
     } else if (available.length === 1) {
@@ -164,7 +209,13 @@ export async function resolveAgentOSTarget(
             ? `\nDefault system '${defaultId}' is configured but not currently available.`
             : `\nTip: configure a default with \`ixora stack system default <id>\`.`;
         fail(
+          "ambiguous",
           `Multiple systems are available. Specify --system <name>.${hint}\nAvailable: ${list}`,
+          {
+            available,
+            defaultSystemId:
+              defaultId && defaultId.length > 0 ? defaultId : undefined,
+          },
         );
       }
     }
@@ -178,6 +229,7 @@ export async function resolveAgentOSTarget(
     const idx = indexAmongManaged(systems, target);
     if (idx === -1) {
       fail(
+        "internal",
         `Internal error: managed system '${target.id}' not found in managed subset.`,
       );
     }
@@ -209,7 +261,30 @@ function describeSystems(systems: SystemConfig[]): string {
     .join(", ");
 }
 
-function fail(msg: string): never {
-  process.stderr.write(`${chalk.red("Error:")} ${msg}\n`);
-  process.exit(1);
+function fail(
+  reason: ResolverFailReason,
+  msg: string,
+  extras?: { available?: SystemConfig[]; defaultSystemId?: string },
+): never {
+  throw new ResolverError(reason, msg, extras);
+}
+
+/**
+ * Resolve like {@link resolveAgentOSTarget}, preserving the historical CLI
+ * failure behavior: write `Error: <message>` to stderr and exit 1. Used by
+ * the preAction hook (and any caller that must not recover from failure).
+ */
+export async function resolveAgentOSTargetOrExit(
+  flags: ResolverFlags,
+  opts: { discoverRunning?: () => Promise<Set<string>> } = {},
+): Promise<ResolvedAgentOSContext> {
+  try {
+    return await resolveAgentOSTarget(flags, opts);
+  } catch (err) {
+    if (err instanceof ResolverError) {
+      process.stderr.write(`${chalk.red("Error:")} ${err.message}\n`);
+      process.exit(1);
+    }
+    throw err;
+  }
 }

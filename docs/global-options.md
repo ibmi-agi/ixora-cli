@@ -61,6 +61,8 @@ Resolution order when running `ixora agents list`:
 
 Externals always count as "available" (no container check), so the rules above include them naturally.
 
+[`ixora chat`](runtime/chat.md) follows the same order with one difference at step 5: instead of erroring, it **prompts you to pick a system** (the configured default listed first). The stack flags above (`--profile`, `--mode`, …) do not apply to `chat` — like every runtime command, it consumes only the AgentOS-targeting flags.
+
 Examples:
 
 ```bash

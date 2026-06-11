@@ -4,7 +4,7 @@
 
 Local-stack management. All commands live under `ixora stack <cmd>`. None of them respect `--system` / `--url` — they target the local deployment directly. Containers (`agentos-db`, `api-<id>`, `mcp-<id>`, `ui`) are spawned via `docker compose` (or `podman compose`) against the generated `~/.ixora/docker-compose.yml`.
 
-**Prereqs**: Node ≥ 20 and a running Docker (or Podman) daemon.
+**Prereqs**: Node ≥ 22 and a running Docker (or Podman) daemon.
 
 ---
 

@@ -1,0 +1,4 @@
+{
+  "tools": "[{\"tool_call_id\":\"tc-h4\",\"tool_name\":\"run_cl_command\",\"tool_args\":{\"command\":\"STRSBS SBSD(DEVLIB/TESTSBS)\"},\"requires_confirmation\":true,\"confirmed\":true,\"confirmation_note\":null}]",
+  "session_id": "sess-S4"
+}

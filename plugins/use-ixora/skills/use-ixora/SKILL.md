@@ -49,7 +49,7 @@ ixora stack status                                # is a stack actually running?
 ixora stack system list                           # what systems are registered?
 ```
 
-If the CLI is missing, install with `npm install -g @ibm/ixora` (Node ≥ 20 required). If `stack status` shows no services running, the runtime commands have no AgentOS to talk to — run `ixora stack install` (first time) or `ixora stack start` (existing install). See [`docs/stack/install.md`](docs/stack/install.md) and [`docs/troubleshooting.md`](docs/troubleshooting.md).
+If the CLI is missing, install with `npm install -g @ibm/ixora` (Node ≥ 22 required). If `stack status` shows no services running, the runtime commands have no AgentOS to talk to — run `ixora stack install` (first time) or `ixora stack start` (existing install). See [`docs/stack/install.md`](docs/stack/install.md) and [`docs/troubleshooting.md`](docs/troubleshooting.md).
 
 ## System resolution (the part `--help` won't tell you)
 
@@ -133,7 +133,7 @@ For anything else, `ixora <group> --help` and `ixora <group> <verb> --help` are 
 
 ## Local deployment shape
 
-- **Prereqs:** Node ≥ 20 and a running Docker (or Podman) daemon.
+- **Prereqs:** Node ≥ 22 and a running Docker (or Podman) daemon.
 - **Default ports** for the first managed system: API `18000`, DB `15432`, UI `13000`. Each additional managed system shifts the API port by `+1` (system index 1 → `18001`, index 2 → `18002`, …). DB and UI ports are shared.
 - **Service names** (pass to `stack logs|restart|stop|start <service>`):
   - `agentos-db` — shared Postgres (per-system DBs live inside this single container)
@@ -182,6 +182,7 @@ See [`docs/configuration.md`](docs/configuration.md) for full file formats.
 - **`ixora agents pending`** lists local paused runs (run_id, agent, age, pending tools); `agents pending <run_id>` pretty-prints the pending tool calls plus the original prompt. Use it to discover what's queued before approving.
 - **`agents continue` can be called with just `<run_id>`** — agent_id is read from the cache. The legacy `<agent_id> <run_id>` form still works.
 - **`agents run --interactive --stream`** drops you into an inline approve / reject / show-details / quit prompt on each pause and continues the same stream — no second invocation, no `--session-id` hunting.
+- **`ixora chat` is a human-only TUI — never invoke it.** It's a full-screen interactive chat REPL (agents/teams/workflows, inline confirmations) for a person at a terminal; it requires an interactive TTY on both stdin and stdout and exits 1 when piped. For scripted or automated runs always use `ixora agents run` (`--stream`, `--background`, `--bypass-confirmations`). You may *suggest* `ixora chat` to the user for hands-on conversations.
 - **`agents create`/`apply`/`update`/`delete`** manage the agent definition (not its runs): a friendly YAML manifest via `-f <file>` (or `-f <dir>` to apply every `*.agent.yaml`), stdin, or `--name/--model/--instructions/--toolsets/--ibmi-tools` flags. `create` fails if the id exists, `apply` upserts, `update` is a sparse edit, `delete` frees the id. Unknown manifest keys are rejected (not dropped); `--dry-run` previews the resolved spec. Run `ixora agents create --help` for the surface.
 - **`agents toolsets list`** shows the curated IBM i toolsets you can pass to `--toolsets`; `agents toolsets get <name>` drills into one toolset's tools and parameters. Both always emit raw JSON.
 - **`agents run --background`** dispatches the run server-side and returns immediately with `{run_id, session_id, status}`. Track it with `agents runs` (list) / `agents runs <run_id> [--watch]` (poll). Background runs are cached at `~/.ixora/agentos-background-runs/<run_id>.json` (7-day TTL). `runs` poll/watch exit codes: `0` completed/running, `2` error, `1` cancelled, `4` paused. Works for `teams` and `workflows` too.

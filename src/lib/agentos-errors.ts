@@ -143,73 +143,93 @@ function reclassifyInternalServerError(
  * Centralised error handler that maps SDK errors to actionable CLI messages.
  * Sets exit codes: 1 for user errors, 2 for system errors.
  */
-export function handleError(err: unknown, ctx?: ErrorContext): never {
+export interface DescribedError {
+  message: string;
+  /** 1 = user/input error, 2 = system/stack fault. */
+  exitCode: number;
+}
+
+/**
+ * Map an error to its user-facing message + exit code WITHOUT printing or
+ * exiting. handleError is the terminal wrapper every command uses; the chat
+ * TUI renders the same messages in-transcript instead of exiting.
+ */
+export function describeError(err: unknown, ctx?: ErrorContext): DescribedError {
   if (err instanceof AuthenticationError) {
-    writeErr(
-      "Authentication failed. Set the system's AgentOS key with `ixora stack system add` (or unset SYSTEM_<ID>_AGENTOS_KEY in ~/.ixora/.env for local unauth).",
-    );
-    process.exitCode = 1;
-  } else if (err instanceof NotFoundError) {
-    writeErr(formatNotFound(ctx));
-    process.exitCode = 1;
-  } else if (err instanceof BadRequestError) {
-    writeErr(`Invalid request: ${err.message}`);
-    process.exitCode = 1;
-  } else if (err instanceof UnprocessableEntityError) {
-    writeErr(formatValidationError(err.message));
-    process.exitCode = 1;
-  } else if (err instanceof RateLimitError) {
-    writeErr("Rate limited. Wait and retry.");
-    process.exitCode = 2;
-  } else if (err instanceof InternalServerError) {
+    return {
+      message:
+        "Authentication failed. Set the system's AgentOS key with `ixora stack system add` (or unset SYSTEM_<ID>_AGENTOS_KEY in ~/.ixora/.env for local unauth).",
+      exitCode: 1,
+    };
+  }
+  if (err instanceof NotFoundError) {
+    return { message: formatNotFound(ctx), exitCode: 1 };
+  }
+  if (err instanceof BadRequestError) {
+    return { message: `Invalid request: ${err.message}`, exitCode: 1 };
+  }
+  if (err instanceof UnprocessableEntityError) {
+    return { message: formatValidationError(err.message), exitCode: 1 };
+  }
+  if (err instanceof RateLimitError) {
+    return { message: "Rate limited. Wait and retry.", exitCode: 2 };
+  }
+  if (err instanceof InternalServerError) {
     // The AgentOS backend frequently dresses 4xx errors as 500s with bodies
     // like "404: No database found with id 'x'" or "400: Invalid start_time".
     // Recover the real status from the prefix so exit codes and hints match.
     const reclassified = reclassifyInternalServerError(err, ctx);
     if (reclassified) {
-      writeErr(reclassified.message);
-      process.exitCode = reclassified.exitCode;
-    } else {
-      writeErr(
-        `Server error: ${err.message}\nRun \`ixora stack status\` for diagnostics.`,
-      );
-      process.exitCode = 2;
+      return { message: reclassified.message, exitCode: reclassified.exitCode };
     }
-  } else if (err instanceof RemoteServerUnavailableError) {
+    return {
+      message: `Server error: ${err.message}\nRun \`ixora stack status\` for diagnostics.`,
+      exitCode: 2,
+    };
+  }
+  if (err instanceof RemoteServerUnavailableError) {
     // A 503 means the server responded but a subsystem is unavailable (e.g. a
     // missing optional dependency). Surface the backend detail instead of
     // masking every 503 as a generic outage — a truly-down server surfaces as
     // a connection error in the next branch, not a 503.
     const detail = err.message?.trim();
-    writeErr(
-      detail
+    return {
+      message: detail
         ? `Server unavailable: ${detail}`
         : "Server unavailable. Is the system running? `ixora stack status`",
-    );
-    process.exitCode = 2;
-  } else if (isConnectionError(err) || isNetworkAPIError(err)) {
-    writeErr(formatConnectionError(ctx));
-    process.exitCode = 2;
-  } else if (err instanceof APIError && err.status === 403) {
-    const isAdmin = err.message.toLowerCase().includes("admin");
-    if (isAdmin) {
-      writeErr(
-        "This operation requires admin scope. Check your AgentOS key permissions.",
-      );
-    } else {
-      writeErr("Access denied. Check your AgentOS key permissions.");
-    }
-    process.exitCode = 1;
-  } else if (err instanceof APIError) {
-    writeErr(`API error (${err.status}): ${err.message}`);
-    process.exitCode = err.status >= 500 ? 2 : 1;
-  } else if (err instanceof ConfigError) {
-    writeErr(err.message);
-    process.exitCode = 1;
-  } else {
-    writeErr(err instanceof Error ? err.message : String(err));
-    process.exitCode = 2;
+      exitCode: 2,
+    };
   }
+  if (isConnectionError(err) || isNetworkAPIError(err)) {
+    return { message: formatConnectionError(ctx), exitCode: 2 };
+  }
+  if (err instanceof APIError && err.status === 403) {
+    const isAdmin = err.message.toLowerCase().includes("admin");
+    return {
+      message: isAdmin
+        ? "This operation requires admin scope. Check your AgentOS key permissions."
+        : "Access denied. Check your AgentOS key permissions.",
+      exitCode: 1,
+    };
+  }
+  if (err instanceof APIError) {
+    return {
+      message: `API error (${err.status}): ${err.message}`,
+      exitCode: err.status >= 500 ? 2 : 1,
+    };
+  }
+  if (err instanceof ConfigError) {
+    return { message: err.message, exitCode: 1 };
+  }
+  return {
+    message: err instanceof Error ? err.message : String(err),
+    exitCode: 2,
+  };
+}
 
+export function handleError(err: unknown, ctx?: ErrorContext): never {
+  const described = describeError(err, ctx);
+  writeErr(described.message);
+  process.exitCode = described.exitCode;
   process.exit();
 }

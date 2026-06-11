@@ -22,7 +22,7 @@ Deploy AI agents for IBM i in minutes. This guide walks you through installing t
 
 | Requirement | How to verify |
 |---|---|
-| **Node.js >= 20** | `node --version` |
+| **Node.js >= 22** | `node --version` |
 | **Docker Desktop or Podman** | `docker compose version` or `podman compose version` |
 | **Docker/Podman running** | `docker info` (must not error) |
 | **IBM i with Mapepire service** | Port 8076 reachable from your workstation |
@@ -393,6 +393,7 @@ Consult the [Agno documentation](https://docs.agno.com) for detailed setup instr
 | Command | Description |
 |---|---|
 | `ixora status` | AgentOS server overview (resources, agents, teams, knowledge) |
+| `ixora chat` | Interactive chat TUI for agents, teams, and workflows (TTY only) |
 | `ixora agents list\|run <id> "msg"` | List or run an agent |
 | `ixora teams list\|run <id> "msg"` | List or run a team |
 | `ixora workflows list\|run <id> "msg"` | List or run a workflow |

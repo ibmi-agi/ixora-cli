@@ -181,6 +181,10 @@ ixora agents run <agent_id> "<message>" --stream --interactive
 
 Same flag works on `agents continue` for the case where you started raw and want the loop to take over after the first manual approval.
 
+### `ixora chat` — human-only TUI, do not invoke
+
+`ixora chat` is a full-screen interactive chat REPL (entity picker, session threading, slash commands, inline per-tool confirmations) — see [`../docs/runtime/chat.md`](../docs/runtime/chat.md). It is **for a human at a terminal only**: it requires an interactive TTY on both stdin and stdout and exits 1 when piped, so **never invoke it from a script or automation**. Use `agents run` / `agents continue` (above) for anything programmatic; suggest `ixora chat` to the user when they want a hands-on conversation.
+
 ### Exit codes
 
 | Code | Meaning |

@@ -1,0 +1,8 @@
+data: {"event":"RunStarted","created_at":1781179200,"run_id":"run-R9","session_id":"sess-S9","agent_id":"agent-one","agent_name":"Agent One","model":"claude-sonnet-4-6","model_provider":"Anthropic"}
+
+data: {"event":"RunContent","created_at":1781179201,"run_id":"run-R9","session_id":"sess-S9","agent_id":"agent-one","content":"Working on the first part","content_type":"str"}
+
+data: {"event":"RunContent","created_at":1781179202,"run_id":"run-R9","session_id":"sess-S9","agent_id":"agent-one","content":" of the answer","content_type":"str"}
+
+data: {"event":"RunCancelled","created_at":1781179203,"run_id":"run-R9","session_id":"sess-S9","agent_id":"agent-one","reason":"cancelled by user"}
+

@@ -32,9 +32,10 @@
   ],
   "license": "MIT",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "dependencies": {
+    "@earendil-works/pi-tui": "0.79.1",
     "@inquirer/prompts": "^7.0.0",
     "@worksofadam/agentos-sdk": "^0.6.2",
     "chalk": "^5.4.0",

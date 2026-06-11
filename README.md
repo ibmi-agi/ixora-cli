@@ -19,7 +19,7 @@ npx @ibm/ixora stack install
 
 ### Requirements
 
-- Node.js >= 20
+- Node.js >= 22
 - Docker Desktop (or Podman)
 - An IBM i system with Db2 for i
 - An API key for your chosen model provider (Anthropic, OpenAI, Google, or Ollama for local)
@@ -37,6 +37,7 @@ Once a system is up, talk to AgentOS directly:
 ```sh
 ixora agents list      # List registered agents
 ixora agents run <id> "what's running on QSYS?"
+ixora chat             # Interactive chat TUI (agents, teams, workflows)
 ixora traces list      # See recent runs
 ixora sessions list    # Browse sessions
 ixora knowledge bases  # List knowledge bases (e.g. "User Documents")
@@ -141,6 +142,7 @@ By default each IBM i system gets its **own** `ai_<id>` Postgres database (and i
 
 | Command | Description |
 |---------|-------------|
+| `chat [--agent\|--team\|--workflow <id>]` | Interactive chat TUI: streamed runs, tool rendering, inline confirmations (TTY only) |
 | `agents list\|get\|run\|continue\|cancel\|create\|apply\|update\|delete` | Manage agents (including the agent definition itself) |
 | `teams list\|get\|run\|continue\|cancel` | Manage teams |
 | `workflows list\|get\|run\|continue\|cancel` | Manage workflows |

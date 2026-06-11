@@ -39,6 +39,7 @@ See [`../global-options.md`](../global-options.md) and [`../stack/systems.md`](.
 
 ### Agent execution
 
+- [`chat`](chat.md) — interactive chat TUI: streamed runs, entity picker, slash commands, inline tool confirmations (TTY only)
 - [`agents`](agents.md) — list, get, run, continue (with `--confirm`/`--reject`), resume SSE, cancel; plus create / apply / update / delete (manage the agent definition itself)
 - [`teams`](teams.md) — list, get, run, continue, resume, cancel
 - [`workflows`](workflows.md) — list, get, run, continue, resume, cancel
