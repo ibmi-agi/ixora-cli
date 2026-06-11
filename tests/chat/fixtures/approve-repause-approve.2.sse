@@ -1,0 +1,10 @@
+data: {"event":"RunContinued","created_at":1781179210,"run_id":"run-R4","session_id":"sess-S4","agent_id":"agent-one"}
+
+data: {"event":"ToolCallStarted","created_at":1781179210,"run_id":"run-R4","session_id":"sess-S4","agent_id":"agent-one","tool":{"tool_call_id":"tc-h3","tool_name":"run_sql_statement","tool_args":{"statement":"UPDATE DEVLIB.CONFIG SET VALUE = 'on' WHERE KEY = 'feature_x'"},"created_at":1781179210}}
+
+data: {"event":"ToolCallCompleted","created_at":1781179211,"run_id":"run-R4","session_id":"sess-S4","agent_id":"agent-one","tool":{"tool_call_id":"tc-h3","tool_name":"run_sql_statement","tool_args":{"statement":"UPDATE DEVLIB.CONFIG SET VALUE = 'on' WHERE KEY = 'feature_x'"},"result":"1 row updated","tool_call_error":false,"metrics":{"duration":0.31},"created_at":1781179210}}
+
+data: {"event":"RunContent","created_at":1781179212,"run_id":"run-R4","session_id":"sess-S4","agent_id":"agent-one","content":"Config updated. Next I need to start the subsystem.","content_type":"str"}
+
+data: {"event":"RunPaused","created_at":1781179213,"run_id":"run-R4","session_id":"sess-S4","agent_id":"agent-one","requirements":[{"id":"req-A2","created_at":"2026-06-10T12:00:13Z","tool_execution":{"tool_call_id":"tc-h4","tool_name":"run_cl_command","tool_args":{"command":"STRSBS SBSD(DEVLIB/TESTSBS)"},"requires_confirmation":true,"confirmed":null,"confirmation_note":null}}]}
+

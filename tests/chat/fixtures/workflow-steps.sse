@@ -1,0 +1,32 @@
+data: {"event":"WorkflowStarted","created_at":1781179200,"run_id":"run-R7","session_id":"sess-S7","workflow_id":"wf-one","workflow_name":"Workflow One"}
+
+data: {"event":"StepStarted","created_at":1781179201,"run_id":"run-R7","session_id":"sess-S7","workflow_id":"wf-one","step_id":"step-id-1","step_name":"step-1","step_index":0}
+
+data: {"event":"RunStarted","created_at":1781179201,"run_id":"run-N1","session_id":"sess-S7","agent_id":"agent-one","agent_name":"Agent One","workflow_id":"wf-one","step_id":"step-id-1","step_name":"step-1","step_index":0}
+
+data: {"event":"RunContent","created_at":1781179202,"run_id":"run-N1","session_id":"sess-S7","agent_id":"agent-one","workflow_id":"wf-one","step_id":"step-id-1","step_name":"step-1","step_index":0,"content":"Analyzing the input","content_type":"str"}
+
+data: {"event":"RunContent","created_at":1781179202,"run_id":"run-N1","session_id":"sess-S7","agent_id":"agent-one","workflow_id":"wf-one","step_id":"step-id-1","step_name":"step-1","step_index":0,"content":" for step one.","content_type":"str"}
+
+data: {"event":"RunCompleted","created_at":1781179203,"run_id":"run-N1","session_id":"sess-S7","agent_id":"agent-one","workflow_id":"wf-one","step_id":"step-id-1","step_name":"step-1","step_index":0,"content":"Analyzing the input for step one.","content_type":"str","metrics":{"input_tokens":60,"output_tokens":14,"total_tokens":74}}
+
+data: {"event":"StepOutput","created_at":1781179203,"run_id":"run-R7","session_id":"sess-S7","workflow_id":"wf-one","step_id":"step-id-1","step_name":"step-1","step_index":0,"content":"Analyzing the input for step one.","success":true,"step_output":{"step_id":"step-id-1","step_name":"step-1","step_index":0,"content":"Analyzing the input for step one.","content_type":"str","success":true}}
+
+data: {"event":"StepCompleted","created_at":1781179204,"run_id":"run-R7","session_id":"sess-S7","workflow_id":"wf-one","step_id":"step-id-1","step_name":"step-1","step_index":0,"content":"Analyzing the input for step one.","content_type":"str","step_response":{"step_id":"step-id-1","step_name":"step-1","step_index":0,"content":"Analyzing the input for step one.","success":true,"duration":1.2,"metrics":{"input_tokens":60,"output_tokens":14,"total_tokens":74}}}
+
+data: {"event":"ParallelExecutionStarted","created_at":1781179204,"run_id":"run-R7","session_id":"sess-S7","workflow_id":"wf-one","step_id":"step-id-par","step_name":"parallel-group","parallel_step_count":2}
+
+data: {"event":"StepStarted","created_at":1781179205,"run_id":"run-R7","session_id":"sess-S7","workflow_id":"wf-one","step_id":"step-id-2","step_name":"step-2","step_index":[1,0]}
+
+data: {"event":"RunStarted","created_at":1781179205,"run_id":"run-N2","session_id":"sess-S7","agent_id":"agent-two","agent_name":"Agent Two","workflow_id":"wf-one","step_id":"step-id-2","step_name":"step-2","step_index":[1,0]}
+
+data: {"event":"RunContent","created_at":1781179206,"run_id":"run-N2","session_id":"sess-S7","agent_id":"agent-two","workflow_id":"wf-one","step_id":"step-id-2","step_name":"step-2","step_index":[1,0],"content":"Step two done.","content_type":"str"}
+
+data: {"event":"RunCompleted","created_at":1781179206,"run_id":"run-N2","session_id":"sess-S7","agent_id":"agent-two","workflow_id":"wf-one","step_id":"step-id-2","step_name":"step-2","step_index":[1,0],"content":"Step two done.","content_type":"str","metrics":{"input_tokens":40,"output_tokens":8,"total_tokens":48}}
+
+data: {"event":"StepCompleted","created_at":1781179207,"run_id":"run-R7","session_id":"sess-S7","workflow_id":"wf-one","step_id":"step-id-2","step_name":"step-2","step_index":[1,0],"content":"Step two done.","content_type":"str","step_response":{"step_id":"step-id-2","step_name":"step-2","step_index":[1,0],"content":"Step two done.","success":true,"duration":0.8,"metrics":{"input_tokens":40,"output_tokens":8,"total_tokens":48}}}
+
+data: {"event":"ParallelExecutionCompleted","created_at":1781179207,"run_id":"run-R7","session_id":"sess-S7","workflow_id":"wf-one","step_id":"step-id-par","step_name":"parallel-group","parallel_step_count":2,"step_results":[{"step_id":"step-id-2","step_name":"step-2","step_index":[1,0],"content":"Step two done.","success":true}]}
+
+data: {"event":"WorkflowCompleted","created_at":1781179208,"run_id":"run-R7","session_id":"sess-S7","workflow_id":"wf-one","workflow_name":"Workflow One"}
+

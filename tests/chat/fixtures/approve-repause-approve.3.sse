@@ -1,0 +1,12 @@
+data: {"event":"RunContinued","created_at":1781179220,"run_id":"run-R4","session_id":"sess-S4","agent_id":"agent-one"}
+
+data: {"event":"ToolCallStarted","created_at":1781179220,"run_id":"run-R4","session_id":"sess-S4","agent_id":"agent-one","tool":{"tool_call_id":"tc-h4","tool_name":"run_cl_command","tool_args":{"command":"STRSBS SBSD(DEVLIB/TESTSBS)"},"created_at":1781179220}}
+
+data: {"event":"ToolCallCompleted","created_at":1781179221,"run_id":"run-R4","session_id":"sess-S4","agent_id":"agent-one","tool":{"tool_call_id":"tc-h4","tool_name":"run_cl_command","tool_args":{"command":"STRSBS SBSD(DEVLIB/TESTSBS)"},"result":"Subsystem TESTSBS started","tool_call_error":false,"metrics":{"duration":0.55},"created_at":1781179220}}
+
+data: {"event":"RunContent","created_at":1781179222,"run_id":"run-R4","session_id":"sess-S4","agent_id":"agent-one","content":"Both operations are done.","content_type":"str"}
+
+data: {"event":"RunContentCompleted","created_at":1781179222,"run_id":"run-R4","session_id":"sess-S4","agent_id":"agent-one"}
+
+data: {"event":"RunCompleted","created_at":1781179223,"run_id":"run-R4","session_id":"sess-S4","agent_id":"agent-one","content":"First I will update the config. Config updated. Next I need to start the subsystem. Both operations are done.","content_type":"str","metrics":{"input_tokens":540,"output_tokens":96,"total_tokens":636,"duration":8.7,"time_to_first_token":0.48}}
+

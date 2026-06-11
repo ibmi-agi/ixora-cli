@@ -1,0 +1,8 @@
+data: {"event":"RunContinued","created_at":1781179210,"run_id":"run-R5","session_id":"sess-S5","agent_id":"agent-one"}
+
+data: {"event":"RunContent","created_at":1781179211,"run_id":"run-R5","session_id":"sess-S5","agent_id":"agent-one","content":"Understood - I will not run the delete (you noted: do not run this on PROD). Nothing was executed.","content_type":"str"}
+
+data: {"event":"RunContentCompleted","created_at":1781179211,"run_id":"run-R5","session_id":"sess-S5","agent_id":"agent-one"}
+
+data: {"event":"RunCompleted","created_at":1781179212,"run_id":"run-R5","session_id":"sess-S5","agent_id":"agent-one","content":"Understood - I will not run the delete (you noted: do not run this on PROD). Nothing was executed.","content_type":"str","metrics":{"input_tokens":310,"output_tokens":41,"total_tokens":351,"duration":1.9,"time_to_first_token":0.39}}
+

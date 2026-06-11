@@ -1,0 +1,14 @@
+data: {"event":"RunStarted","created_at":1781179200,"run_id":"run-R2","session_id":"sess-S2","agent_id":"agent-one","agent_name":"Agent One","model":"claude-sonnet-4-6","model_provider":"Anthropic"}
+
+data: {"event":"RunContent","created_at":1781179201,"run_id":"run-R2","session_id":"sess-S2","agent_id":"agent-one","content":"Let me look that up.","content_type":"str"}
+
+data: {"event":"ToolCallStarted","created_at":1781179201,"run_id":"run-R2","session_id":"sess-S2","agent_id":"agent-one","tool":{"tool_call_id":"tc-a1","tool_name":"get_system_status","tool_args":{"system":"DEV1"},"created_at":1781179201}}
+
+data: {"event":"ToolCallCompleted","created_at":1781179202,"run_id":"run-R2","session_id":"sess-S2","agent_id":"agent-one","tool":{"tool_call_id":"tc-a1","tool_name":"get_system_status","tool_args":{"system":"DEV1"},"result":"CPU 12%, 3 active jobs, no MSGW","tool_call_error":false,"metrics":{"duration":0.42},"created_at":1781179201}}
+
+data: {"event":"RunContent","created_at":1781179203,"run_id":"run-R2","session_id":"sess-S2","agent_id":"agent-one","content":" DEV1 looks healthy: CPU at 12%.","content_type":"str"}
+
+data: {"event":"RunContentCompleted","created_at":1781179203,"run_id":"run-R2","session_id":"sess-S2","agent_id":"agent-one"}
+
+data: {"event":"RunCompleted","created_at":1781179204,"run_id":"run-R2","session_id":"sess-S2","agent_id":"agent-one","content":"Let me look that up. DEV1 looks healthy: CPU at 12%.","content_type":"str","metrics":{"input_tokens":210,"output_tokens":58,"total_tokens":268,"duration":3.05,"time_to_first_token":0.51}}
+

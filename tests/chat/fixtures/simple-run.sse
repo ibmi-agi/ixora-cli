@@ -1,0 +1,18 @@
+data: {"event":"RunStarted","created_at":1781179200,"run_id":"run-R1","session_id":"sess-S1","agent_id":"agent-one","agent_name":"Agent One","model":"claude-sonnet-4-6","model_provider":"Anthropic"}
+
+data: {"event":"ModelRequestStarted","created_at":1781179200,"run_id":"run-R1","session_id":"sess-S1","agent_id":"agent-one"}
+
+data: {"event":"RunContent","created_at":1781179201,"run_id":"run-R1","session_id":"sess-S1","agent_id":"agent-one","content":"Hello","content_type":"str","reasoning_content":"The user greeted me; a short reply is enough."}
+
+data: {"event":"RunContent","created_at":1781179201,"run_id":"run-R1","session_id":"sess-S1","agent_id":"agent-one","content":", this is","content_type":"str"}
+
+data: {"event":"RunContent","created_at":1781179202,"run_id":"run-R1","session_id":"sess-S1","agent_id":"agent-one","content":" a simple run.","content_type":"str"}
+
+data: {"event":"RunContentCompleted","created_at":1781179202,"run_id":"run-R1","session_id":"sess-S1","agent_id":"agent-one"}
+
+data: {"event":"RunCompleted","created_at":1781179203,"run_id":"run-R1","session_id":"sess-S1","agent_id":"agent-one","content":"Hello, this is a simple run.","content_type":"str","metrics":{"input_tokens":120,"output_tokens":34,"total_tokens":154,"duration":2.31,"time_to_first_token":0.42}}
+
+data: {"event":"MemoryUpdateStarted","created_at":1781179203,"run_id":"run-R1","session_id":"sess-S1","agent_id":"agent-one"}
+
+data: {"event":"MemoryUpdateCompleted","created_at":1781179204,"run_id":"run-R1","session_id":"sess-S1","agent_id":"agent-one"}
+
