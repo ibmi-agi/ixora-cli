@@ -11,6 +11,7 @@ import {
   ReasoningLane,
   StyledLines,
   ToolCallView,
+  resultReportsError,
 } from "../../src/lib/chat/components/blocks.js";
 import {
   TurnView,
@@ -99,6 +100,37 @@ describe("ToolCallView", () => {
     assertWithinWidth(lines, 80);
   });
 
+  it("marks a successful call whose payload reports an error with ⚠ · failed", () => {
+    // Recorded ibmi-mcp-server shape: SQL errors come back as ordinary text
+    // with tool_call_error=false — the call succeeded, the statement failed.
+    const result =
+      "Error: Error in ExecuteQueryWithPagination: [SQL0204] PTF_GROUP_INFO in QSYS2 type *FILE not found., 42704, -204\n\nDetails:\n{\n" +
+      '  "originalErrorName": "Error"\n}';
+    const view = new ToolCallView(
+      theme,
+      toolBlock({ open: false, status: "success", durationSeconds: 0.1, result }),
+    );
+    const lines = view.render(100);
+    expect(lines[0]).toContain("⚠");
+    expect(lines[0]).toContain("· failed");
+    expect(lines[0]).not.toContain("✓");
+    assertWithinWidth(lines, 100);
+  });
+
+  it("keeps the ✓ glyph for clean results", () => {
+    const view = new ToolCallView(
+      theme,
+      toolBlock({
+        open: false,
+        status: "success",
+        durationSeconds: 0.1,
+        result: '[{"X": 1}]',
+      }),
+    );
+    expect(view.render(100)[0]).toContain("✓");
+    expect(view.render(100).join("\n")).not.toContain("failed");
+  });
+
   it("paints full-width background bars when the theme defines toolBar", () => {
     const open = "\x1b[48;5;235m";
     const barTheme = {
@@ -117,6 +149,22 @@ describe("ToolCallView", () => {
       // Bars pad to the full render width.
       expect(visibleWidth(line)).toBe(40);
     }
+  });
+});
+
+describe("resultReportsError", () => {
+  it("detects an Error-prefixed first line", () => {
+    expect(resultReportsError("Error: [SQL0204] not found")).toBe(true);
+    expect(resultReportsError("Error in ExecuteQuery: boom\nDetails: {}")).toBe(true);
+    expect(resultReportsError("  \nError: indented after blank")).toBe(true);
+  });
+
+  it("ignores results that merely contain the word Error", () => {
+    expect(resultReportsError('[{"MESSAGE": "Error: disk full"}]')).toBe(false);
+    expect(resultReportsError("rows with Error later\nError: line two")).toBe(false);
+    expect(resultReportsError("Errors: 0")).toBe(false);
+    expect(resultReportsError(null)).toBe(false);
+    expect(resultReportsError("")).toBe(false);
   });
 });
 

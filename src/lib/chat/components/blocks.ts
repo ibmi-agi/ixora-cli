@@ -113,6 +113,19 @@ export class StreamingMarkdown implements Component {
 const RESULT_PREVIEW_LINES = 5;
 
 /**
+ * A tool call can succeed at the transport layer while its payload reports a
+ * failure — the ibmi-mcp-server returns SQL errors as ordinary text (so the
+ * agent can read them and adapt), leaving tool_call_error false. Anchored to
+ * the first line to avoid false positives on row data that merely contains
+ * the word "Error" (real result rows start with JSON, not an Error: prefix).
+ */
+export function resultReportsError(result: string | null): boolean {
+  if (!result) return false;
+  const firstLine = result.trimStart().split("\n", 1)[0] ?? "";
+  return /^error\b/i.test(firstLine);
+}
+
+/**
  * One tool call as a pi-style tinted section, updated in place: a header row
  * (glyph + name + k=v args summarized by the reducer), then — once the call
  * completes with output — the tail of the result and a "Took X.Xs" row, all
@@ -138,6 +151,9 @@ export class ToolCallView extends CachedLines {
   protected renderLines(width: number): string[] {
     const t = this.theme;
     const b = this.block;
+    // The call ran, but its payload reports a failure (e.g. a bad SQL
+    // statement): distinct from both ✓ (clean result) and ✗ (call failed).
+    const reportedError = b.status === "success" && resultReportsError(b.result);
     // closed + still "running" = interrupted (Esc/stream drop closed the
     // block without a completion event) — never show the in-flight glyph.
     const glyph =
@@ -146,9 +162,12 @@ export class ToolCallView extends CachedLines {
           ? t.dim("◷")
           : t.dim("◌")
         : b.status === "success"
-          ? t.success("✓")
+          ? reportedError
+            ? t.warning("⚠")
+            : t.success("✓")
           : t.error("✗");
     const args = b.argsSummary === "" ? "" : t.dim(`(${b.argsSummary})`);
+    const failed = reportedError ? t.warning(" · failed") : "";
 
     const resultLines =
       b.status === "running" ? [] : (b.result ?? "").trimEnd().split("\n");
@@ -160,7 +179,7 @@ export class ToolCallView extends CachedLines {
       b.durationSeconds !== null ? t.dim(` · ${b.durationSeconds.toFixed(1)}s`) : "";
     const lines = [
       truncateToWidth(
-        ` ${glyph} ${t.bold(b.toolName)}${args}${hasResult ? "" : duration}`,
+        ` ${glyph} ${t.bold(b.toolName)}${args}${failed}${hasResult ? "" : duration}`,
         width,
       ),
     ];
