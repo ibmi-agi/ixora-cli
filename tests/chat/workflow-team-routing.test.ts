@@ -193,6 +193,111 @@ describe("team executor inside a workflow", () => {
     expect(state.runCompleted).toBe(true);
   });
 
+  it("a sub-team member (team within a team) never clobbers the top run", () => {
+    let state = runSequence([
+      ev("TeamRunStarted", {
+        team_id: "team-TOP",
+        team_name: "Top Team",
+        run_id: "run-TOP",
+        session_id: "sess-TOP",
+      }),
+      ev("TeamToolCallStarted", {
+        team_id: "team-TOP",
+        run_id: "run-TOP",
+        tool: {
+          tool_call_id: "tc-sub",
+          tool_name: "delegate_task_to_member",
+          tool_args: { member_id: "sub-team", task: "investigate" },
+          created_at: clock,
+        },
+      }),
+      // The sub-team's own Team* events, forwarded in the parent stream:
+      ev("TeamRunStarted", {
+        team_id: "team-SUB",
+        team_name: "Sub Team",
+        run_id: "run-SUB",
+        session_id: "sess-SUB",
+      }),
+      ev("TeamRunContent", { team_id: "team-SUB", run_id: "run-SUB", content: "sub-leader text" }),
+    ]);
+    // Top run keys intact; member block upgraded to the sub-team's name.
+    expect(state.runId).toBe("run-TOP");
+    expect(state.header?.entityName).toBe("Top Team");
+    const member = state.blocks.find((b): b is MemberBlock => b.kind === "member")!;
+    expect(member.name).toBe("Sub Team");
+    expect(member.open).toBe(true);
+    // Sub-leader content renders INSIDE the member block.
+    const text = state.blocks.find(
+      (b): b is TextBlock => b.kind === "text" && b.parentId === member.id,
+    );
+    expect(text?.text).toBe("sub-leader text");
+
+    // Sub-team completion never flips top status/metrics.
+    const afterSubDone = reduce(
+      state,
+      ev("TeamRunCompleted", {
+        team_id: "team-SUB",
+        run_id: "run-SUB",
+        content: "sub summary",
+        metrics: { input_tokens: 1 },
+      }),
+    );
+    expect(afterSubDone).toBe(state);
+    expect(afterSubDone.status).toBe("running");
+    expect(afterSubDone.runCompleted).toBe(false);
+
+    // Top leader resumes: member closes, content at top level.
+    state = reduce(
+      afterSubDone,
+      ev("TeamRunContent", { team_id: "team-TOP", run_id: "run-TOP", content: "top resumes" }),
+    );
+    const closedMember = state.blocks.find((b): b is MemberBlock => b.kind === "member")!;
+    expect(closedMember.open).toBe(false);
+    const topText = state.blocks.find(
+      (b): b is TextBlock => b.kind === "text" && b.parentId === null && b.text === "top resumes",
+    );
+    expect(topText).toBeDefined();
+  });
+
+  it("parallel team-steps: member events route to the member inside the matched step", () => {
+    let state = runSequence([
+      ev("WorkflowStarted", { workflow_id: "wf-1", workflow_name: "WF One", run_id: "run-WF" }),
+      ev("ParallelExecutionStarted", { workflow_id: "wf-1", parallel_step_count: 2 }),
+      ev("StepStarted", { workflow_id: "wf-1", step_id: "s1", step_name: "step-a", step_index: [0, 0] }),
+      ev("StepStarted", { workflow_id: "wf-1", step_id: "s2", step_name: "step-b", step_index: [0, 1] }),
+      ev("TeamRunStarted", { workflow_id: "wf-1", step_id: "s1", team_id: "team-A", team_name: "Team A", run_id: "run-TA" }),
+      ev("TeamRunStarted", { workflow_id: "wf-1", step_id: "s2", team_id: "team-B", team_name: "Team B", run_id: "run-TB" }),
+      ev("TeamToolCallStarted", {
+        workflow_id: "wf-1",
+        step_id: "s1",
+        tool: { tool_call_id: "tc-a", tool_name: "delegate_task_to_member", tool_args: { member_id: "alpha", task: "t" }, created_at: clock },
+      }),
+      ev("TeamToolCallStarted", {
+        workflow_id: "wf-1",
+        step_id: "s2",
+        tool: { tool_call_id: "tc-b", tool_name: "delegate_task_to_member", tool_args: { member_id: "beta", task: "t" }, created_at: clock },
+      }),
+      // alpha's RunStarted: agent_id doesn't match the slug, the positional
+      // pointer references beta — must still land on s1's member.
+      ev("RunStarted", { workflow_id: "wf-1", step_id: "s1", agent_id: "agent-alpha", agent_name: "Alpha Agent", run_id: "run-A" }),
+    ]);
+    const steps = state.blocks.filter((b): b is StepBlock => b.kind === "step");
+    const s1 = steps.find((b) => b.stepId === "s1")!;
+    expect(s1.executorName).toBe("Team A"); // not clobbered by the member
+    const members = state.blocks.filter((b): b is MemberBlock => b.kind === "member");
+    const alpha = members.find((b) => b.parentId === s1.id)!;
+    expect(alpha.name).toBe("Alpha Agent"); // upgraded in the right step
+
+    state = reduce(
+      state,
+      ev("RunContent", { workflow_id: "wf-1", step_id: "s1", agent_id: "agent-alpha", run_id: "run-A", content: "alpha says" }),
+    );
+    const text = state.blocks.find(
+      (b): b is TextBlock => b.kind === "text" && b.text === "alpha says",
+    );
+    expect(text?.parentId).toBe(alpha.id);
+  });
+
   it("plain team chats are unaffected: TeamRunStarted with no steps owns the run", () => {
     const state = runSequence([
       ev("TeamRunStarted", {
@@ -204,6 +309,38 @@ describe("team executor inside a workflow", () => {
     ]);
     expect(state.runId).toBe("run-T");
     expect(state.header?.entityName).toBe("Team X");
+  });
+
+  it("late TeamRunCompleted after its step closed never flips top state", () => {
+    const before = runSequence([
+      ...openWorkflowWithTeamStep(),
+      ev("TeamRunContent", { ...STEP, content: "text" }),
+      ev("StepCompleted", { ...STEP, step_response: { duration: 1, success: true } }),
+    ]);
+    const after = reduce(
+      before,
+      ev("TeamRunCompleted", {
+        ...STEP,
+        team_id: "team-X",
+        run_id: "run-TEAM",
+        content: "late summary",
+        metrics: { input_tokens: 5 },
+      }),
+    );
+    expect(after).toBe(before);
+    expect(after.status).toBe("running");
+    expect(after.metrics).toBeNull();
+  });
+
+  it("nested TeamRunCancelled never cancels the top run", () => {
+    const before = runSequence(openWorkflowWithTeamStep());
+    const after = reduce(
+      before,
+      ev("TeamRunCancelled", { ...STEP, team_id: "team-X", run_id: "run-TEAM" }),
+    );
+    expect(after).toBe(before);
+    expect(after.status).toBe("running");
+    expect(after.runCompleted).toBe(false);
   });
 
   it("TeamRunPaused routes like RunPaused (forward compat)", () => {

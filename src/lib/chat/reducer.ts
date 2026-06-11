@@ -249,6 +249,18 @@ function truncate(s: string, max: number): string {
   return s.length > max ? `${s.slice(0, max - 3)}...` : s;
 }
 
+/**
+ * The load-bearing nesting invariant: the FIRST (Team/Workflow)RunStarted of
+ * a stream owns the top-level run; any later event carrying a DIFFERENT
+ * run_id belongs to a nested executor (workflow step, delegated member,
+ * sub-team) and must never flip top-level run state — that would corrupt
+ * Esc-cancel targeting, the header, and completion status mid-run.
+ */
+function isNestedRun(state: TranscriptState, event: StreamEvent): boolean {
+  const id = str(event, "run_id");
+  return state.runId !== null && id !== undefined && id !== state.runId;
+}
+
 // ---------------------------------------------------------------------------
 // Block ops
 // ---------------------------------------------------------------------------
@@ -290,6 +302,21 @@ function appendTextDelta(
 
 function reasoningKey(draft: TranscriptState, event: StreamEvent): string {
   return `${str(event, "run_id") ?? draft.runId ?? "run"}:reasoning`;
+}
+
+/**
+ * Where a reasoning lane mounts. Team-prefixed reasoning is the LEADER's —
+ * team events carry no agent_id, so positional member matching would
+ * misattribute leader thoughts to an open delegation; route by step only.
+ */
+function reasoningParent(
+  state: TranscriptState,
+  event: StreamEvent,
+): string | null {
+  if (event.event.startsWith("Team")) {
+    return matchOpenStep(state, event)?.id ?? null;
+  }
+  return containerId(resolveContainer(state, event));
 }
 
 function appendReasoning(
@@ -372,7 +399,12 @@ function openMemberBlocks(draft: TranscriptState): MemberBlock[] {
 }
 
 function closeMemberBlock(draft: TranscriptState, blockId: string): void {
-  closeTextBlock(draft); // flush the member's open text
+  // Flush the member's open text — but ONLY its own (with concurrent
+  // delegations the global pointer may reference another member's stream).
+  if (draft.openTextBlockId) {
+    const textBlock = getBlock(draft, draft.openTextBlockId);
+    if (textBlock && textBlock.parentId === blockId) closeTextBlock(draft);
+  }
   const block = getBlock(draft, blockId);
   if (block && block.kind === "member") {
     patchBlock(draft, blockId, {
@@ -489,6 +521,13 @@ function resolveContainer(
     if (member.parentId === step.id) {
       return { type: "member", blockId: member.id };
     }
+    // Parallel team-steps: the positional pointer may reference the OTHER
+    // step's member. Prefer any open member mounted inside the matched step
+    // before falling back to the step itself.
+    const stepMember = openMemberBlocks(state).find(
+      (b) => b.parentId === step.id,
+    );
+    if (stepMember) return { type: "member", blockId: stepMember.id };
     return { type: "step", blockId: step.id };
   }
   if (member) return { type: "member", blockId: member.id };
@@ -525,6 +564,10 @@ function onRunStarted(
   }
 
   if (container.type === "step") {
+    const block = getBlock(state, container.blockId);
+    // First executor wins — a member's RunStarted routed here as a fallback
+    // must not clobber the step's team-executor name.
+    if (block?.kind === "step" && block.executorName !== null) return state;
     const draft = begin(state);
     patchBlock(draft, container.blockId, {
       executorName:
@@ -536,6 +579,10 @@ function onRunStarted(
     });
     return draft;
   }
+
+  // A nested executor's RunStarted with no matching container (delegation
+  // window not open, late/out-of-order delivery): never clobber the top run.
+  if (isNestedRun(state, event)) return state;
 
   // Top-level run start: capture the continue/cancel keys + header.
   const draft = begin(state);
@@ -627,6 +674,9 @@ function onRunCompleted(
     // here would corrupt Esc-cancel targeting and the metrics footer.
     return state;
   }
+  // Any terminal for a run that is not the top run (sub-team inside a team,
+  // late executor terminal after its step closed) never flips top state.
+  if (isNestedRun(state, event)) return state;
 
   const draft = begin(state);
   closeTextBlock(draft);
@@ -673,16 +723,24 @@ function onRunError(
       : "Unknown error";
 
   if (event.event === "TeamRunError") {
-    // Team step-executor error inside a workflow: error block in the step,
-    // not a top-level terminal flip (the workflow itself is still running).
+    // Team executor error inside a workflow step or a delegation (sub-team):
+    // error block in the container, not a top-level terminal flip. Only a
+    // NESTED TeamRunError diverts to a member — the top team's own error
+    // (same run_id) must flip top state even while a delegation is open.
     const step = matchOpenStep(state, event);
-    if (step) {
+    const member =
+      step || !isNestedRun(state, event)
+        ? undefined
+        : matchOpenMember(state, event);
+    const parent = step?.id ?? member?.id;
+    if (parent !== undefined) {
       const draft = begin(state);
       closeTextBlock(draft);
+      if (member) patchBlock(draft, member.id, { status: "error" });
       draft.blocks.push({
         id: newId(draft),
         kind: "error",
-        parentId: step.id,
+        parentId: parent,
         open: false,
         createdAtMs: tsMs(event),
         message,
@@ -723,6 +781,10 @@ function onRunError(
       return draft;
     }
   }
+
+  // Nested executor error with no matched container: drop rather than flip
+  // top state (its boundary closes via the enclosing step/delegation).
+  if (isNestedRun(state, event)) return state;
 
   const draft = begin(state);
   closeTextBlock(draft);
@@ -787,6 +849,10 @@ function onCancelled(
   state: TranscriptState,
   event: StreamEvent,
 ): TranscriptState {
+  // A nested executor's cancellation (e.g. someone cancelled a member
+  // team's run externally) must not mark the still-live top run cancelled —
+  // that would disable Esc-cancel for the real run.
+  if (isNestedRun(state, event)) return state;
   const draft = begin(state);
   closeTextBlock(draft);
   draft.status = "cancelled";
@@ -821,7 +887,7 @@ function onReasoningStarted(
   }
   appendReasoning(
     draft,
-    containerId(resolveContainer(state, event)),
+    reasoningParent(state, event),
     key,
     "",
     tsMs(event),
@@ -861,7 +927,7 @@ function onReasoningStep(
   const draft = begin(state);
   appendReasoning(
     draft,
-    containerId(resolveContainer(state, event)),
+    reasoningParent(state, event),
     reasoningKey(draft, event),
     delta,
     tsMs(event),
@@ -904,6 +970,21 @@ function onTeamRunStarted(
     return draft;
   }
 
+  // Sub-team starting inside a delegation (a member that is itself a team):
+  // upgrade the member block's title, exactly like a member RunStarted.
+  if (isNestedRun(state, event)) {
+    const member = matchOpenMember(state, event);
+    if (member) {
+      const draft = begin(state);
+      patchBlock(draft, member.id, {
+        name: str(event, "team_name") ?? str(event, "team_id") ?? member.name,
+        memberId: str(event, "team_id") ?? member.memberId,
+      });
+      return draft;
+    }
+    return state;
+  }
+
   const draft = begin(state);
   draft.status = "running";
   draft.runCompleted = false;
@@ -933,7 +1014,16 @@ function onTeamRunContent(
   if (text === "" && reasoning === "" && !members) return state;
 
   // Inside a workflow the leader's text belongs to the team-executor step.
-  const parent = matchOpenStep(state, event)?.id ?? null;
+  let parent = matchOpenStep(state, event)?.id ?? null;
+  // A nested sub-team's content belongs to the delegation's member block —
+  // it must not close that member block (the leader hasn't resumed) nor
+  // render at the leader's level.
+  if (isNestedRun(state, event)) {
+    const member = matchOpenMember(state, event);
+    if (member && (parent === null || member.parentId === parent)) {
+      parent = member.id;
+    }
+  }
   const draft = begin(state);
   // Leader resumed speaking: open member blocks under the same container
   // close first.

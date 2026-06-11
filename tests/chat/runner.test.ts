@@ -225,6 +225,40 @@ describe("ChatController", () => {
     expect(rendered).toContain("cancelled");
   });
 
+  it("Esc after a terminal event mid-stream renders no false cancelled banner", async () => {
+    const shell = new FakeShell();
+    const controller = makeController(shell);
+    // Stream delivers RunPaused (terminal: runCompleted=true) then stays
+    // open — Esc in that window must be a no-op, not a cancel.
+    const stream = hangingStream([
+      {
+        event: "RunStarted",
+        created_at: 1781179200,
+        run_id: "run-Z1",
+        session_id: "sess-Z1",
+        agent_id: "demo-agent",
+      } as unknown as StreamEvent,
+      {
+        event: "RunPaused",
+        created_at: 1781179201,
+        run_id: "run-Z1",
+        session_id: "sess-Z1",
+        agent_id: "demo-agent",
+        tools: [],
+      } as unknown as StreamEvent,
+    ]);
+    fakeClient.agents.runStream.mockResolvedValue(stream);
+
+    await controller.start({ entity: { kind: "agent", id: "demo-agent" } });
+    const turn = shell.onSubmit("pauses then hangs") as Promise<void>;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    controller.interrupt();
+    expect(fakeClient.agents.cancel).not.toHaveBeenCalled();
+    expect(shell.rendered()).not.toContain("cancelled");
+    stream.abort(); // release the hanging stream so the turn resolves
+    await turn;
+  });
+
   it("does NOT cancel a run that already completed (runCompleted guard)", async () => {
     const shell = new FakeShell();
     const controller = makeController(shell);
