@@ -13,6 +13,7 @@ const ALL_COMMANDS: SlashCommandName[] = [
   "workflows",
   "sessions",
   "new",
+  "clear",
   "system",
   "status",
   "tools",
@@ -21,7 +22,7 @@ const ALL_COMMANDS: SlashCommandName[] = [
 ];
 
 describe("SLASH_COMMANDS registry", () => {
-  it("contains exactly the ten chat commands, without leading slashes", () => {
+  it("contains exactly the eleven chat commands, without leading slashes", () => {
     expect(SLASH_COMMANDS.map((c) => c.name)).toEqual(ALL_COMMANDS);
   });
 

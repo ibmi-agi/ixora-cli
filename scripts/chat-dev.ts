@@ -6,6 +6,7 @@
 import { buildChatTheme } from "../src/lib/chat/theme.js";
 import { ChatApp } from "../src/lib/chat/app.js";
 import { StyledLines } from "../src/lib/chat/components/blocks.js";
+import { userMessageLine } from "../src/lib/chat/components/transcript-view.js";
 import { parseSlash } from "../src/lib/chat/slash.js";
 
 const theme = buildChatTheme();
@@ -17,7 +18,11 @@ app.onSubmit = (text) => {
     void app.exit(0);
     return;
   }
-  app.addToTranscript(new StyledLines(`${theme.user("you ❯")} ${text}`));
+  if (slash?.kind === "command" && slash.command === "clear") {
+    app.clearTranscript();
+    return;
+  }
+  app.addToTranscript(userMessageLine(theme, text));
   app.addToTranscript(new StyledLines(theme.dim(`echo: ${text}`)));
 };
 app.onInterrupt = () => {
@@ -25,6 +30,7 @@ app.onInterrupt = () => {
 };
 
 app.setHeader("dev smoke · no backend");
+app.setFooter("agent: dev-smoke · no backend", "↑0 ↓0");
 app.start();
 app.addToTranscript(
   new StyledLines(theme.dim("chat-dev: type to echo, /exit or Ctrl+C twice to quit.")),

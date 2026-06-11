@@ -25,12 +25,19 @@ import {
   TUI,
   matchesKey,
   truncateToWidth,
+  visibleWidth,
   type Component,
 } from "@earendil-works/pi-tui";
 import { createSlashAutocompleteProvider } from "./slash.js";
 import type { ChatTheme } from "./theme.js";
 
 const CTRL_C_EXIT_WINDOW_MS = 1000;
+
+/** An inline prompt: mounted above the editor, owns the keyboard while shown. */
+export type PromptComponent = Component & {
+  focused: boolean;
+  handleInput(data: string): void;
+};
 
 /**
  * The shell surface the chat controller drives. ChatApp is the real
@@ -40,7 +47,7 @@ export interface ChatShell {
   readonly tui: TUI;
   /** A chat message or slash command was submitted (returned promise is awaitable). */
   onSubmit: (text: string) => unknown;
-  /** Esc pressed outside overlays/autocomplete. */
+  /** Esc pressed outside overlays/inline prompts/autocomplete. */
   onInterrupt: () => void;
   /** Cleanup before process exit (best-effort). */
   onBeforeExit: () => void | Promise<void>;
@@ -49,9 +56,42 @@ export interface ChatShell {
   restoreTerminal(): void;
   setHeader(text: string): void;
   addToTranscript(component: Component): void;
+  /** Drop every transcript component (the /clear command). */
+  clearTranscript(): void;
   setBusy(message: string | null): void;
   setHint(text: string): void;
+  /** Persistent status bar under the editor: dim left text, right-aligned right text. */
+  setFooter(left: string, right: string): void;
+  /** Mount an inline prompt above the editor and give it keyboard focus. */
+  presentPrompt(component: PromptComponent): void;
+  /** Remove the inline prompt and refocus the editor. */
+  dismissPrompt(): void;
   requestRender(): void;
+}
+
+/** pi-style footer line: dim left segment, right segment pushed to the edge. */
+class StatusBar implements Component {
+  private left = "";
+  private right = "";
+
+  constructor(private readonly theme: ChatTheme) {}
+
+  set(left: string, right: string): void {
+    this.left = left;
+    this.right = right;
+  }
+
+  render(width: number): string[] {
+    if (this.left === "" && this.right === "") return [];
+    const left = this.theme.dim(this.left);
+    if (this.right === "") return [truncateToWidth(left, width)];
+    const right = this.theme.dim(this.right);
+    const gap = width - visibleWidth(left) - visibleWidth(right);
+    if (gap < 1) return [truncateToWidth(left, width)];
+    return [left + " ".repeat(gap) + right];
+  }
+
+  invalidate(): void {}
 }
 
 export class ChatApp implements ChatShell {
@@ -66,8 +106,11 @@ export class ChatApp implements ChatShell {
 
   private readonly headerLine: Text;
   private readonly statusSlot = new Container();
+  private readonly promptSlot = new Container();
+  private promptActive = false;
   private readonly loader: Loader;
   private readonly hintLine = new Text("", 0, 0);
+  private readonly footerLine: StatusBar;
   private lastCtrlCAt = 0;
   private exiting = false;
   private headerText = "";
@@ -89,12 +132,15 @@ export class ChatApp implements ChatShell {
     this.editor = new Editor(this.tui, theme.editor);
     this.editor.setAutocompleteProvider(createSlashAutocompleteProvider());
     this.editor.onSubmit = (text) => this.handleSubmit(text);
+    this.footerLine = new StatusBar(theme);
 
     this.tui.addChild(this.headerLine);
     this.tui.addChild(this.transcript);
     this.tui.addChild(this.statusSlot);
+    this.tui.addChild(this.promptSlot);
     this.tui.addChild(this.editor);
     this.tui.addChild(this.hintLine);
+    this.tui.addChild(this.footerLine);
 
     this.tui.addInputListener((data) => this.handleGlobalKeys(data));
 
@@ -188,6 +234,31 @@ export class ChatApp implements ChatShell {
     this.tui.requestRender();
   }
 
+  clearTranscript(): void {
+    this.transcript.clear();
+    this.tui.requestRender();
+  }
+
+  setFooter(left: string, right: string): void {
+    this.footerLine.set(left, right);
+    this.tui.requestRender();
+  }
+
+  presentPrompt(component: PromptComponent): void {
+    this.promptSlot.clear();
+    this.promptSlot.addChild(component);
+    this.promptActive = true;
+    this.tui.setFocus(component);
+    this.tui.requestRender();
+  }
+
+  dismissPrompt(): void {
+    this.promptSlot.clear();
+    this.promptActive = false;
+    this.tui.setFocus(this.editor);
+    this.tui.requestRender();
+  }
+
   /** Spinner + message while a run is in flight; null stops and clears. */
   setBusy(message: string | null): void {
     if (message === null) {
@@ -228,9 +299,9 @@ export class ChatApp implements ChatShell {
   private handleGlobalKeys(
     data: string,
   ): { consume?: boolean; data?: string } | undefined {
-    // Overlays (pickers, pause prompts) own their keys — including Esc and
-    // Ctrl+C, which SelectList/Input map to cancel.
-    if (this.tui.hasOverlay()) return undefined;
+    // Overlays (pickers) and inline prompts (pause decisions) own their keys
+    // — including Esc and Ctrl+C, which SelectList/Input map to cancel.
+    if (this.tui.hasOverlay() || this.promptActive) return undefined;
 
     if (matchesKey(data, "escape")) {
       // Let the editor close its own autocomplete popup first.

@@ -10,6 +10,7 @@ import {
   Container,
   Markdown,
   truncateToWidth,
+  visibleWidth,
   wrapTextWithAnsi,
   type Component,
 } from "@earendil-works/pi-tui";
@@ -21,7 +22,26 @@ import type {
   StepBlock,
   ToolBlock,
 } from "../types.js";
-import type { ChatTheme } from "../theme.js";
+import type { BarStyle, ChatTheme } from "../theme.js";
+
+/**
+ * Wrap an already full-width line in a background bar. truncateToWidth
+ * injects full `\x1b[0m` resets at truncation points — re-open the
+ * background after each so the bar spans the entire row.
+ */
+export function barWrap(line: string, bar: BarStyle): string {
+  return (
+    bar.open + line.replaceAll("\x1b[0m", "\x1b[0m" + bar.open) + bar.close
+  );
+}
+
+/** Pad a (already width-truncated) line to full width, then bar-wrap it. */
+export function barLine(line: string, width: number, bar: BarStyle): string {
+  return barWrap(
+    line + " ".repeat(Math.max(0, width - visibleWidth(line))),
+    bar,
+  );
+}
 
 /** Simple line-cache base for width-aware text components. */
 abstract class CachedLines implements Component {
@@ -89,12 +109,16 @@ export class StreamingMarkdown implements Component {
   }
 }
 
+/** Result-preview tail length for completed tool calls (pi-style section). */
+const RESULT_PREVIEW_LINES = 5;
+
 /**
- * One tool call as a single row, updated in place: glyph + name + k=v args
- * (already summarized by the reducer) + duration once completed. Lines never
- * exceed the render width.
+ * One tool call as a pi-style tinted section, updated in place: a header row
+ * (glyph + name + k=v args summarized by the reducer), then — once the call
+ * completes with output — the tail of the result and a "Took X.Xs" row, all
+ * on a full-width background bar. Lines never exceed the render width.
  */
-export class ToolCallRow extends CachedLines {
+export class ToolCallView extends CachedLines {
   private block: ToolBlock;
 
   constructor(
@@ -124,11 +148,44 @@ export class ToolCallRow extends CachedLines {
         : b.status === "success"
           ? t.success("✓")
           : t.error("✗");
+    const args = b.argsSummary === "" ? "" : t.dim(`(${b.argsSummary})`);
+
+    const resultLines =
+      b.status === "running" ? [] : (b.result ?? "").trimEnd().split("\n");
+    const hasResult = resultLines.some((line) => line.trim() !== "");
+
+    // Without output the duration stays on the header; with output it gets
+    // its own pi-style "Took X.Xs" row under the result tail.
     const duration =
       b.durationSeconds !== null ? t.dim(` · ${b.durationSeconds.toFixed(1)}s`) : "";
-    const args = b.argsSummary === "" ? "" : t.dim(`(${b.argsSummary})`);
-    const line = `${glyph} ${t.bold(b.toolName)}${args}${duration}`;
-    return [truncateToWidth(line, width)];
+    const lines = [
+      truncateToWidth(
+        ` ${glyph} ${t.bold(b.toolName)}${args}${hasResult ? "" : duration}`,
+        width,
+      ),
+    ];
+    if (hasResult) {
+      const tail = resultLines.slice(-RESULT_PREVIEW_LINES);
+      const hidden = resultLines.length - tail.length;
+      if (hidden > 0) {
+        lines.push(
+          truncateToWidth(
+            t.dim(`   … (+${hidden} earlier ${hidden === 1 ? "line" : "lines"})`),
+            width,
+          ),
+        );
+      }
+      for (const line of tail) {
+        lines.push(truncateToWidth(`   ${t.dim(line)}`, width));
+      }
+      if (b.durationSeconds !== null) {
+        lines.push(
+          truncateToWidth(t.dim(` Took ${b.durationSeconds.toFixed(1)}s`), width),
+        );
+      }
+    }
+    const bar = this.theme.toolBar;
+    return bar ? lines.map((line) => barLine(line, width, bar)) : lines;
   }
 }
 

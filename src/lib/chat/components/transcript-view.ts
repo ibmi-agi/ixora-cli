@@ -6,10 +6,11 @@
 // reference check per block is enough). Blocks are append-ordered and never
 // reorder; nested blocks (parentId) mount inside their container's body.
 
-import { Container, type Component } from "@earendil-works/pi-tui";
+import { Container, Spacer, Text, type Component } from "@earendil-works/pi-tui";
 import type { Block, TranscriptState } from "../types.js";
 import type { ChatTheme } from "../theme.js";
 import {
+  barWrap,
   GroupBlockView,
   MemberBlockView,
   MetricsFooter,
@@ -17,13 +18,13 @@ import {
   StepBlockView,
   StreamingMarkdown,
   StyledLines,
-  ToolCallRow,
+  ToolCallView,
 } from "./blocks.js";
 
 type BlockView =
   | { kind: "text"; component: StreamingMarkdown }
   | { kind: "reasoning"; component: ReasoningLane }
-  | { kind: "tool"; component: ToolCallRow }
+  | { kind: "tool"; component: ToolCallView }
   | { kind: "member"; component: MemberBlockView }
   | { kind: "step"; component: StepBlockView }
   | { kind: "group"; component: GroupBlockView }
@@ -95,7 +96,7 @@ export class TurnView {
       case "reasoning":
         return { kind: "reasoning", component: new ReasoningLane(theme, block) };
       case "tool":
-        return { kind: "tool", component: new ToolCallRow(theme, block) };
+        return { kind: "tool", component: new ToolCallView(theme, block) };
       case "member":
         return { kind: "member", component: new MemberBlockView(theme, block) };
       case "step":
@@ -148,7 +149,22 @@ export class TurnView {
   }
 }
 
-/** A submitted user message, echoed above its turn. */
+/**
+ * A submitted user message, echoed above its turn: a full-width grey bar
+ * (pi-style) flanked by blank lines; falls back to a "you ❯" prefix line
+ * when backgrounds are unavailable (--no-color / 16-color terminals).
+ */
 export function userMessageLine(theme: ChatTheme, text: string): Component {
-  return new StyledLines(`${theme.user("you ❯")} ${text}`);
+  const bar = theme.userBar;
+  if (!bar) {
+    return new StyledLines(`${theme.user("you ❯")} ${text}`);
+  }
+  const container = new Container();
+  container.addChild(new Spacer(1));
+  container.addChild(
+    // Text's customBgFn receives each wrapped line already padded to width.
+    new Text(text, 1, 1, (line) => barWrap(line, bar)),
+  );
+  container.addChild(new Spacer(1));
+  return container;
 }

@@ -1,10 +1,13 @@
-// HITL pause overlay: one decision prompt per confirmation-gated tool.
+// HITL pause prompt: one inline decision per confirmation-gated tool.
 //
-// Shows the tool name + full args with Approve / Reject / Reject with note /
-// (Approve all, multi-tool pauses only). "Reject with note" swaps to an Input
-// overlay for the note. Esc/Ctrl+C resolve as REJECT with the default note —
-// the safe choice, and the continue is still always sent (HITL defect B), so
-// the run can never strand paused. Overlay components are never reused.
+// Rendered ABOVE the editor (not as a fullscreen overlay) so the transcript
+// stays visible — Claude Code-style inline confirmation. Shows the tool name
+// + args (capped to a preview; full args are never load-bearing for the
+// decision) with Approve / Reject / Reject with note / (Approve all,
+// multi-tool pauses only). "Reject with note" swaps to an inline Input for
+// the note. Esc/Ctrl+C resolve as REJECT with the default note — the safe
+// choice, and the continue is still always sent (HITL defect B), so the run
+// can never strand paused. Prompt components are never reused.
 
 import {
   Container,
@@ -14,17 +17,26 @@ import {
   wrapTextWithAnsi,
   type Component,
   type SelectItem,
-  type TUI,
 } from "@earendil-works/pi-tui";
 import type { ToolExecution } from "../hitl.js";
 import type { ChatTheme } from "../theme.js";
+import type { PromptComponent } from "../app.js";
+
+/** Where inline prompts mount; ChatShell satisfies this structurally. */
+export interface PromptHost {
+  presentPrompt(component: PromptComponent): void;
+  dismissPrompt(): void;
+}
 
 export type PauseChoice =
   | { kind: "approve" }
   | { kind: "approve-all" }
   | { kind: "reject"; note?: string };
 
-/** Full-args body, wrapped to width (never exceeds it). */
+/** Args previews are capped so one huge payload can't flood the screen. */
+const ARGS_PREVIEW_LINES = 8;
+
+/** Capped args body, wrapped to width (never exceeds it). */
 class ArgsBody implements Component {
   constructor(
     private readonly theme: ChatTheme,
@@ -39,16 +51,21 @@ class ArgsBody implements Component {
       json = "(unserializable arguments)";
     }
     const innerWidth = Math.max(1, width - 2);
-    return json
+    const lines = json
       .split("\n")
-      .flatMap((line) => wrapTextWithAnsi(this.theme.dim(line), innerWidth))
-      .map((line) => "  " + line);
+      .flatMap((line) => wrapTextWithAnsi(this.theme.dim(line), innerWidth));
+    const capped = lines.slice(0, ARGS_PREVIEW_LINES);
+    if (lines.length > capped.length) {
+      capped.push(this.theme.dim(`… (+${lines.length - capped.length} more lines)`));
+    }
+    return capped.map((line) => "  " + line);
   }
 
   invalidate(): void {}
 }
 
 class PauseDecisionComponent extends Container {
+  focused = false;
   private readonly list: SelectList;
 
   constructor(
@@ -107,6 +124,7 @@ class PauseDecisionComponent extends Container {
 }
 
 class RejectNoteComponent extends Container {
+  focused = false;
   private readonly input: Input;
 
   constructor(theme: ChatTheme, done: (note: string | null) => void) {
@@ -137,7 +155,7 @@ class RejectNoteComponent extends Container {
  * caller maps it to a HitlDecision (and latches approve-all itself).
  */
 export async function promptPauseDecision(
-  tui: TUI,
+  host: PromptHost,
   theme: ChatTheme,
   toolExecution: ToolExecution,
   multi: boolean,
@@ -151,13 +169,11 @@ export async function promptPauseDecision(
       (choice) => {
         if (settled) return;
         settled = true;
-        tui.hideOverlay();
+        host.dismissPrompt();
         resolve(choice);
-        tui.requestRender();
       },
     );
-    tui.showOverlay(component, { width: "70%", maxHeight: "70%" });
-    tui.requestRender();
+    host.presentPrompt(component);
   });
 
   if (first !== "reject-note") return first;
@@ -167,12 +183,10 @@ export async function promptPauseDecision(
     const component = new RejectNoteComponent(theme, (value) => {
       if (settled) return;
       settled = true;
-      tui.hideOverlay();
+      host.dismissPrompt();
       resolve(value);
-      tui.requestRender();
     });
-    tui.showOverlay(component, { width: "70%" });
-    tui.requestRender();
+    host.presentPrompt(component);
   });
 
   return note === null ? { kind: "reject" } : { kind: "reject", note };

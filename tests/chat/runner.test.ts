@@ -87,7 +87,9 @@ class FakeShell implements ChatShell {
   onBeforeExit: () => void | Promise<void> = () => {};
   readonly components: Component[] = [];
   header = "";
+  footer: { left: string; right: string } = { left: "", right: "" };
   hints: string[] = [];
+  cleared = 0;
 
   start(): void {}
   async exit(): Promise<never> {
@@ -100,10 +102,19 @@ class FakeShell implements ChatShell {
   addToTranscript(component: Component): void {
     this.components.push(component);
   }
+  clearTranscript(): void {
+    this.components.length = 0;
+    this.cleared += 1;
+  }
   setBusy(): void {}
   setHint(text: string): void {
     this.hints.push(text);
   }
+  setFooter(left: string, right: string): void {
+    this.footer = { left, right };
+  }
+  presentPrompt(): void {}
+  dismissPrompt(): void {}
   requestRender(): void {}
 
   rendered(width = 120): string {
@@ -342,5 +353,48 @@ describe("ChatController", () => {
     );
     await shell.onSubmit("recovers");
     expect(shell.rendered()).toContain("tokens:");
+  });
+
+  it("/clear wipes the transcript and starts a new session", async () => {
+    const shell = new FakeShell();
+    const controller = makeController(shell);
+    fakeClient.agents.runStream.mockResolvedValue(
+      await fixtureStream("simple-run"),
+    );
+    await controller.start({ entity: { kind: "agent", id: "demo-agent" } });
+    await shell.onSubmit("hello there");
+    expect(shell.rendered()).toContain("tokens:");
+
+    await shell.onSubmit("/clear");
+    expect(shell.cleared).toBe(1);
+    expect(shell.rendered()).not.toContain("tokens:");
+    expect(shell.rendered()).toContain("Started a new session.");
+    expect(shell.header).toContain("new session");
+
+    // The next run starts WITHOUT the old session id.
+    fakeClient.agents.runStream.mockResolvedValue(
+      await fixtureStream("simple-run"),
+    );
+    await shell.onSubmit("fresh start");
+    expect(fakeClient.agents.runStream).toHaveBeenLastCalledWith("demo-agent", {
+      message: "fresh start",
+    });
+  });
+
+  it("updates the footer status bar with entity, tokens, and model", async () => {
+    const shell = new FakeShell();
+    const controller = makeController(shell);
+    await controller.start({ entity: { kind: "agent", id: "demo-agent" } });
+    expect(shell.footer.left).toContain("agent: demo-agent");
+
+    fakeClient.agents.runStream.mockResolvedValue(
+      await fixtureStream("simple-run"),
+    );
+    await shell.onSubmit("hello there");
+    expect(shell.footer.right).toMatch(/↑\S+ ↓\S+/);
+
+    // /clear resets the per-session token totals.
+    await shell.onSubmit("/clear");
+    expect(shell.footer.right).not.toMatch(/↑/);
   });
 });

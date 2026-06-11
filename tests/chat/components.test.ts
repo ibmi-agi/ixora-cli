@@ -10,9 +10,12 @@ import {
   MetricsFooter,
   ReasoningLane,
   StyledLines,
-  ToolCallRow,
+  ToolCallView,
 } from "../../src/lib/chat/components/blocks.js";
-import { TurnView } from "../../src/lib/chat/components/transcript-view.js";
+import {
+  TurnView,
+  userMessageLine,
+} from "../../src/lib/chat/components/transcript-view.js";
 import {
   createInitialState,
   finalizeTranscript,
@@ -55,29 +58,88 @@ function assertWithinWidth(lines: string[], width: number): void {
   }
 }
 
-describe("ToolCallRow", () => {
+describe("ToolCallView", () => {
   it("never renders wider than the given width for pathological args", () => {
     const args = {
       sql: "select * from qsys2.syscolumns where table_name = 'X'".repeat(40),
       nested: { a: [1, 2, 3], b: "y".repeat(500) },
       flag: true,
     };
-    const row = new ToolCallRow(theme, toolBlock({ args, argsSummary: summarizeArgs(args) }));
+    const view = new ToolCallView(theme, toolBlock({ args, argsSummary: summarizeArgs(args) }));
     for (const width of [10, 20, 40, 80, 200]) {
-      assertWithinWidth(row.render(width), width);
+      assertWithinWidth(view.render(width), width);
     }
   });
 
   it("completes in place: glyph and duration change on update", () => {
-    const row = new ToolCallRow(theme, toolBlock());
-    const before = row.render(80).join("\n");
+    const view = new ToolCallView(theme, toolBlock());
+    const before = view.render(80).join("\n");
     expect(before).toContain("run_sql");
-    row.update(
+    view.update(
       toolBlock({ status: "success", durationSeconds: 1.234, result: "ok" }),
     );
-    const after = row.render(80).join("\n");
+    const after = view.render(80).join("\n");
     expect(after).toContain("1.2s");
     expect(after).not.toBe(before);
+  });
+
+  it("shows the result tail with an earlier-lines marker and a Took row", () => {
+    const result = Array.from({ length: 12 }, (_, i) => `row ${i + 1}`).join("\n");
+    const view = new ToolCallView(
+      theme,
+      toolBlock({ open: false, status: "success", durationSeconds: 0.42, result }),
+    );
+    const lines = view.render(80);
+    const rendered = lines.join("\n");
+    expect(rendered).toContain("… (+7 earlier lines)");
+    expect(rendered).not.toContain("row 7"); // hidden head
+    expect(rendered).toContain("row 8"); // visible tail start
+    expect(rendered).toContain("row 12");
+    expect(rendered).toContain("Took 0.4s");
+    assertWithinWidth(lines, 80);
+  });
+
+  it("paints full-width background bars when the theme defines toolBar", () => {
+    const open = "\x1b[48;5;235m";
+    const barTheme = {
+      ...theme,
+      toolBar: { open, close: "\x1b[49m" },
+    };
+    const view = new ToolCallView(
+      barTheme,
+      toolBlock({ open: false, status: "success", durationSeconds: 1.0, result: "ok" }),
+    );
+    const lines = view.render(40);
+    expect(lines.length).toBeGreaterThan(1);
+    for (const line of lines) {
+      expect(line.startsWith(open)).toBe(true);
+      expect(line.endsWith("\x1b[49m")).toBe(true);
+      // Bars pad to the full render width.
+      expect(visibleWidth(line)).toBe(40);
+    }
+  });
+});
+
+describe("userMessageLine", () => {
+  it("renders a full-width grey bar when the theme defines userBar", () => {
+    const open = "\x1b[48;5;237m";
+    const barTheme = { ...theme, userBar: { open, close: "\x1b[49m" } };
+    const lines = userMessageLine(barTheme, "hello there").render(40);
+    const barLines = lines.filter((l) => l.startsWith(open));
+    // paddingY rows + the message row all carry the background.
+    expect(barLines.length).toBeGreaterThanOrEqual(3);
+    for (const line of barLines) {
+      expect(visibleWidth(line)).toBe(40);
+    }
+    expect(lines.join("\n")).toContain("hello there");
+  });
+
+  it("falls back to the you ❯ prefix without colors", () => {
+    const lines = userMessageLine(
+      { ...theme, userBar: null },
+      "hello there",
+    ).render(40);
+    expect(lines.join("\n")).toContain("you ❯ hello there");
   });
 });
 

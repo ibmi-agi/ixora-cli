@@ -69,11 +69,18 @@ Type `/` at the start of the input line to autocomplete these:
 | `/workflows [id]` | List workflows, or switch the active workflow |
 | `/sessions [id]` | List sessions, or resume one |
 | `/new` | Start a new session |
+| `/clear` | Clear the screen and start a new session |
 | `/system [id]` | Show or switch the target system |
 | `/status` | Show system, entity, and session status |
 | `/tools` | List the active entity's tools (confirmation-gated tools flagged) |
 | `/help` | Show available commands |
 | `/exit` | Exit chat |
+
+---
+
+## Layout
+
+Submitted messages render on a full-width grey bar; tool calls render as tinted sections showing the call, the tail of its output, and its duration. A status bar under the input line shows the connected entity and system on the left, and the session's token totals (`↑input ↓output`) plus the model on the right.
 
 ---
 
@@ -89,14 +96,14 @@ Type `/` at the start of the input line to autocomplete these:
 
 ## Tool confirmations (HITL)
 
-When a run pauses on a confirmation-gated tool (the same pauses described in [`agents.md`](agents.md#when-the-agent-pauses-for-approval)), `chat` shows an inline overlay with the tool name and arguments and prompts per tool:
+When a run pauses on a confirmation-gated tool (the same pauses described in [`agents.md`](agents.md#when-the-agent-pauses-for-approval)), `chat` shows an inline prompt above the input line — the transcript stays visible — with the tool name and arguments (long argument payloads are truncated to a preview) and prompts per tool:
 
 - **Approve** — run the tool.
 - **Reject** — don't run it.
 - **Reject with note** — don't run it, and tell the agent why (the note becomes `confirmation_note`).
 - **Approve all** — approve this and every remaining tool in the pause (multi-tool pauses only).
 
-Rejected tools still **inform the agent**: the run always continues with the decision stamped (`confirmed: false` plus the note), so the agent sees the rejection and adapts instead of the run stranding paused. With `--bypass-confirmations` every gated tool is approved automatically and no overlay appears.
+Rejected tools still **inform the agent**: the run always continues with the decision stamped (`confirmed: false` plus the note), so the agent sees the rejection and adapts instead of the run stranding paused. With `--bypass-confirmations` every gated tool is approved automatically and no prompt appears.
 
 ---
 

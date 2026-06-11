@@ -25,6 +25,17 @@ export function applyColorMode(colorEnabled: boolean): void {
   }
 }
 
+/**
+ * Full-width background bar (pi-style), as a raw SGR open/close pair rather
+ * than a chalk function: bar lines can contain `\x1b[0m` resets injected by
+ * truncateToWidth, and the renderer must re-open the background after each
+ * one — impossible through an opaque chalk wrapper.
+ */
+export interface BarStyle {
+  open: string;
+  close: string;
+}
+
 export interface ChatTheme {
   // General styling
   dim: (s: string) => string;
@@ -33,8 +44,12 @@ export interface ChatTheme {
   success: (s: string) => string;
   warning: (s: string) => string;
   bold: (s: string) => string;
-  /** "you>" label on submitted messages. */
+  /** "you>" label on submitted messages (no-color fallback). */
   user: (s: string) => string;
+  /** Grey full-width bar behind submitted user messages (null = no color). */
+  userBar: BarStyle | null;
+  /** Tinted full-width bar behind tool-call sections (null = no color). */
+  toolBar: BarStyle | null;
   /** Member-block titles (delegated team members). */
   member: (s: string) => string;
   /** Workflow step/group titles. */
@@ -46,6 +61,24 @@ export interface ChatTheme {
   markdown: MarkdownTheme;
   /** Reasoning lane rendered as dim italic markdown. */
   reasoningStyle: DefaultTextStyle;
+}
+
+/**
+ * Background bar for the current chalk level: truecolor when available,
+ * a 256-color approximation otherwise, none when colors are off (level <= 1 —
+ * 16-color terminals have no usable subtle background).
+ */
+function buildBar(
+  rgb: [number, number, number],
+  ansi256: number,
+): BarStyle | null {
+  if (chalk.level >= 3) {
+    return { open: `\x1b[48;2;${rgb[0]};${rgb[1]};${rgb[2]}m`, close: "\x1b[49m" };
+  }
+  if (chalk.level === 2) {
+    return { open: `\x1b[48;5;${ansi256}m`, close: "\x1b[49m" };
+  }
+  return null;
 }
 
 function buildSelectListTheme(): SelectListTheme {
@@ -87,6 +120,9 @@ export function buildChatTheme(): ChatTheme {
     warning: (s) => chalk.yellow(s),
     bold: (s) => chalk.bold(s),
     user: (s) => chalk.bold.green(s),
+    // Slate grey (pi's user-message bar) / dark desaturated green (tool bar).
+    userBar: buildBar([43, 48, 59], 237),
+    toolBar: buildBar([30, 41, 30], 235),
     member: (s) => chalk.magenta(s),
     step: (s) => chalk.blue(s),
     editor: {

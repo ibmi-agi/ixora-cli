@@ -46,7 +46,7 @@ import {
   type EntityKind,
   type EntityLists,
 } from "./components/pickers.js";
-import { promptPauseDecision } from "./components/pause-overlay.js";
+import { promptPauseDecision } from "./components/pause-prompt.js";
 import { TurnView, userMessageLine } from "./components/transcript-view.js";
 
 interface EntitySummary {
@@ -99,6 +99,10 @@ export class ChatController {
   private lastPauseEvent: StreamEvent | null = null;
   private bypassConfirmations = false;
   private systemLabel: string;
+  // Footer status-bar data: per-session token totals + last reported model.
+  private totalInputTokens = 0;
+  private totalOutputTokens = 0;
+  private lastModel: string | null = null;
 
   constructor(
     private readonly app: ChatShell,
@@ -185,9 +189,12 @@ export class ChatController {
         this.showHelp();
         return;
       case "new":
-        this.sessionId = null;
+        this.startNewSession();
         this.addInfo("Started a new session.");
         this.updateHeader();
+        return;
+      case "clear":
+        this.clearScreen();
         return;
       case "status":
         this.showStatus();
@@ -250,6 +257,12 @@ export class ChatController {
       this.app.setBusy(null);
       this.busy = false;
       this.adoptSessionId();
+      const metrics = this.state.metrics;
+      if (metrics) {
+        this.totalInputTokens += metrics.input_tokens ?? 0;
+        this.totalOutputTokens += metrics.output_tokens ?? 0;
+      }
+      if (this.state.header?.model) this.lastModel = this.state.header.model;
       this.updateHeader();
       this.app.requestRender();
     }
@@ -388,7 +401,7 @@ export class ChatController {
         if (approveAll) return { approve: true };
         this.app.setBusy(null);
         const choice = await promptPauseDecision(
-          this.app.tui,
+          this.app,
           this.theme,
           toolExecution,
           gatedCount > 1,
@@ -535,7 +548,7 @@ export class ChatController {
   private setEntity(choice: EntityChoice, opts: { announce?: boolean } = {}): void {
     const switched = this.entity !== null && this.entity.id !== choice.id;
     this.entity = choice;
-    if (switched) this.sessionId = null;
+    if (switched) this.startNewSession();
     if (opts.announce !== false) {
       this.addInfo(`Chatting with ${choice.kind} ${choice.name} (${choice.id}).`);
     }
@@ -613,7 +626,7 @@ export class ChatController {
       setAgentOSContext(ctx);
       resetClient();
       this.systemLabel = ctx.systemId ?? ctx.baseUrl;
-      this.sessionId = null;
+      this.startNewSession();
       this.app.setBusy("discovering entities...");
       await this.discoverEntities();
       this.app.setBusy(null);
@@ -719,6 +732,27 @@ export class ChatController {
     if (this.state.sessionId) this.sessionId = this.state.sessionId;
   }
 
+  private startNewSession(): void {
+    this.sessionId = null;
+    this.totalInputTokens = 0;
+    this.totalOutputTokens = 0;
+  }
+
+  /** /clear: wipe the transcript and start a fresh session. */
+  private clearScreen(): void {
+    if (this.busy) {
+      this.app.setHint("A run is in progress — press Esc to cancel it first.");
+      return;
+    }
+    this.app.clearTranscript();
+    this.turnView = null;
+    this.state = createInitialState();
+    this.lastPauseEvent = null;
+    this.startNewSession();
+    this.addInfo("Started a new session.");
+    this.updateHeader();
+  }
+
   // -- info blocks --------------------------------------------------------------
 
   private showHelp(): void {
@@ -796,6 +830,16 @@ export class ChatController {
       : "(no entity)";
     const session = this.sessionId ?? "new session";
     this.app.setHeader(`${this.systemLabel} · ${entity} · ${session}`);
+    // pi-style footer: connected entity + system left, tokens + model right.
+    const left = this.entity
+      ? `${this.entity.kind}: ${this.entity.id} · ${this.systemLabel}`
+      : `no entity · ${this.systemLabel}`;
+    const tokens =
+      this.totalInputTokens > 0 || this.totalOutputTokens > 0
+        ? `↑${fmtTokens(this.totalInputTokens)} ↓${fmtTokens(this.totalOutputTokens)}`
+        : "";
+    const right = [tokens, this.lastModel ?? ""].filter(Boolean).join(" · ");
+    this.app.setFooter(left, right);
   }
 
   private addInfo(text: string): void {
@@ -805,6 +849,11 @@ export class ChatController {
   private addError(text: string): void {
     this.app.addToTranscript(new StyledLines(this.theme.error("Error: ") + text));
   }
+}
+
+/** "4200" → "4.2k" (footer token counts, pi-style). */
+function fmtTokens(n: number): string {
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 }
 
 function countGated(pause: CapturedPause): number {

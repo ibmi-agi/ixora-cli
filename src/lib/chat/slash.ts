@@ -17,6 +17,7 @@ const COMMAND_NAMES = [
   "workflows",
   "sessions",
   "new",
+  "clear",
   "system",
   "status",
   "tools",
@@ -48,6 +49,7 @@ const COMMAND_DEFS: Record<
     argumentHint: "[id]",
   },
   new: { description: "Start a new session" },
+  clear: { description: "Clear the screen and start a new session" },
   system: {
     description: "Show or switch the target system",
     argumentHint: "[name]",
