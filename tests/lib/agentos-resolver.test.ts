@@ -25,9 +25,12 @@ vi.mock("../../src/lib/constants.js", async (importOriginal) => {
   };
 });
 
-const { resolveAgentOSTarget, runningSystemsFromPsJson } = await import(
-  "../../src/lib/agentos-resolver.js"
-);
+const {
+  resolveAgentOSTarget,
+  resolveAgentOSTargetOrExit,
+  ResolverError,
+  runningSystemsFromPsJson,
+} = await import("../../src/lib/agentos-resolver.js");
 const { DOCKER_PS_NDJSON, PODMAN_PS_JSON } = await import(
   "../helpers/fixtures.js"
 );
@@ -134,23 +137,47 @@ describe("resolveAgentOSTarget", () => {
 `,
     );
 
-    const exitSpy = vi
-      .spyOn(process, "exit")
-      .mockImplementation(((_code?: number) => {
-        throw new Error("__exit__");
-      }) as never);
-    const stderrSpy = vi
-      .spyOn(process.stderr, "write")
-      .mockImplementation(() => true);
+    const err = await resolveAgentOSTarget(
+      {},
+      { discoverRunning: runningOf("prod1") },
+    ).catch((e: unknown) => e);
 
-    await expect(
-      resolveAgentOSTarget({}, { discoverRunning: runningOf("prod1") }),
-    ).rejects.toThrow("__exit__");
-    const errMsg = stderrSpy.mock.calls.map((c) => c[0]).join("");
-    expect(errMsg).toMatch(/Multiple systems are available/);
+    expect(err).toBeInstanceOf(ResolverError);
+    if (!(err instanceof ResolverError)) throw new Error("unreachable");
+    expect(err.reason).toBe("ambiguous");
+    expect(err.message).toMatch(/Multiple systems are available/);
+    expect(err.available?.map((s) => s.id)).toEqual(["prod1", "cloud"]);
+    expect(err.defaultSystemId).toBeUndefined();
+  });
 
-    exitSpy.mockRestore();
-    stderrSpy.mockRestore();
+  it("ambiguous ResolverError carries the configured-but-unavailable default", async () => {
+    writeFileSync(
+      configFile,
+      `systems:
+  - id: prod1
+    name: 'P'
+    kind: managed
+    mode: full
+  - id: cloud
+    name: 'C'
+    kind: external
+    url: 'https://x'
+`,
+    );
+    writeFileSync(envFile, "IXORA_DEFAULT_SYSTEM='gone'\n");
+
+    const err = await resolveAgentOSTarget(
+      {},
+      { discoverRunning: runningOf("prod1") },
+    ).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(ResolverError);
+    if (!(err instanceof ResolverError)) throw new Error("unreachable");
+    expect(err.reason).toBe("ambiguous");
+    expect(err.message).toMatch(
+      /Default system 'gone' is configured but not currently available/,
+    );
+    expect(err.defaultSystemId).toBe("gone");
   });
 
   it("--system targets external without requiring a running container", async () => {
@@ -186,26 +213,16 @@ describe("resolveAgentOSTarget", () => {
 `,
     );
 
-    const exitSpy = vi
-      .spyOn(process, "exit")
-      .mockImplementation(((_code?: number) => {
-        throw new Error("__exit__");
-      }) as never);
-    const stderrSpy = vi
-      .spyOn(process.stderr, "write")
-      .mockImplementation(() => true);
+    const err = await resolveAgentOSTarget(
+      { system: "prod1" },
+      { discoverRunning: runningOf() },
+    ).catch((e: unknown) => e);
 
-    await expect(
-      resolveAgentOSTarget(
-        { system: "prod1" },
-        { discoverRunning: runningOf() },
-      ),
-    ).rejects.toThrow("__exit__");
-    const errMsg = stderrSpy.mock.calls.map((c) => c[0]).join("");
-    expect(errMsg).toMatch(/is not running/);
-
-    exitSpy.mockRestore();
-    stderrSpy.mockRestore();
+    expect(err).toBeInstanceOf(ResolverError);
+    if (!(err instanceof ResolverError)) throw new Error("unreachable");
+    expect(err.reason).toBe("not-running");
+    expect(err.message).toMatch(/is not running/);
+    expect(err.available).toBeUndefined();
   });
 
   it("port stability: external between two managed does NOT shift the second managed's port", async () => {
@@ -293,5 +310,64 @@ describe("resolveAgentOSTarget", () => {
       { discoverRunning: runningOf("prod1") },
     );
     expect(ctx.systemId).toBe("cloud");
+  });
+
+  describe("resolveAgentOSTargetOrExit", () => {
+    it("prints `Error:` to stderr and exits 1 on resolution failure", async () => {
+      writeFileSync(
+        configFile,
+        `systems:
+  - id: prod1
+    name: 'P'
+    kind: managed
+    mode: full
+  - id: cloud
+    name: 'C'
+    kind: external
+    url: 'https://x'
+`,
+      );
+
+      const exitSpy = vi
+        .spyOn(process, "exit")
+        .mockImplementation(((_code?: number) => {
+          throw new Error("__exit__");
+        }) as never);
+      const stderrSpy = vi
+        .spyOn(process.stderr, "write")
+        .mockImplementation(() => true);
+
+      await expect(
+        resolveAgentOSTargetOrExit(
+          {},
+          { discoverRunning: runningOf("prod1") },
+        ),
+      ).rejects.toThrow("__exit__");
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      const errMsg = stderrSpy.mock.calls.map((c) => c[0]).join("");
+      expect(errMsg).toMatch(/Error:/);
+      expect(errMsg).toMatch(/Multiple systems are available/);
+
+      exitSpy.mockRestore();
+      stderrSpy.mockRestore();
+    });
+
+    it("returns the resolved context untouched on success", async () => {
+      writeFileSync(
+        configFile,
+        `systems:
+  - id: personal
+    name: 'X'
+    kind: external
+    url: 'http://localhost:8080'
+`,
+      );
+      const ctx = await resolveAgentOSTargetOrExit(
+        {},
+        { discoverRunning: runningOf() },
+      );
+      expect(ctx.systemId).toBe("personal");
+      expect(ctx.baseUrl).toBe("http://localhost:8080");
+    });
   });
 });

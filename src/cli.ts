@@ -27,7 +27,7 @@ import { workflowsCommand } from "./agentos/workflows.js";
 import { setAgentOSContext } from "./lib/agentos-context.js";
 import {
   type ResolverFlags,
-  resolveAgentOSTarget,
+  resolveAgentOSTargetOrExit,
 } from "./lib/agentos-resolver.js";
 import { SCRIPT_VERSION } from "./lib/constants.js";
 import { cmdVersion } from "./commands/version.js";
@@ -276,6 +276,9 @@ export function createProgram(): Command {
     ) {
       return;
     }
+    // `ixora chat` resolves its own target inside its action so it can
+    // prompt the user on ambiguity instead of exiting here.
+    if (actionCmd.parent === program && actionCmd.name() === "chat") return;
 
     const opts = thisCmd.opts();
     const flags: ResolverFlags = {
@@ -284,7 +287,7 @@ export function createProgram(): Command {
       key: typeof opts.key === "string" ? opts.key : undefined,
       timeout: typeof opts.timeout === "number" ? opts.timeout : undefined,
     };
-    const ctx = await resolveAgentOSTarget(flags);
+    const ctx = await resolveAgentOSTargetOrExit(flags);
     setAgentOSContext(ctx);
   });
 
