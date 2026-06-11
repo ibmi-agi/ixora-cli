@@ -112,10 +112,10 @@ Output columns: `ID`, `NAME`, `STATUS`, `TYPE`.
 
 ```bash
 ixora knowledge get kn_abc
-ixora knowledge get kn_abc --json     # full payload including raw content
+ixora knowledge get kn_abc --json     # full content record (metadata, status)
 ```
 
-Default fields: `ID`, `Name`, `Status`, `Type`, `Content` (truncated to 200 chars). Use `--json` to see the full content.
+Default fields: `ID`, `Name`, `Status`, `Type`, `Content`. The content record is metadata and processing status — it does not include the document text. To retrieve the indexed text itself, use `knowledge search` with JSON output, which carries the full chunk content.
 
 ---
 
@@ -138,7 +138,7 @@ ixora knowledge search "security audit" --search-type keyword
 | `--db-id <id>` | — | Database ID |
 | `--knowledge-id <id>` | — | Knowledge base ID |
 
-Output columns: `ID`, `CONTENT` (truncated to 80 chars), `NAME`, `SCORE` (reranking score where available).
+Output columns: `ID`, `CONTENT`, `NAME`, `SCORE` (reranking score where available). The table view truncates `CONTENT` to 80 chars for display; JSON output carries the full chunk text.
 
 ---
 

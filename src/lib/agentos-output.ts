@@ -85,7 +85,15 @@ export function outputList(
       process.stdout.write(`${JSON.stringify(filtered, null, 2)}\n`);
       return;
     }
-    const envelope: Record<string, unknown> = { data };
+    // JSON rows mirror the table columns (opts.keys) — not the raw API
+    // payload. Every key is present on every row (null when the API omits
+    // it) so consumers see stable shapes. Full objects stay reachable via
+    // `<group> get <id>` or an explicit `--json <fields>` projection,
+    // which selects from raw rows.
+    const rows = data.map((row) =>
+      Object.fromEntries(opts.keys.map((key) => [key, row[key] ?? null])),
+    );
+    const envelope: Record<string, unknown> = { data: rows };
     if (opts.meta) envelope.meta = opts.meta;
     process.stdout.write(`${JSON.stringify(envelope, null, 2)}\n`);
     return;
