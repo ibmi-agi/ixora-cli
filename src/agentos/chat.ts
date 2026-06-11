@@ -15,9 +15,6 @@ import {
 } from "../lib/agentos-resolver.js";
 import { setAgentOSContext } from "../lib/agentos-context.js";
 import type { SystemConfig } from "../lib/systems.js";
-import { applyColorMode, buildChatTheme } from "../lib/chat/theme.js";
-import { ChatApp } from "../lib/chat/app.js";
-import { ChatController } from "../lib/chat/runner.js";
 import type { EntityKind } from "../lib/chat/components/pickers.js";
 
 function isPromptCancellation(err: unknown): boolean {
@@ -86,7 +83,20 @@ export const chatCommand = new Command("chat")
     "auto-approve confirmation-gated tools (demo mode)",
   )
   .action(async (opts, cmd: Command) => {
-    // TTY guard first: the TUI owns stdin AND stdout. A piped stdout would
+    // pi-tui (+ marked) costs ~35ms at import — lazy-load the whole TUI
+    // stack so every non-chat invocation skips it. Loaded before the TTY
+    // guard only for applyColorMode (the guard's error must honor
+    // --no-color too).
+    const [{ applyColorMode, buildChatTheme }, { ChatApp }, { ChatController }] =
+      await Promise.all([
+        import("../lib/chat/theme.js"),
+        import("../lib/chat/app.js"),
+        import("../lib/chat/runner.js"),
+      ]);
+    const globals = cmd.optsWithGlobals();
+    applyColorMode(globals.color !== false);
+
+    // TTY guard: the TUI owns stdin AND stdout. A piped stdout would
     // otherwise silently flip output formatting (getOutputFormat) — refuse.
     if (!process.stdin.isTTY || !process.stdout.isTTY) {
       writeError(
@@ -95,9 +105,6 @@ export const chatCommand = new Command("chat")
       process.exitCode = 1;
       return;
     }
-
-    const globals = cmd.optsWithGlobals();
-    applyColorMode(globals.color !== false);
 
     // Self-resolution (the preAction hook skips chat): same flags, but
     // ambiguity prompts instead of exiting.

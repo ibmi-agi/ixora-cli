@@ -72,6 +72,10 @@ export function reduce(
     case "RunError":
       return onRunError(state, event);
     case "RunPaused":
+    // TeamRunPaused does not exist in today's protocol (team HITL is a
+    // server-side gap), but the runner and hitl layers already accept it —
+    // route it identically so all three layers agree if agno ships it.
+    case "TeamRunPaused":
       return onRunPaused(state, event);
     case "RunContinued":
       return onRunContinued(state);
@@ -144,7 +148,9 @@ export function reduce(
 
     // --- known noise: status-line at most, safe to ignore ---
     // (PreHook*/PostHook*, UpdatingMemory, MemoryUpdate*, SessionSummary*,
-    // ParserModel*, OutputModel*, CustomEvent, RunIntermediateContent, ...)
+    // ParserModel*, OutputModel*, CustomEvent, RunIntermediateContent,
+    // TeamRunIntermediateContent, RunOutput — final content always arrives
+    // via RunCompleted.content, which onRunCompleted renders as fallback)
     // --- unknown events (wire-only ModelRequest*/ModelResponse*, future
     // additions): ignored silently for forward compatibility. ---
     default:
@@ -473,10 +479,20 @@ function resolveContainer(
   state: TranscriptState,
   event: StreamEvent,
 ): Container {
-  const step = matchOpenStep(state, event);
-  if (step) return { type: "step", blockId: step.id };
   const member = matchOpenMember(state, event);
+  const step = matchOpenStep(state, event);
+  if (member && step) {
+    // Workflow-nested team events carry the step's step_id on EVERY executor
+    // event (agno enriches them), so a member's own events would otherwise
+    // be stolen by the step match. A member block mounted inside the matched
+    // step belongs to that step's team — the member wins.
+    if (member.parentId === step.id) {
+      return { type: "member", blockId: member.id };
+    }
+    return { type: "step", blockId: step.id };
+  }
   if (member) return { type: "member", blockId: member.id };
+  if (step) return { type: "step", blockId: step.id };
   return { type: "top" };
 }
 
@@ -605,6 +621,11 @@ function onRunCompleted(
     // TeamToolCallCompleted); nested workflow-executor RunCompleted likewise
     // (the step closes on StepCompleted).
     if (container.type !== "top") return state;
+  } else if (matchOpenStep(state, event)) {
+    // TeamRunCompleted from a team step-executor inside a workflow: the run
+    // is NOT over — the step closes on StepCompleted. Touching runId/status
+    // here would corrupt Esc-cancel targeting and the metrics footer.
+    return state;
   }
 
   const draft = begin(state);
@@ -650,6 +671,25 @@ function onRunError(
     typeof event.content === "string" && event.content !== ""
       ? event.content
       : "Unknown error";
+
+  if (event.event === "TeamRunError") {
+    // Team step-executor error inside a workflow: error block in the step,
+    // not a top-level terminal flip (the workflow itself is still running).
+    const step = matchOpenStep(state, event);
+    if (step) {
+      const draft = begin(state);
+      closeTextBlock(draft);
+      draft.blocks.push({
+        id: newId(draft),
+        kind: "error",
+        parentId: step.id,
+        open: false,
+        createdAtMs: tsMs(event),
+        message,
+      });
+      return draft;
+    }
+  }
 
   if (event.event === "RunError") {
     const container = resolveContainer(state, event);
@@ -851,6 +891,19 @@ function onTeamRunStarted(
   state: TranscriptState,
   event: StreamEvent,
 ): TranscriptState {
+  // Team step-executor inside a workflow: record the executor on the step;
+  // never clobber the top-level run keys (run_id/header belong to the
+  // workflow run — overwriting them breaks Esc-cancel and the header).
+  const step = matchOpenStep(state, event);
+  if (step) {
+    const draft = begin(state);
+    patchBlock(draft, step.id, {
+      executorName:
+        str(event, "team_name") ?? str(event, "team_id") ?? step.executorName,
+    });
+    return draft;
+  }
+
   const draft = begin(state);
   draft.status = "running";
   draft.runCompleted = false;
@@ -879,16 +932,19 @@ function onTeamRunContent(
   const members = state.blocks.some((b) => b.kind === "member" && b.open);
   if (text === "" && reasoning === "" && !members) return state;
 
+  // Inside a workflow the leader's text belongs to the team-executor step.
+  const parent = matchOpenStep(state, event)?.id ?? null;
   const draft = begin(state);
-  // Leader resumed speaking: any open member block closes first.
+  // Leader resumed speaking: open member blocks under the same container
+  // close first.
   for (const member of openMemberBlocks(draft)) {
-    closeMemberBlock(draft, member.id);
+    if (member.parentId === parent) closeMemberBlock(draft, member.id);
   }
   if (reasoning !== "") {
-    appendReasoning(draft, null, reasoningKey(draft, event), reasoning, tsMs(event));
+    appendReasoning(draft, parent, reasoningKey(draft, event), reasoning, tsMs(event));
   }
   if (text !== "") {
-    appendTextDelta(draft, null, text, tsMs(event));
+    appendTextDelta(draft, parent, text, tsMs(event));
   }
   return draft;
 }
@@ -901,10 +957,12 @@ function onTeamToolCallStarted(
 ): TranscriptState {
   const tool = getTool(event);
   if (!tool) return state;
+  // Inside a workflow, team tool rows and member blocks nest in the step.
+  const parent = matchOpenStep(state, event)?.id ?? null;
 
   if (tool.tool_name !== DELEGATE_TOOL) {
     const draft = begin(state);
-    startToolRow(draft, null, tool, tsMs(event));
+    startToolRow(draft, parent, tool, tsMs(event));
     return draft;
   }
 
@@ -921,7 +979,7 @@ function onTeamToolCallStarted(
   const block: MemberBlock = {
     id: newId(draft),
     kind: "member",
-    parentId: null,
+    parentId: parent,
     open: true,
     createdAtMs: tsMs(event),
     memberId,

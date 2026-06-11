@@ -82,6 +82,10 @@ export class ChatApp implements ChatShell {
       theme.dim,
       "working...",
     );
+    // pi-tui's Loader starts its animation interval in the CONSTRUCTOR
+    // (setIndicator → start()) — stop it until setBusy() actually shows it,
+    // or an invisible ~10Hz re-render loop runs for the whole session.
+    this.loader.stop();
     this.editor = new Editor(this.tui, theme.editor);
     this.editor.setAutocompleteProvider(createSlashAutocompleteProvider());
     this.editor.onSubmit = (text) => this.handleSubmit(text);
@@ -108,11 +112,16 @@ export class ChatApp implements ChatShell {
     };
     process.prependListener("uncaughtException", onFatal);
     process.prependListener("unhandledRejection", onFatal);
+    // Keyboard Ctrl+C never raises SIGINT in raw mode, but an external
+    // `kill -INT` still does — without a handler it terminates the process
+    // with the terminal stranded in raw mode.
+    process.on("SIGINT", onSignal);
     process.on("SIGTERM", onSignal);
     process.on("SIGHUP", onSignal);
     this.removeCrashHandlers = () => {
       process.removeListener("uncaughtException", onFatal);
       process.removeListener("unhandledRejection", onFatal);
+      process.removeListener("SIGINT", onSignal);
       process.removeListener("SIGTERM", onSignal);
       process.removeListener("SIGHUP", onSignal);
     };

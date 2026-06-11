@@ -13,7 +13,14 @@
 
 import type { AgentStream, StreamEvent } from "@worksofadam/agentos-sdk";
 import type { Command } from "commander";
-import { getClient, getBaseUrl, isUrlOverridden, resetClient } from "../agentos-client.js";
+import {
+  getClient,
+  getBaseUrl,
+  isUrlOverridden,
+  resetClient,
+  urlContext,
+} from "../agentos-client.js";
+import { describeError, handleError } from "../agentos-errors.js";
 import { getAgentOSContext, setAgentOSContext } from "../agentos-context.js";
 import { resolveAgentOSTarget } from "../agentos-resolver.js";
 import { readSystems } from "../systems.js";
@@ -60,8 +67,13 @@ export interface ChatStartOptions {
   bypassConfirmations?: boolean;
 }
 
+/**
+ * In-transcript error text: the same CLI-layer mapping handleError prints
+ * (auth hints, validation reformatting, dressed-500 reclassification) —
+ * never raw SDK error bodies, and never process.exit.
+ */
 function errMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+  return describeError(err).message;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -105,19 +117,24 @@ export class ChatController {
     this.app.onSubmit = (text) =>
       this.handleSubmit(text).catch((err) => this.addError(errMessage(err)));
     this.app.onInterrupt = () => this.interrupt();
+    // Exiting (/exit, double-Ctrl+C) with a run in flight: abort the local
+    // stream and best-effort REST-cancel so the run doesn't keep burning
+    // server-side. Bounded — never block exit on a dead backend.
+    this.app.onBeforeExit = () => this.cancelActiveRun(1500);
     this.app.start();
     this.app.setBusy("connecting...");
 
     try {
       await this.discoverEntities();
     } catch (err) {
-      // Startup failure: nothing useful can happen inside the TUI.
+      // Startup failure: nothing useful can happen inside the TUI. Restore
+      // the terminal first, then reuse the CLI's canonical error mapping
+      // (auth vs connectivity vs API errors) — it prints and exits.
       this.app.restoreTerminal();
-      process.stderr.write(
-        this.theme.error("Error: ") +
-          `cannot reach AgentOS at ${getBaseUrl(this.cmd)}: ${errMessage(err)}\n`,
-      );
-      process.exit(2);
+      handleError(err, {
+        resource: "agents",
+        ...urlContext(this.cmd),
+      });
     }
     this.app.setBusy(null);
 
@@ -284,21 +301,14 @@ export class ChatController {
   /** Esc: abort the local fetch, REST-cancel the run unless it already ended. */
   interrupt(): void {
     if (!this.busy || !this.activeStream) return;
+    // The run already reached a terminal event (or paused — RunPaused is
+    // stream-terminal): nothing to cancel, and rendering a "cancelled"
+    // banner here would be a lie while the pause overlay is about to show.
+    if (this.state.runCompleted) return;
     this.userAborted = true;
-    const { runId, runCompleted } = this.state;
+    const { runId } = this.state;
     this.activeStream.abort();
-    if (!runCompleted && runId && this.entity) {
-      const client = getClient(this.cmd);
-      const cancel =
-        this.entity.kind === "agent"
-          ? client.agents.cancel(this.entity.id, runId)
-          : this.entity.kind === "team"
-            ? client.teams.cancel(this.entity.id, runId)
-            : client.workflows.cancel(this.entity.id, runId);
-      void cancel.catch(() => {
-        // Best-effort: the local stream is already gone.
-      });
-    }
+    this.restCancel(runId);
     // The aborted fetch will never deliver the server's RunCancelled —
     // synthesize one so the reducer renders the banner.
     const synthetic = {
@@ -312,7 +322,50 @@ export class ChatController {
     this.app.requestRender();
   }
 
+  /** Fire-and-forget REST cancel (abort() only kills the local fetch). */
+  private restCancel(runId: string | null): Promise<void> {
+    if (!runId || !this.entity) return Promise.resolve();
+    const client = getClient(this.cmd);
+    const cancel =
+      this.entity.kind === "agent"
+        ? client.agents.cancel(this.entity.id, runId)
+        : this.entity.kind === "team"
+          ? client.teams.cancel(this.entity.id, runId)
+          : client.workflows.cancel(this.entity.id, runId);
+    return cancel.catch(() => {
+      // Best-effort: the local stream is already gone.
+    });
+  }
+
+  /** Exit-path cleanup: abort + bounded REST cancel for a live run. */
+  private async cancelActiveRun(timeoutMs: number): Promise<void> {
+    if (!this.busy) return;
+    this.userAborted = true;
+    this.activeStream?.abort();
+    const { runId, runCompleted } = this.state;
+    if (runCompleted || !runId) return;
+    await Promise.race([
+      this.restCancel(runId),
+      new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
+    ]);
+  }
+
   // -- HITL -----------------------------------------------------------------
+
+  /**
+   * A pause with NO confirmation-gated tools (user-input / external-approval
+   * requirements) is not resolvable in chat v1. Continuing anyway would POST
+   * unstamped requirements in a potentially endless promptless loop — leave
+   * the run paused and tell the user where to resolve it.
+   */
+  private reportUnsupportedPause(pause: CapturedPause): void {
+    const kind = this.entity?.kind ?? "agent";
+    this.addError(
+      "the run paused with requirements chat cannot answer (no confirmation-gated tools — " +
+        "likely user-input or external approval). It remains paused; resolve it with " +
+        `\`ixora ${kind}s continue ${pause.runId}\` or \`ixora approvals list\`.`,
+    );
+  }
 
   private async resolvePauses(): Promise<void> {
     const entity = this.entity!;
@@ -323,6 +376,10 @@ export class ChatController {
     });
     let approveAll = false;
     let gatedCount = countGated(pause);
+    if (gatedCount === 0) {
+      this.reportUnsupportedPause(pause);
+      return;
+    }
 
     const result = await runHitlLoop({
       pause,
@@ -360,6 +417,11 @@ export class ChatController {
           });
           approveAll = false;
           gatedCount = countGated(pause);
+          if (gatedCount === 0) {
+            // Same guard as the initial pause: never loop promptlessly.
+            this.reportUnsupportedPause(pause);
+            return null;
+          }
           return pause;
         }
         return null;
@@ -531,7 +593,23 @@ export class ChatController {
       target = item.value;
     }
     try {
-      const ctx = await resolveAgentOSTarget({ system: target });
+      // The resolver's helpers (e.g. getApiPortBase) console.warn on bad
+      // config values — a raw stdout write would corrupt the live TUI.
+      // Capture and re-render as transcript lines instead.
+      const warnings: string[] = [];
+      const originalWarn = console.warn;
+      console.warn = (...args: unknown[]) => {
+        warnings.push(args.map(String).join(" "));
+      };
+      let ctx;
+      try {
+        ctx = await resolveAgentOSTarget({ system: target });
+      } finally {
+        console.warn = originalWarn;
+      }
+      for (const warning of warnings) {
+        this.addInfo(`Warning: ${warning}`);
+      }
       setAgentOSContext(ctx);
       resetClient();
       this.systemLabel = ctx.systemId ?? ctx.baseUrl;

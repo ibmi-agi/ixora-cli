@@ -269,8 +269,15 @@ export async function runHitlLoop(
 
     let tools: string;
     if (mode.kind === "auto") {
-      tools = buildConfirmPayload(toolExecutions);
-      autoApproved += toolExecutions.length;
+      // Stamp ONLY confirmation-gated entries (contract: everything else —
+      // user-input/approval requirements — round-trips untouched).
+      const decisions = new Map<string, HitlDecision>(
+        toolExecutions
+          .filter((te) => te.requires_confirmation === true)
+          .map((te) => [te.tool_call_id, { approve: true }]),
+      );
+      tools = buildDecisionPayload(toolExecutions, decisions);
+      autoApproved += decisions.size;
     } else {
       const decisions = new Map<string, HitlDecision>();
       for (const toolExecution of toolExecutions) {

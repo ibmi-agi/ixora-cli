@@ -237,6 +237,61 @@ describe("ChatController", () => {
     expect(fakeClient.agents.cancel).not.toHaveBeenCalled();
   });
 
+  it("leaves a zero-gated pause paused with a resume hint instead of looping promptlessly", async () => {
+    const shell = new FakeShell();
+    const controller = makeController(shell);
+    const pauseBody = [
+      'data: {"event": "RunStarted", "created_at": 1781179200, "run_id": "run-U1", "session_id": "sess-U1", "agent_id": "demo-agent"}',
+      "",
+      'data: {"event": "RunPaused", "created_at": 1781179201, "run_id": "run-U1", "session_id": "sess-U1", "agent_id": "demo-agent", "requirements": [{"id": "req-u1", "created_at": "2026-06-11T00:00:00Z", "tool_execution": {"tool_call_id": "tc-u1", "tool_name": "ask_user", "tool_args": {}, "requires_confirmation": false, "confirmed": null, "confirmation_note": null, "requires_user_input": true}}]}',
+      "",
+      "",
+    ].join("\n");
+    fakeClient.agents.runStream.mockResolvedValue(
+      AgentStream.fromSSEResponse(
+        new Response(pauseBody, {
+          headers: { "Content-Type": "text/event-stream" },
+        }),
+        new AbortController(),
+      ),
+    );
+
+    await controller.start({ entity: { kind: "agent", id: "demo-agent" } });
+    await shell.onSubmit("needs user input");
+
+    expect(fakeClient.agents.continue).not.toHaveBeenCalled();
+    const rendered = shell.rendered();
+    expect(rendered).toContain("remains paused");
+    expect(rendered).toContain("run-U1");
+  });
+
+  it("onBeforeExit aborts and REST-cancels a live run", async () => {
+    const shell = new FakeShell();
+    const controller = makeController(shell);
+    const stream = hangingStream([
+      {
+        event: "RunStarted",
+        created_at: 1781179200,
+        run_id: "run-Y1",
+        session_id: "sess-Y1",
+        agent_id: "demo-agent",
+      } as unknown as StreamEvent,
+    ]);
+    fakeClient.agents.runStream.mockResolvedValue(stream);
+    fakeClient.agents.cancel.mockResolvedValue(undefined);
+
+    await controller.start({ entity: { kind: "agent", id: "demo-agent" } });
+    const turn = shell.onSubmit("about to exit") as Promise<void>;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await shell.onBeforeExit();
+    await turn;
+
+    expect(fakeClient.agents.cancel).toHaveBeenCalledWith(
+      "demo-agent",
+      "run-Y1",
+    );
+  });
+
   it("renders per-message errors in-transcript without killing the session", async () => {
     const shell = new FakeShell();
     const controller = makeController(shell);

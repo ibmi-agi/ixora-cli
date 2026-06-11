@@ -37,6 +37,9 @@ export class TurnView {
 
   constructor(private readonly theme: ChatTheme) {
     this.footer = new MetricsFooter(theme);
+    // Mounted from the start so a run that produces metrics but no blocks
+    // still shows its footer; mount() re-appends to keep it last.
+    this.container.addChild(this.footer);
   }
 
   /** Fold the latest reducer state into the mounted component tree. */

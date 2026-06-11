@@ -114,9 +114,13 @@ export class ToolCallRow extends CachedLines {
   protected renderLines(width: number): string[] {
     const t = this.theme;
     const b = this.block;
+    // closed + still "running" = interrupted (Esc/stream drop closed the
+    // block without a completion event) — never show the in-flight glyph.
     const glyph =
       b.status === "running"
-        ? t.dim("◷")
+        ? b.open
+          ? t.dim("◷")
+          : t.dim("◌")
         : b.status === "success"
           ? t.success("✓")
           : t.error("✗");
@@ -187,7 +191,11 @@ abstract class TitledContainer implements Component {
         line: truncateToWidth(this.title(), width),
       };
     }
-    return [this.titleCache.line, ...this.indented.render(width)];
+    return [
+      this.titleCache.line,
+      ...this.indented.render(width),
+      ...this.extraLines(width),
+    ];
   }
 
   invalidate(): void {
@@ -200,6 +208,12 @@ abstract class TitledContainer implements Component {
   }
 
   protected abstract title(): string;
+
+  /** Additional indented lines after the body (e.g. captured step output). */
+  protected extraLines(width: number): string[] {
+    void width;
+    return [];
+  }
 }
 
 /**
@@ -226,11 +240,14 @@ export class MemberBlockView extends TitledContainer {
   protected title(): string {
     const t = this.theme;
     const b = this.block;
+    // closed + still "running" = interrupted mid-delegation; don't claim ✓.
     const glyph = b.open
       ? t.member("▸")
       : b.status === "error"
         ? t.error("✗")
-        : t.success("✓");
+        : b.status === "running"
+          ? t.dim("◌")
+          : t.success("✓");
     const task = b.task ? t.dim(` — ${b.task}`) : "";
     return `${glyph} ${t.member(t.bold(b.name))}${task}`;
   }
@@ -265,6 +282,30 @@ export class StepBlockView extends TitledContainer {
       b.durationSeconds !== null ? t.dim(` · ${b.durationSeconds.toFixed(1)}s`) : "";
     const executor = b.executorName ? t.dim(` (${b.executorName})`) : "";
     return `${glyph} ${t.step(`step ${index}`)}${t.bold(name)}${executor}${duration}`;
+  }
+
+  /**
+   * Steps with non-streaming executors produce their text only via
+   * StepOutput/StepCompleted content — render it when nothing streamed
+   * into the body (the captured output is otherwise invisible).
+   */
+  protected override extraLines(width: number): string[] {
+    const content = this.block.output?.content;
+    const error = this.block.output?.error;
+    if (this.body.children.length > 0) return [];
+    const text = error ? `Error: ${error}` : content;
+    if (!text) return [];
+    const innerWidth = Math.max(1, width - 2);
+    return text
+      .trimEnd()
+      .split("\n")
+      .flatMap((line) =>
+        wrapTextWithAnsi(
+          error ? this.theme.error(line) : this.theme.dim(line),
+          innerWidth,
+        ),
+      )
+      .map((line) => "  " + line);
   }
 }
 
