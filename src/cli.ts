@@ -601,8 +601,9 @@ export function createProgram(): Command {
   registerStackHints(program);
 
   // ── Mount the ported agno tree at top level ────────────────────────────
-  program.addCommand(agentsCommand);
+  // chat first: it's the interactive front door, listed right after stack.
   program.addCommand(chatCommand);
+  program.addCommand(agentsCommand);
   program.addCommand(teamsCommand);
   program.addCommand(workflowsCommand);
   program.addCommand(tracesCommand);
