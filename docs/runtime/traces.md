@@ -95,7 +95,7 @@ ixora traces search --filter '{"duration_gt":10000}' --group-by session
 | `--page <n>` | Default `1` |
 | `--db-id <id>` | Database ID |
 
-Invalid JSON errors out client-side. Output columns: `TRACE_ID`, `NAME`, `STATUS`, `DURATION`.
+Invalid JSON errors out client-side. Output columns: `TRACE_ID`, `NAME`, `STATUS`, `DURATION` — except with `--group-by session`, which returns session aggregates and uses the same columns as `traces stats` (`SESSION_ID`, `USER_ID`, `AGENT_ID`, `TOTAL_TRACES`, `FIRST_TRACE`, `LAST_TRACE`).
 
 ---
 

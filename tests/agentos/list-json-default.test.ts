@@ -1,12 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Regression test for `-o json` on list verbs: JSON rows must mirror the
-// table columns (the outputList `keys` projection, null-filled for keys the
-// API omits), not dump the raw API payload. The mock rows carry an `extra`
-// field that only appears in the raw payload — if it ever shows up in
-// `-o json` output, the projection regressed. Full objects remain reachable
-// via `<group> get <id>` or an explicit `--json <fields>` projection
-// (covered by list-projection.test.ts).
+// Pins the default JSON contract for list verbs: bare `--json` / `-o json` /
+// piped output emits the rows EXACTLY as passed to outputList — the full API
+// payload for commands that pass raw rows through — inside the {data, meta}
+// envelope. Filtering fields is opt-in via `--json <fields>` (covered by
+// list-projection.test.ts). The `extra` field below stands in for any API
+// field not shown in the table view: it must survive into `-o json` output.
+//
+// v0.4.14 wrongly projected default JSON rows to the table columns; this
+// suite exists so that regression cannot ship again. Commands that pre-map
+// rows for display (evals, approvals, schedules, registries, knowledge
+// search) are intentionally not asserted here — their mapping is per-command
+// display logic, not the outputList chokepoint contract.
 
 const ARRAY_PAYLOAD = {
   data: [{ id: "a", extra: "x" }, { id: "b", extra: "y" }],
@@ -43,20 +48,6 @@ vi.mock("@worksofadam/agentos-sdk", () => {
     };
     knowledge = {
       list: vi.fn().mockResolvedValue(ARRAY_PAYLOAD),
-      search: vi.fn().mockResolvedValue(ARRAY_PAYLOAD),
-    };
-    evals = {
-      list: vi.fn().mockResolvedValue(ARRAY_PAYLOAD),
-    };
-    approvals = {
-      list: vi.fn().mockResolvedValue(ARRAY_PAYLOAD),
-    };
-    schedules = {
-      list: vi.fn().mockResolvedValue(ARRAY_PAYLOAD),
-      listRuns: vi.fn().mockResolvedValue(ARRAY_PAYLOAD),
-    };
-    registry = {
-      list: vi.fn().mockResolvedValue(ARRAY_PAYLOAD),
     };
     traces = {
       list: vi.fn().mockResolvedValue(ARRAY_PAYLOAD),
@@ -73,6 +64,7 @@ const { clearAgentOSContext } = await import(
   "../../src/lib/agentos-context.js"
 );
 
+// Every command here passes raw rows straight to outputList.
 const CASES: ReadonlyArray<readonly [string, readonly string[]]> = [
   ["agents list", ["agents", "list"]],
   ["teams list", ["teams", "list"]],
@@ -83,18 +75,12 @@ const CASES: ReadonlyArray<readonly [string, readonly string[]]> = [
   ["sessions runs", ["sessions", "runs", "sess-1"]],
   ["memories list", ["memories", "list"]],
   ["knowledge list", ["knowledge", "list"]],
-  ["knowledge search", ["knowledge", "search", "query"]],
-  ["evals list", ["evals", "list"]],
-  ["approvals list", ["approvals", "list"]],
-  ["schedules list", ["schedules", "list"]],
-  ["schedules runs", ["schedules", "runs", "sched-1"]],
-  ["registries list", ["registries", "list"]],
   ["traces list", ["traces", "list"]],
   ["traces stats", ["traces", "stats"]],
   ["traces search", ["traces", "search"]],
 ];
 
-describe("`-o json` on list verbs projects rows to the table columns", () => {
+describe("`-o json` on list verbs passes raw rows through (full payload)", () => {
   let stdoutSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
@@ -106,7 +92,7 @@ describe("`-o json` on list verbs projects rows to the table columns", () => {
   });
 
   it.each(CASES)(
-    "`%s -o json` emits projected rows, no raw-payload leak",
+    "`%s -o json` emits unprojected rows, fields beyond the table columns intact",
     async (_name, argv) => {
       const program = createProgram();
       await program.parseAsync([
@@ -123,15 +109,14 @@ describe("`-o json` on list verbs projects rows to the table columns", () => {
       const parsed = JSON.parse(written) as {
         data: Record<string, unknown>[];
       };
-      expect(Array.isArray(parsed.data)).toBe(true);
-      expect(parsed.data).toHaveLength(2);
-      for (const row of parsed.data) {
-        expect(row).not.toHaveProperty("extra");
-      }
+      expect(parsed.data).toEqual([
+        { id: "a", extra: "x" },
+        { id: "b", extra: "y" },
+      ]);
     },
   );
 
-  it("`agents list -o json` emits the exact projected envelope, null-filling missing keys", async () => {
+  it("`agents list -o json` emits the exact full-payload envelope with meta", async () => {
     const program = createProgram();
     await program.parseAsync([
       "node",
@@ -147,8 +132,8 @@ describe("`-o json` on list verbs projects rows to the table columns", () => {
     const written = stdoutSpy.mock.calls.map((c) => String(c[0])).join("");
     expect(JSON.parse(written)).toEqual({
       data: [
-        { id: "a", name: null, description: null },
-        { id: "b", name: null, description: null },
+        { id: "a", extra: "x" },
+        { id: "b", extra: "y" },
       ],
       meta: { page: 1, limit: 20, total_pages: 1, total_count: 2 },
     });

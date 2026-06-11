@@ -22,7 +22,7 @@ All subcommands accept `--db-id <id>` to target a specific database (used in per
 ixora sessions list
 ixora sessions list --type agent --component-id sql-agent
 ixora sessions list --user-id alice --sort-by updated_at --sort-order desc
-ixora sessions list --json session_id,session_name,type
+ixora sessions list --json session_id,session_name,session_type
 ```
 
 | Flag | Default | Purpose |
