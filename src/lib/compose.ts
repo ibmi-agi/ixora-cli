@@ -63,7 +63,7 @@ export async function runCompose(
     }
 
     error(`Command failed: ${composeCmd} ${args.join(" ")}`);
-    console.log(`  Check ${bold("ixora logs")} for details.`);
+    console.log(`  Check ${bold("ixora stack logs")} for details.`);
     process.exit(exitCode);
   }
 }
@@ -86,13 +86,13 @@ export function writeComposeFile(envFile: string = ENV_FILE): void {
 
 export function requireInstalled(): void {
   if (!existsSync(ENV_FILE)) {
-    throw new Error("ixora is not installed. Run: ixora install");
+    throw new Error("ixora is not installed. Run: ixora stack install");
   }
 }
 
 export function requireComposeFile(): void {
   if (!existsSync(COMPOSE_FILE)) {
-    throw new Error("ixora is not installed. Run: ixora install");
+    throw new Error("ixora is not installed. Run: ixora stack install");
   }
 }
 

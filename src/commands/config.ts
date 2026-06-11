@@ -34,7 +34,7 @@ import {
 
 export function cmdConfigShow(): void {
   if (!existsSync(ENV_FILE)) {
-    die("ixora is not installed. Run: ixora install");
+    die("ixora is not installed. Run: ixora stack install");
   }
 
   console.log();
@@ -74,7 +74,7 @@ export function cmdConfigShow(): void {
   const systems = readSystems();
   if (systems.length === 0) {
     console.log(
-      `  ${dim("(no systems configured — run `ixora system add`)")}`,
+      `  ${dim("(no systems configured — run `ixora stack system add`)")}`,
     );
   } else {
     for (const sys of systems) {
@@ -179,24 +179,24 @@ export function cmdConfigShow(): void {
     console.log();
   }
 
-  console.log(`  ${dim("Edit with: ixora config edit")}`);
-  console.log(`  ${dim("Set a value: ixora config set KEY VALUE")}`);
+  console.log(`  ${dim("Edit with: ixora stack config edit")}`);
+  console.log(`  ${dim("Set a value: ixora stack config set KEY VALUE")}`);
   console.log();
 }
 
 export function cmdConfigSet(key: string, value: string): void {
   if (!existsSync(ENV_FILE)) {
-    die("ixora is not installed. Run: ixora install");
+    die("ixora is not installed. Run: ixora stack install");
   }
 
   updateEnvKey(key, value);
   success(`Set ${key}`);
-  console.log(`  Restart to apply: ${bold("ixora restart")}`);
+  console.log(`  Restart to apply: ${bold("ixora stack restart")}`);
 }
 
 export async function cmdConfigEdit(): Promise<void> {
   if (!existsSync(ENV_FILE)) {
-    die("ixora is not installed. Run: ixora install");
+    die("ixora is not installed. Run: ixora stack install");
   }
 
   const editor = process.env["EDITOR"] ?? process.env["VISUAL"] ?? "";
@@ -224,7 +224,7 @@ export async function cmdConfigEdit(): Promise<void> {
 
   console.log();
   success("Config saved");
-  console.log(`  Restart to apply: ${bold("ixora restart")}`);
+  console.log(`  Restart to apply: ${bold("ixora stack restart")}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -266,7 +266,7 @@ export async function cmdSystemConfigShow(systemId: string): Promise<void> {
   console.log(`    ${cyan("source")}    ${dim(path)}`);
   if (!profile) {
     warn(
-      `Mode is 'custom' but no profile YAML found. Run: ixora config edit ${systemId}`,
+      `Mode is 'custom' but no profile YAML found. Run: ixora stack config edit ${systemId}`,
     );
     return;
   }
@@ -290,7 +290,7 @@ export async function cmdSystemConfigShow(systemId: string): Promise<void> {
       for (const p of problems) {
         warn(
           `Unknown ${p.kind} in profile: ${p.missing.join(", ")} — ` +
-            `removed in this image. Edit with: ixora config edit ${systemId}`,
+            `removed in this image. Edit with: ixora stack config edit ${systemId}`,
         );
       }
     }
@@ -334,7 +334,7 @@ export async function cmdSystemConfigEdit(systemId: string): Promise<void> {
     if (sys.mode === "custom") deleteUserProfile(systemId);
     setSystemMode(systemId, "full");
     success(
-      `System '${systemId}' set to Full mode. Restart to apply: ${bold("ixora restart")}`,
+      `System '${systemId}' set to Full mode. Restart to apply: ${bold("ixora stack restart")}`,
     );
     return;
   }
@@ -354,7 +354,7 @@ export async function cmdSystemConfigEdit(systemId: string): Promise<void> {
   writeUserProfile(systemId, picker.profile);
   setSystemMode(systemId, "custom");
   success(
-    `System '${systemId}' set to Custom mode. Restart to apply: ${bold("ixora restart")}`,
+    `System '${systemId}' set to Custom mode. Restart to apply: ${bold("ixora stack restart")}`,
   );
 }
 
@@ -372,7 +372,7 @@ export function cmdSystemConfigReset(systemId: string): void {
   }
   setSystemMode(systemId, "full");
   success(
-    `System '${systemId}' reset to Full mode. Restart to apply: ${bold("ixora restart")}`,
+    `System '${systemId}' reset to Full mode. Restart to apply: ${bold("ixora stack restart")}`,
   );
 }
 

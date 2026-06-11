@@ -42,7 +42,7 @@ export async function cmdUninstall(opts: UninstallOptions): Promise<void> {
     console.log(chalk.yellow("This will stop containers and remove images."));
     console.log(
       dim(
-        `Configuration in ${IXORA_DIR} will be preserved. Run 'ixora start' to re-pull and restart.`,
+        `Configuration in ${IXORA_DIR} will be preserved. Run 'ixora stack start' to re-pull and restart.`,
       ),
     );
   }
@@ -86,9 +86,9 @@ export async function cmdUninstall(opts: UninstallOptions): Promise<void> {
 
   if (!opts.purge) {
     console.log(`  Configuration preserved in ${dim(IXORA_DIR)}`);
-    console.log(`  Run ${bold("ixora start")} to re-pull images and restart.`);
+    console.log(`  Run ${bold("ixora stack start")} to re-pull images and restart.`);
     console.log(
-      `  Run ${bold("ixora uninstall --purge")} to remove everything.`,
+      `  Run ${bold("ixora stack uninstall --purge")} to remove everything.`,
     );
   }
 

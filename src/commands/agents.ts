@@ -49,7 +49,7 @@ export async function cmdAgentsEdit(systemId?: string): Promise<void> {
     }
   } else if (!systems.some((s) => s.id === resolvedId)) {
     die(
-      `System '${resolvedId}' not found. Run \`ixora system\` to see configured systems.`,
+      `System '${resolvedId}' not found. Run \`ixora stack system list\` to see configured systems.`,
     );
   }
 
@@ -78,7 +78,7 @@ export async function cmdAgentsEdit(systemId?: string): Promise<void> {
 
   success(
     `Wrote ~/.ixora/profiles/${resolvedId}.yaml — restart to apply: ${bold(
-      `ixora system restart ${resolvedId}`,
+      `ixora stack system restart ${resolvedId}`,
     )}`,
   );
 }
