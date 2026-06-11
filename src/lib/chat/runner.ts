@@ -53,6 +53,8 @@ interface EntitySummary {
   id: string;
   name: string;
   description?: string;
+  /** Configured model id from the list payload (agents/teams; workflows have none). */
+  model?: string;
 }
 
 interface DiscoveredEntities {
@@ -490,11 +492,14 @@ export class ChatController {
         const rec = asRecord(item);
         const id = strField(rec, "id");
         if (!id) return [];
+        // Wire shape: model: { name: "Claude", model: "claude-...", provider }.
+        const model = asRecord(rec?.model);
         return [
           {
             id,
             name: strField(rec, "name") ?? id,
             description: strField(rec, "description"),
+            model: strField(model, "model") ?? strField(model, "id"),
           },
         ];
       });
@@ -517,6 +522,16 @@ export class ChatController {
       pool.find((e) => e.id === idOrName) ??
       pool.find((e) => e.name.toLowerCase() === idOrName.toLowerCase());
     return match ? { kind, id: match.id, name: match.name } : null;
+  }
+
+  private summaryFor(kind: EntityKind, id: string): EntitySummary | undefined {
+    const pool =
+      kind === "agent"
+        ? this.entities.agents
+        : kind === "team"
+          ? this.entities.teams
+          : this.entities.workflows;
+    return pool.find((e) => e.id === id);
   }
 
   private entityLists(): EntityLists {
@@ -549,6 +564,9 @@ export class ChatController {
     const switched = this.entity !== null && this.entity.id !== choice.id;
     this.entity = choice;
     if (switched) this.startNewSession();
+    // Show the configured model immediately; the first run's header replaces
+    // it with the runtime-reported model (which may differ).
+    this.lastModel = this.summaryFor(choice.kind, choice.id)?.model ?? null;
     if (opts.announce !== false) {
       this.addInfo(`Chatting with ${choice.kind} ${choice.name} (${choice.id}).`);
     }
@@ -636,6 +654,10 @@ export class ChatController {
       if (!stillExists) {
         this.entity = null;
         await this.pickEntity("agent");
+      } else {
+        // Same entity id on the new system may be configured differently.
+        this.lastModel =
+          this.summaryFor(this.entity!.kind, this.entity!.id)?.model ?? null;
       }
       this.updateHeader();
     } catch (err) {
@@ -843,7 +865,7 @@ export class ChatController {
     this.app.setHeader(`${this.systemLabel} · ${entity} · ${session}`);
     // pi-style footer: connected entity + system left, tokens + model right.
     const left = this.entity
-      ? `${this.entity.kind}: ${this.entity.id} · ${this.systemLabel}`
+      ? `${this.entity.name} · ${this.entity.id} · ${this.systemLabel}`
       : `no entity · ${this.systemLabel}`;
     const tokens =
       this.totalInputTokens > 0 || this.totalOutputTokens > 0

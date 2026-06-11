@@ -135,7 +135,12 @@ function makeController(shell: FakeShell) {
 
 beforeEach(() => {
   fakeClient.agents.list.mockResolvedValue([
-    { id: "demo-agent", name: "Demo Agent", description: "test agent" },
+    {
+      id: "demo-agent",
+      name: "Demo Agent",
+      description: "test agent",
+      model: { name: "Claude", model: "claude-demo-1", provider: "Anthropic" },
+    },
   ]);
   fakeClient.teams.list.mockResolvedValue([]);
   fakeClient.workflows.list.mockResolvedValue([]);
@@ -387,7 +392,9 @@ describe("ChatController", () => {
     const shell = new FakeShell();
     const controller = makeController(shell);
     await controller.start({ entity: { kind: "agent", id: "demo-agent" } });
-    expect(shell.footer.left).toContain("agent: demo-agent");
+    // name · id · system, and the configured model BEFORE any run.
+    expect(shell.footer.left).toContain("Demo Agent · demo-agent · ");
+    expect(shell.footer.right).toContain("claude-demo-1");
 
     fakeClient.agents.runStream.mockResolvedValue(
       await fixtureStream("simple-run"),
@@ -395,8 +402,9 @@ describe("ChatController", () => {
     await shell.onSubmit("hello there");
     expect(shell.footer.right).toMatch(/↑\S+ ↓\S+/);
 
-    // /clear resets the per-session token totals.
+    // /clear resets the per-session token totals but keeps the model.
     await shell.onSubmit("/clear");
     expect(shell.footer.right).not.toMatch(/↑/);
+    expect(shell.footer.right).not.toBe("");
   });
 });
