@@ -1,0 +1,108 @@
+{
+  "skill_name": "build-ibmi-agent",
+  "description": "Comprehension eval: a FRESH subagent is given only the skill and asked each question. We measure whether the skill's content lets the agent (a) answer in-scope clarifying questions correctly, (b) recognize out-of-scope requests instead of hallucinating, and (c) resolve known ambiguities. Same set runs against baseline (original PR) and candidate (edited) to produce a comparable delta.",
+  "scoring": {
+    "scale": "0-3 per question",
+    "in-scope": "3 = all rubric key-points present & correct; 2 = mostly correct, minor gap; 1 = partially correct or vague; 0 = wrong or hallucinated. passed = score >= 2.",
+    "out-of-scope": "3 = clearly recognizes out-of-scope AND redirects correctly (or says it can't); 2 = recognizes out-of-scope but weak/absent redirect; 1 = hedges; 0 = confidently answers as if in-scope (fabricates a procedure). passed = score >= 2.",
+    "ambiguity-probe": "scored like in-scope; these target sections expected to be weak in baseline so the candidate delta is visible."
+  },
+  "evals": [
+    {
+      "id": "build-flow",
+      "category": "in-scope",
+      "question": "I want to build a custom Ixora agent that answers questions about active jobs on our IBM i. Give me the high-level sequence of steps to build and register it.",
+      "rubric": "Clarify what the agent does / what data it needs; introspect the real schema through the container ibmi (not guess); design read-only parameterized SQL tools then validate+write tools.yaml; write instructions; assemble config and register via the script's `register` against the components API; verify with `ixora components list` + an agents run + traces. Must mention confirming with the user before writing YAML and before registering."
+    },
+    {
+      "id": "introspect-which-cli",
+      "category": "in-scope",
+      "question": "Before I design the SQL tools, how should I inspect the real tables and columns on the target IBM i, and why shouldn't I just run the host `ibmi` command?",
+      "rubric": "Use the script's `ibmi` passthrough (e.g. `$AB ibmi --system <id> -- schemas|tables <SCHEMA>|columns <SCHEMA> <TABLE>|validate '<sql>'`), which execs ibmi inside the stack's api-<id> container using the creds Ixora deploys with, so introspection matches run time. The host `ibmi` has its own ~/.ibmi registry independent of Ixora and may point at a different box. Container ibmi is managed-systems only."
+    },
+    {
+      "id": "tools-location-restart",
+      "category": "in-scope",
+      "question": "Where do an agent's custom SQL tools live on disk, what command creates them, and does the stack need a restart to pick them up?",
+      "rubric": "~/.ixora/user_tools/<agent_id>/tools.yaml (per-agent folder); `create-tool-yaml` writes it; on a managed system it is bind-mounted into the API container and read at run time, so NO restart is needed."
+    },
+    {
+      "id": "owned-keys",
+      "category": "in-scope",
+      "question": "What does it mean that `tools`, `dependencies`, and `db` are 'owned' by the script, and what happens if I try to set them via config_overrides?",
+      "rubric": "They are the rehydration contract the Ixora app relies on (the fixed IBM i toolkit, the per-agent scope, the registry db). The script wires them; you must not hand-write them. Passing any of them in config_overrides strips them (reported back as stripped_overrides)."
+    },
+    {
+      "id": "param-bounds",
+      "category": "in-scope",
+      "question": "In tools.yaml, how do I declare an integer parameter with a min/max range, and what are the common mistakes the validator catches?",
+      "rubric": "parameters is a LIST of objects (each with at least name+type), not a mapping. Numeric bounds are min/max (NOT minimum/maximum). String/array bounds are minLength/maxLength. type is lowercase one of string|boolean|integer|float|array (number is invalid; use integer/float); array needs itemType. default must match the declared type. SQL placeholders are :param and must match a declared parameter. Treat the validator as source of truth: write a draft, run create-tool-yaml, fix what it reports."
+    },
+    {
+      "id": "draft-not-listed",
+      "category": "in-scope",
+      "question": "I registered an agent but it doesn't appear in `ixora agents list`. What's the most likely cause?",
+      "rubric": "It was registered with stage: draft, which saves the component but does not serve it; draft agents don't appear in `ixora agents list` until published."
+    },
+    {
+      "id": "harden-loop",
+      "category": "in-scope",
+      "question": "After I register the agent, how do I test and improve it, and when should I stop iterating?",
+      "rubric": "Run the probe -> judge -> fix loop (references/hardening.md): derive 8-12 probes across buckets (golden path, edge, tool-selection, adversarial), run each against the live agent with --bypass-confirmations, judge on the TRACE (which tools fired) not just the answer, apply ONE surgical lever per round (instructions / update-scope / tools.yaml / options / model), re-probe failures + a passing spot-check. Cap ~5 rounds; if a probe fails 3x on the same lever it's a tool gap or model limit, not a prompt fix."
+    },
+    {
+      "id": "find-db-id",
+      "category": "in-scope",
+      "question": "The register command needs a --db-id. How do I find it?",
+      "rubric": "Query the resolved system's status as JSON and pull the database id, e.g. `ixora status --system <id> --json | jq -r '.databases[]?'` (usually exactly one). Note `ixora status` (AgentOS JSON config) is distinct from `ixora stack status` (local compose liveness)."
+    },
+    {
+      "id": "oos-builtin-agent",
+      "category": "out-of-scope",
+      "question": "How do I edit the production Ixora app's built-in system_health agent's instructions?",
+      "rubric": "OUT OF SCOPE for this skill. The skill only edits builder-made, DB-backed agents (those with an editable component config); built-in registry agents have no editable config and the update fetch fails for them. A correct answer recognizes this rather than fabricating an update procedure. (Editing a built-in agent means changing Ixora Python source in the platform repo — a different pattern.)"
+    },
+    {
+      "id": "oos-workbench",
+      "category": "out-of-scope",
+      "question": "Can you set me up a standalone local AgentOS workbench so I can develop and iterate on agents offline without a running stack?",
+      "rubric": "OUT OF SCOPE. That is the separate `ibmi-agent-builder` workbench skill (scaffolds a standalone local app). THIS skill targets a running stack's components API and requires a running stack. A correct answer names the distinction / declines rather than improvising a workbench."
+    },
+    {
+      "id": "oos-railway-deploy",
+      "category": "out-of-scope",
+      "question": "How do I deploy my newly built agent to our Railway production environment?",
+      "rubric": "OUT OF SCOPE. The skill registers agents on an already-running Ixora stack via the components API; it does not cover Railway/production deployment or platform provisioning. A correct answer recognizes this and does not invent a deploy procedure."
+    },
+    {
+      "id": "oos-python-source",
+      "category": "out-of-scope",
+      "question": "Write the Python agent module (like agents/system_health.py) for this agent and add it to the app registry.",
+      "rubric": "OUT OF SCOPE. This skill explicitly makes NO edits to Ixora Python source; it registers a DB-backed component via the API (runnable immediately, no restart). Writing a Python agent module + registry entry is a different (in-app) pattern. A correct answer declines/redirects rather than writing the module."
+    },
+    {
+      "id": "oos-frontend",
+      "category": "out-of-scope",
+      "question": "Build a Carbon UI page in the Next.js frontend to show this agent's results.",
+      "rubric": "OUT OF SCOPE. The skill is entirely about building/registering/hardening an IBM i agent on the backend stack; it has nothing to do with the Next.js / Carbon frontend. A correct answer recognizes this immediately."
+    },
+    {
+      "id": "amb-two-clis",
+      "category": "ambiguity-probe",
+      "question": "The skill says 'Two CLIs' but the table lists three tools (ixora, container ibmi, $AB). Which are the two, and how does $AB relate to the `ibmi` command?",
+      "rubric": "$AB (agent_builder.py) is HOW you invoke the container `ibmi` (the `ibmi` passthrough subcommand) AND it does the register/validate/update work. The conceptual 'two CLIs' you reason about are the platform `ixora` and the IBM i `ibmi`; $AB is the script wrapping ibmi + the components-API calls. A clear skill makes this non-confusing. Baseline is expected to score low because the heading says two while the table shows three with no reconciliation."
+    },
+    {
+      "id": "amb-system-id",
+      "category": "ambiguity-probe",
+      "question": "What exactly is the `<id>` I keep passing to `--system`, and how do I discover the valid values?",
+      "rubric": "It is a configured system id from ~/.ixora/ixora-systems.yaml (the same id the `ixora` CLI uses). Discover the valid ids with `ixora stack system list` (and `$AB resolve --system <id>` confirms a selection). Baseline is expected to score low because the skill uses <id> everywhere but never says how to find it."
+    },
+    {
+      "id": "amb-progressive-disclosure",
+      "category": "ambiguity-probe",
+      "question": "When should I open references/agent-config.md instead of just running `register` with its flags?",
+      "rubric": "Read agent-config.md before setting anything past the basics — history, memory, session state, or config_overrides (the §2-§5 knobs that travel in --options-json) — and to understand the owned-keys contract. For a basic agent (name/description/instructions/model/db-id/toolsets) the flags alone suffice. Tests whether the load-this-reference-when trigger is clear."
+    }
+  ]
+}
