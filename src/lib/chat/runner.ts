@@ -535,7 +535,7 @@ export class ChatController {
 
   private async pickEntity(initialTab: EntityKind): Promise<boolean> {
     const choice = await showEntityPicker(
-      this.app.tui,
+      this.app,
       this.theme,
       this.entityLists(),
       initialTab,
@@ -593,7 +593,7 @@ export class ChatController {
         a.id === defaultId ? -1 : b.id === defaultId ? 1 : 0,
       );
       const item = await showListPicker(
-        this.app.tui,
+        this.app,
         this.theme,
         "Switch system",
         ordered.map((s) => ({
@@ -688,7 +688,7 @@ export class ChatController {
           },
         ];
       });
-      const item = await showListPicker(this.app.tui, this.theme, "Resume session", items);
+      const item = await showListPicker(this.app, this.theme, "Resume session", items);
       if (item) await this.resumeSession(item.value);
     } catch (err) {
       this.app.setBusy(null);
@@ -704,10 +704,21 @@ export class ChatController {
       const runs = await client.sessions.getRuns(sessionId);
       this.app.setBusy(null);
       this.sessionId = sessionId;
+      // The footer totals describe THIS session: drop the previous session's
+      // counts and rebuild from the replayed runs' metrics (best-effort).
+      this.totalInputTokens = 0;
+      this.totalOutputTokens = 0;
       this.addInfo(`Resumed session ${sessionId}.`);
       for (const run of Array.isArray(runs) ? runs : []) {
         const rec = asRecord(run);
         if (!rec) continue;
+        const metrics = asRecord(rec.metrics);
+        if (typeof metrics?.input_tokens === "number") {
+          this.totalInputTokens += metrics.input_tokens;
+        }
+        if (typeof metrics?.output_tokens === "number") {
+          this.totalOutputTokens += metrics.output_tokens;
+        }
         const input = extractRunInput(rec.run_input);
         if (input) {
           this.app.addToTranscript(userMessageLine(this.theme, input));

@@ -54,7 +54,7 @@ An unknown id passed via `--agent`/`--team`/`--workflow` exits 1 with a not-foun
 
 ## The entity picker
 
-Run `ixora chat` with no entity flag and a tabbed picker opens, listing the agents, teams, and workflows discovered on the server. Tab between the three kinds, pick one, and start typing. You can switch entities later without leaving chat via `/agents`, `/teams`, or `/workflows`.
+Run `ixora chat` with no entity flag and a tabbed picker opens in place of the input line, listing the agents, teams, and workflows discovered on the server. Type to search, Tab between the three kinds, Enter to pick, Esc to cancel. You can switch entities later without leaving chat via `/agents`, `/teams`, or `/workflows` — the session and system pickers work the same way.
 
 ---
 

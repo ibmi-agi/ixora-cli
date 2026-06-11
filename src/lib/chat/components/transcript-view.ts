@@ -155,15 +155,19 @@ export class TurnView {
  * when backgrounds are unavailable (--no-color / 16-color terminals).
  */
 export function userMessageLine(theme: ChatTheme, text: string): Component {
+  // Whitespace-only text (possible in replayed session inputs) would render
+  // an invisible bar flanked by stray spacers — show nothing instead.
+  const message = text.trim();
+  if (message === "") return new Container();
   const bar = theme.userBar;
   if (!bar) {
-    return new StyledLines(`${theme.user("you ❯")} ${text}`);
+    return new StyledLines(`${theme.user("you ❯")} ${message}`);
   }
   const container = new Container();
   container.addChild(new Spacer(1));
   container.addChild(
     // Text's customBgFn receives each wrapped line already padded to width.
-    new Text(text, 1, 1, (line) => barWrap(line, bar)),
+    new Text(message, 1, 1, (line) => barWrap(line, bar)),
   );
   container.addChild(new Spacer(1));
   return container;

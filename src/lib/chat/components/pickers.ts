@@ -1,20 +1,31 @@
-// Overlay pickers: tabbed entity picker, plus a generic list picker used for
-// sessions and systems.
+// pi-style selectors: tabbed entity picker, plus a generic list picker used
+// for sessions and systems.
 //
-// Overlay lifecycle rule (pi-tui): overlay components are disposed on hide —
-// every picker is created fresh by its factory and never reused. All
-// factories resolve null on cancel (Esc / Ctrl+C).
+// Selectors mount IN PLACE of the editor (SelectorHost.presentSelector) —
+// never as centered overlays — mirroring pi's settings/model selectors:
+// ─ rule · context row · "> " search input · list (→ cursor, n/total) ·
+// dim hint · ─ rule. The search Input buffers printable keys; navigation
+// keys (up/down/enter/Esc) route to the SelectList. Every picker is created
+// fresh by its factory and never reused; factories resolve null on cancel
+// (Esc / Ctrl+C).
 
 import {
   Container,
+  Input,
   SelectList,
   Text,
-  decodeKittyPrintable,
   matchesKey,
+  type Component,
   type SelectItem,
-  type TUI,
 } from "@earendil-works/pi-tui";
 import type { ChatTheme } from "../theme.js";
+import type { PromptComponent } from "../app.js";
+
+/** Where selectors mount; ChatShell satisfies this structurally. */
+export interface SelectorHost {
+  presentSelector(component: PromptComponent): void;
+  dismissSelector(): void;
+}
 
 export type EntityKind = "agent" | "team" | "workflow";
 
@@ -36,102 +47,146 @@ const TABS: { kind: EntityKind; label: string; key: keyof EntityLists }[] = [
   { kind: "workflow", label: "Workflows", key: "workflows" },
 ];
 
-/** Extract a typed printable character from one key event, if any. */
-function printableChar(data: string): string | undefined {
-  const kitty = decodeKittyPrintable(data);
-  if (kitty !== undefined) return kitty;
-  if (data.length === 1 && data >= " " && data !== "\x7f") return data;
-  return undefined;
-}
-
 const MAX_VISIBLE = 10;
 
-class EntityPickerComponent extends Container {
+/** Full-width horizontal rule (pi's DynamicBorder). */
+class Rule implements Component {
+  constructor(private readonly color: (s: string) => string) {}
+
+  render(width: number): string[] {
+    return [this.color("─".repeat(Math.max(1, width)))];
+  }
+
+  invalidate(): void {}
+}
+
+/** Navigation keys belong to the list; everything else feeds the search. */
+function isListKey(data: string): boolean {
+  return (
+    matchesKey(data, "up") ||
+    matchesKey(data, "down") ||
+    matchesKey(data, "pageUp") ||
+    matchesKey(data, "pageDown") ||
+    matchesKey(data, "enter") ||
+    matchesKey(data, "escape") ||
+    matchesKey(data, "ctrl+c")
+  );
+}
+
+/**
+ * Shared selector scaffolding: rule · context row · search input · list ·
+ * hint · rule, with focus propagated into the Input so its cursor shows.
+ */
+abstract class SelectorComponent extends Container {
+  private _focused = false;
+  protected readonly input = new Input();
+  protected readonly contextLine = new Text("", 1, 0);
+  protected readonly listSlot = new Container();
+
+  constructor(theme: ChatTheme, hint: string) {
+    super();
+    this.addChild(new Rule(theme.dim));
+    this.addChild(this.contextLine);
+    this.addChild(this.input);
+    this.addChild(this.listSlot);
+    this.addChild(new Text(theme.dim(hint), 1, 0));
+    this.addChild(new Rule(theme.dim));
+  }
+
+  get focused(): boolean {
+    return this._focused;
+  }
+
+  set focused(value: boolean) {
+    this._focused = value;
+    this.input.focused = value;
+  }
+
+  handleInput(data: string): void {
+    if (this.handleExtraKeys(data)) return;
+    if (isListKey(data)) {
+      this.activeList().handleInput(data);
+      return;
+    }
+    this.input.handleInput(data);
+    this.applyFilter(this.input.getValue());
+  }
+
+  /** Picker-specific keys (e.g. Tab). Return true when consumed. */
+  protected handleExtraKeys(data: string): boolean {
+    void data;
+    return false;
+  }
+
+  protected abstract activeList(): SelectList;
+
+  protected abstract applyFilter(filter: string): void;
+}
+
+class EntityPickerComponent extends SelectorComponent {
   private tabIndex: number;
-  private filter = "";
   private readonly lists: SelectList[];
-  private readonly tabsLine = new Text("", 1, 0);
-  private readonly filterLine = new Text("", 1, 0);
-  private readonly listSlot = new Container();
 
   constructor(
     private readonly theme: ChatTheme,
-    private readonly entities: EntityLists,
+    entities: EntityLists,
     initialTab: EntityKind,
     private readonly done: (choice: EntityChoice | null) => void,
   ) {
-    super();
+    super(theme, "Type to search · Tab to switch kind · Enter to select · Esc to cancel");
     this.tabIndex = Math.max(
       0,
       TABS.findIndex((t) => t.kind === initialTab),
     );
     this.lists = TABS.map((tab) => {
-      const list = new SelectList(
-        this.entities[tab.key],
-        MAX_VISIBLE,
-        theme.selectList,
-      );
+      const list = new SelectList(entities[tab.key], MAX_VISIBLE, theme.selectList);
       list.onSelect = (item) => {
         this.done({ kind: tab.kind, id: item.value, name: item.label });
       };
       list.onCancel = () => this.done(null);
       return list;
     });
-    this.addChild(this.tabsLine);
-    this.addChild(this.filterLine);
-    this.addChild(this.listSlot);
     this.refresh();
   }
 
-  handleInput(data: string): void {
-    if (matchesKey(data, "tab")) {
-      this.tabIndex = (this.tabIndex + 1) % TABS.length;
-      this.filter = "";
-      this.refresh();
-      return;
-    }
-    if (matchesKey(data, "backspace")) {
-      if (this.filter.length > 0) {
-        this.filter = this.filter.slice(0, -1);
-        this.refresh();
-        return;
-      }
-      // fall through: list ignores it
-    }
-    const ch = printableChar(data);
-    if (ch !== undefined) {
-      this.filter += ch;
-      this.refresh();
-      return;
-    }
-    this.lists[this.tabIndex].handleInput(data);
+  protected override handleExtraKeys(data: string): boolean {
+    if (!matchesKey(data, "tab")) return false;
+    this.tabIndex = (this.tabIndex + 1) % TABS.length;
+    this.input.setValue("");
+    this.refresh();
+    return true;
+  }
+
+  protected activeList(): SelectList {
+    return this.lists[this.tabIndex];
+  }
+
+  protected applyFilter(filter: string): void {
+    this.activeList().setFilter(filter);
   }
 
   private refresh(): void {
     const t = this.theme;
-    this.tabsLine.setText(
+    this.contextLine.setText(
       TABS.map((tab, i) =>
         i === this.tabIndex
           ? t.accent(t.bold(` ${tab.label} `))
           : t.dim(` ${tab.label} `),
-      ).join(t.dim("|")) + t.dim("   (Tab to switch, type to filter)"),
+      ).join(t.dim("|")),
     );
-    this.filterLine.setText(
-      this.filter === "" ? "" : t.dim(`filter: ${this.filter}`),
-    );
-    const active = this.lists[this.tabIndex];
-    active.setFilter(this.filter);
+    const active = this.activeList();
+    active.setFilter(this.input.getValue());
     this.listSlot.clear();
     this.listSlot.addChild(active);
   }
 }
 
 /**
- * Tabbed Agents | Teams | Workflows picker. Resolves the chosen entity, or
- * null on cancel.
+ * Tabbed Agents | Teams | Workflows picker, in the editor's place. Resolves
+ * the chosen entity, or null on cancel.
  */
 export function showEntityPicker(
-  tui: TUI,
+  host: SelectorHost,
   theme: ChatTheme,
   entities: EntityLists,
   initialTab: EntityKind = "agent",
@@ -145,62 +200,43 @@ export function showEntityPicker(
       (choice) => {
         if (settled) return;
         settled = true;
-        tui.hideOverlay();
+        host.dismissSelector();
         resolve(choice);
-        tui.requestRender();
       },
     );
-    tui.showOverlay(component, { width: "70%", maxHeight: "70%" });
-    tui.requestRender();
+    host.presentSelector(component);
   });
 }
 
-class ListPickerComponent extends Container {
-  private filter = "";
+class ListPickerComponent extends SelectorComponent {
   private readonly list: SelectList;
-  private readonly titleLine = new Text("", 1, 0);
 
   constructor(
-    private readonly theme: ChatTheme,
-    private readonly titleText: string,
+    theme: ChatTheme,
+    title: string,
     items: SelectItem[],
     done: (item: SelectItem | null) => void,
   ) {
-    super();
+    super(theme, "Type to search · Enter to select · Esc to cancel");
+    this.contextLine.setText(theme.bold(title));
     this.list = new SelectList(items, MAX_VISIBLE, theme.selectList);
     this.list.onSelect = (item) => done(item);
     this.list.onCancel = () => done(null);
-    this.addChild(this.titleLine);
-    this.addChild(this.list);
-    this.refresh();
+    this.listSlot.addChild(this.list);
   }
 
-  handleInput(data: string): void {
-    if (matchesKey(data, "backspace") && this.filter.length > 0) {
-      this.filter = this.filter.slice(0, -1);
-      this.refresh();
-      return;
-    }
-    const ch = printableChar(data);
-    if (ch !== undefined) {
-      this.filter += ch;
-      this.refresh();
-      return;
-    }
-    this.list.handleInput(data);
+  protected activeList(): SelectList {
+    return this.list;
   }
 
-  private refresh(): void {
-    const t = this.theme;
-    const filter = this.filter === "" ? "" : t.dim(`  filter: ${this.filter}`);
-    this.titleLine.setText(t.bold(this.titleText) + filter);
-    this.list.setFilter(this.filter);
+  protected applyFilter(filter: string): void {
+    this.list.setFilter(filter);
   }
 }
 
-/** Generic framed single-list overlay picker (sessions, systems, ...). */
+/** Generic single-list picker (sessions, systems, ...), in the editor's place. */
 export function showListPicker(
-  tui: TUI,
+  host: SelectorHost,
   theme: ChatTheme,
   title: string,
   items: SelectItem[],
@@ -210,12 +246,10 @@ export function showListPicker(
     const component = new ListPickerComponent(theme, title, items, (item) => {
       if (settled) return;
       settled = true;
-      tui.hideOverlay();
+      host.dismissSelector();
       resolve(item);
-      tui.requestRender();
     });
-    tui.showOverlay(component, { width: "70%", maxHeight: "70%" });
-    tui.requestRender();
+    host.presentSelector(component);
   });
 }
 

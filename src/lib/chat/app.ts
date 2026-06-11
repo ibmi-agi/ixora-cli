@@ -66,6 +66,10 @@ export interface ChatShell {
   presentPrompt(component: PromptComponent): void;
   /** Remove the inline prompt and refocus the editor. */
   dismissPrompt(): void;
+  /** Replace the editor with a selector (pi-style) and give it keyboard focus. */
+  presentSelector(component: PromptComponent): void;
+  /** Restore the editor in place of the selector and refocus it. */
+  dismissSelector(): void;
   requestRender(): void;
 }
 
@@ -87,8 +91,12 @@ class StatusBar implements Component {
     if (this.right === "") return [truncateToWidth(left, width)];
     const right = this.theme.dim(this.right);
     const gap = width - visibleWidth(left) - visibleWidth(right);
-    if (gap < 1) return [truncateToWidth(left, width)];
-    return [left + " ".repeat(gap) + right];
+    if (gap >= 1) return [left + " ".repeat(gap) + right];
+    // Too narrow for both: truncate the left side to keep the right (token
+    // totals + model) visible; drop the right only when there's no room at all.
+    const leftRoom = width - visibleWidth(right) - 1;
+    if (leftRoom < 8) return [truncateToWidth(left, width)];
+    return [truncateToWidth(left, leftRoom, "...", true) + " " + right];
   }
 
   invalidate(): void {}
@@ -107,7 +115,10 @@ export class ChatApp implements ChatShell {
   private readonly headerLine: Text;
   private readonly statusSlot = new Container();
   private readonly promptSlot = new Container();
+  /** Holds the editor, or a selector standing in for it (pi-style). */
+  private readonly editorSlot = new Container();
   private promptActive = false;
+  private selectorActive = false;
   private readonly loader: Loader;
   private readonly hintLine = new Text("", 0, 0);
   private readonly footerLine: StatusBar;
@@ -134,11 +145,12 @@ export class ChatApp implements ChatShell {
     this.editor.onSubmit = (text) => this.handleSubmit(text);
     this.footerLine = new StatusBar(theme);
 
+    this.editorSlot.addChild(this.editor);
     this.tui.addChild(this.headerLine);
     this.tui.addChild(this.transcript);
     this.tui.addChild(this.statusSlot);
     this.tui.addChild(this.promptSlot);
-    this.tui.addChild(this.editor);
+    this.tui.addChild(this.editorSlot);
     this.tui.addChild(this.hintLine);
     this.tui.addChild(this.footerLine);
 
@@ -259,6 +271,22 @@ export class ChatApp implements ChatShell {
     this.tui.requestRender();
   }
 
+  presentSelector(component: PromptComponent): void {
+    this.editorSlot.clear();
+    this.editorSlot.addChild(component);
+    this.selectorActive = true;
+    this.tui.setFocus(component);
+    this.tui.requestRender();
+  }
+
+  dismissSelector(): void {
+    this.editorSlot.clear();
+    this.editorSlot.addChild(this.editor);
+    this.selectorActive = false;
+    this.tui.setFocus(this.editor);
+    this.tui.requestRender();
+  }
+
   /** Spinner + message while a run is in flight; null stops and clears. */
   setBusy(message: string | null): void {
     if (message === null) {
@@ -299,9 +327,12 @@ export class ChatApp implements ChatShell {
   private handleGlobalKeys(
     data: string,
   ): { consume?: boolean; data?: string } | undefined {
-    // Overlays (pickers) and inline prompts (pause decisions) own their keys
-    // — including Esc and Ctrl+C, which SelectList/Input map to cancel.
-    if (this.tui.hasOverlay() || this.promptActive) return undefined;
+    // Overlays, inline prompts (pause decisions), and selectors (pickers)
+    // own their keys — including Esc and Ctrl+C, which SelectList/Input map
+    // to cancel.
+    if (this.tui.hasOverlay() || this.promptActive || this.selectorActive) {
+      return undefined;
+    }
 
     if (matchesKey(data, "escape")) {
       // Let the editor close its own autocomplete popup first.

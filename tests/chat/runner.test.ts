@@ -115,6 +115,8 @@ class FakeShell implements ChatShell {
   }
   presentPrompt(): void {}
   dismissPrompt(): void {}
+  presentSelector(): void {}
+  dismissSelector(): void {}
   requestRender(): void {}
 
   rendered(width = 120): string {
