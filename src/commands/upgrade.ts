@@ -76,7 +76,7 @@ export async function cmdUpgrade(opts: UpgradeOptions): Promise<void> {
       tags = await fetchImageTags("ibmi-agi/ixora-api");
     } catch {
       warn("Could not fetch available versions from registry");
-      die("Specify a version: ixora upgrade <version>");
+      die("Specify a version: ixora stack upgrade <version>");
     }
 
     if (tags.length === 0) {
@@ -160,7 +160,7 @@ export async function cmdUpgrade(opts: UpgradeOptions): Promise<void> {
 
     error((err as Error).message);
     info(
-      `Run ${bold("ixora logs")} to investigate, then retry with ${bold(`ixora upgrade ${targetVersion}`)}`,
+      `Run ${bold("ixora stack logs")} to investigate, then retry with ${bold(`ixora stack upgrade ${targetVersion}`)}`,
     );
     process.exit(1);
   }

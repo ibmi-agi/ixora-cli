@@ -103,7 +103,7 @@ function renderProfileYaml(systemId: string, profile: UserProfile): string {
     `# Custom deployment for system '${systemId}' — managed by ixora-cli.`,
     `# Bind-mounted into the API container as`,
     `# /app/app/config/deployments/_user/${systemId}.yaml — same schema as`,
-    `# app/config/deployments/full.yaml. Edit via 'ixora config edit ${systemId}'.`,
+    `# app/config/deployments/full.yaml. Edit via 'ixora stack config edit ${systemId}'.`,
     `include_dependencies: ${profile.include_dependencies ? "true" : "false"}`,
   ];
   for (const kind of ["agents", "teams", "workflows", "knowledge"] as const) {

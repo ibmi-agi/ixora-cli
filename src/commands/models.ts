@@ -20,7 +20,7 @@ import {
 
 export function cmdModelsShow(): void {
   if (!existsSync(ENV_FILE)) {
-    die("ixora is not installed. Run: ixora install");
+    die("ixora is not installed. Run: ixora stack install");
   }
 
   const provider = detectCurrentProvider();
@@ -75,7 +75,7 @@ export async function cmdModelsSet(
   providerArg?: string,
 ): Promise<void> {
   if (!existsSync(ENV_FILE)) {
-    die("ixora is not installed. Run: ixora install");
+    die("ixora is not installed. Run: ixora stack install");
   }
 
   if (providerArg) {
@@ -151,6 +151,6 @@ async function promptRestart(): Promise<void> {
     const { cmdRestart } = await import("./restart.js");
     await cmdRestart({});
   } else {
-    console.log(`  Restart to apply: ${bold("ixora restart")}`);
+    console.log(`  Restart to apply: ${bold("ixora stack restart")}`);
   }
 }
